@@ -1,58 +1,105 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Laundryku
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Laundryku adalah aplikasi web manajemen laundry berbasis Laravel dan Filament.
 
-## About Laravel
+## Login Demo
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+Setelah instalasi selesai, buka halaman admin:
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
-
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
-
-```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+```text
+http://127.0.0.1:8000/admin
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Gunakan akun berikut:
 
-## Contributing
+```text
+Email: test@example.com
+Password: password
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+## Instalasi Windows
 
-## Code of Conduct
+Installer Windows menggunakan XAMPP untuk MySQL. Script akan membantu setup database, dependency, migration, seed user login, build asset, lalu menjalankan server Laravel.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+1. Install XAMPP jika belum ada. Jika belum terdeteksi, script akan menawarkan instalasi via winget.
+2. Buka PowerShell di folder project.
+3. Jalankan:
 
-## Security Vulnerabilities
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install-windows.ps1
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Script akan menanyakan:
 
-## License
+```text
+XAMPP folder path
+Laravel app port
+Konfirmasi instalasi dependency yang belum ada
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Default yang aman:
+
+```text
+XAMPP folder path: C:\xampp
+Laravel app port: 8000
+```
+
+Catatan: project ini membutuhkan PHP 8.3 atau lebih baru. Jika PHP bawaan XAMPP masih di bawah 8.3, script tetap memakai MySQL dari XAMPP, tetapi akan menawarkan instalasi PHP 8.4 via winget untuk menjalankan Laravel.
+
+## Instalasi Linux
+
+Installer Linux akan mengecek dan memasang dependency yang belum tersedia, menyiapkan database lokal, menjalankan migration dan seeder, build asset, lalu menjalankan server Laravel.
+
+Jalankan dari folder project:
+
+```bash
+chmod +x install-linux.sh
+./install-linux.sh
+```
+
+Script mendukung package manager umum:
+
+```text
+apt
+pacman
+dnf
+zypper
+```
+
+Database yang dipakai:
+
+```text
+SQLite jika ekstensi pdo_sqlite aktif
+MariaDB lokal sebagai fallback jika SQLite tidak tersedia
+```
+
+## Setelah Server Jalan
+
+Jika script selesai, terminal akan menampilkan:
+
+```text
+Laundryku is ready.
+URL: http://127.0.0.1:8000/admin
+Email: test@example.com
+Password: password
+```
+
+Biarkan terminal tetap terbuka selama menggunakan aplikasi. Tekan `Ctrl+C` untuk menghentikan server.
+
+## Menjalankan Ulang
+
+Jika dependency sudah terpasang, cukup jalankan script yang sama:
+
+Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install-windows.ps1
+```
+
+Linux:
+
+```bash
+./install-linux.sh
+```
+
+Migration dan seeder aman dijalankan ulang. Akun login demo akan tetap tersedia.

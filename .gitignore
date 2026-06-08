@@ -1,8 +1,12 @@
 *.log
 .DS_Store
 .env
+.env.bak
 .env.backup
 .env.production
+.mariadb-data/
+.mariadb.pid
+.mariadb.sock
 .phpactor.json
 .phpunit.result.cache
 /.codex
