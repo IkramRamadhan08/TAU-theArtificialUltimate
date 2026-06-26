@@ -2,7 +2,7 @@ use client::{Client, UserStore};
 use codestral::{CodestralEditPredictionDelegate, load_codestral_api_key};
 use collections::HashMap;
 use copilot::CopilotEditPredictionDelegate;
-use edit_prediction::{EditPredictionModel, ZedEditPredictionDelegate};
+use edit_prediction::{EditPredictionModel, TauEditPredictionDelegate};
 use editor::Editor;
 use gpui::{AnyWindowHandle, App, AppContext as _, Context, Entity, WeakEntity};
 use language::{
@@ -250,7 +250,7 @@ fn assign_edit_prediction_provider(
 
     match provider_config {
         None => {
-            editor.set_edit_prediction_provider::<ZedEditPredictionDelegate>(None, window, cx);
+            editor.set_edit_prediction_provider::<TauEditPredictionDelegate>(None, window, cx);
         }
         Some(EditPredictionProviderConfig::Copilot) => {
             let ep_store = edit_prediction::EditPredictionStore::global(client, &user_store, cx);
@@ -282,7 +282,7 @@ fn assign_edit_prediction_provider(
                 user_store.read(cx).current_organization_configuration()
             {
                 if !organization_configuration.edit_prediction.is_enabled {
-                    editor.set_edit_prediction_provider::<ZedEditPredictionDelegate>(
+                    editor.set_edit_prediction_provider::<TauEditPredictionDelegate>(
                         None, window, cx,
                     );
 
@@ -299,7 +299,7 @@ fn assign_edit_prediction_provider(
                 });
 
                 let provider = cx.new(|cx| {
-                    ZedEditPredictionDelegate::new(
+                    TauEditPredictionDelegate::new(
                         project.clone(),
                         singleton_buffer,
                         &client,

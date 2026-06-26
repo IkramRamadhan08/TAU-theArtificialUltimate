@@ -100,7 +100,7 @@ use workspace::{
 use workspace::{Pane, notifications::DetachAndPromptErr};
 use zed_actions::{
     About, OpenBrowser, OpenDocs, OpenSettingsFile,
-    OpenZedUrl, Quit,
+    OpenTauUrl, Quit,
 };
 
 const DOCS_URL: &str = "https://tau.ai/docs/";
@@ -898,7 +898,7 @@ fn register_actions(
         .register_action(|_, _: &ToggleFullScreen, window, _| {
             window.toggle_fullscreen();
         })
-        .register_action(|_, action: &OpenZedUrl, _, cx| {
+        .register_action(|_, action: &OpenTauUrl, _, cx| {
             OpenListener::global(cx).open(RawOpenRequest {
                 urls: vec![String::from(&*action.url)],
                 ..Default::default()

@@ -15,7 +15,7 @@ use cloud_llm_client::{
     EditPredictionRejectReason, EditPredictionRejection,
     MAX_EDIT_PREDICTION_REJECTIONS_PER_REQUEST, MINIMUM_REQUIRED_VERSION_HEADER_NAME,
     PREFERRED_EXPERIMENT_HEADER_NAME, PredictEditsRequestTrigger, RejectEditPredictionsBodyRef,
-    ZED_VERSION_HEADER_NAME,
+    TAU_VERSION_HEADER_NAME,
 };
 use collections::{HashMap, HashSet};
 use copilot::{Copilot, Reinstall, SignIn, SignOut};
@@ -104,13 +104,13 @@ use crate::jump_example::{
 use crate::license_detection::LicenseDetectionWatcher;
 use crate::mercury::Mercury;
 pub use crate::metrics::{KeptRateResult, compute_kept_rate};
-use crate::onboarding_modal::ZedPredictModal;
+use crate::onboarding_modal::TauPredictModal;
 pub use crate::prediction::EditPrediction;
 pub use crate::prediction::EditPredictionId;
 use crate::prediction::EditPredictionResult;
 pub use language_model::ApiKeyState;
 pub use telemetry_events::EditPredictionRating;
-pub use zed_edit_prediction_delegate::ZedEditPredictionDelegate;
+pub use zed_edit_prediction_delegate::TauEditPredictionDelegate;
 
 actions!(
     edit_prediction,
@@ -130,7 +130,7 @@ const EDIT_HISTORY_DIFF_SIZE_LIMIT: usize = 2048 * 3; // ~2048 tokens or ~50% of
 const COLLABORATOR_EDIT_LOCALITY_CONTEXT_TOKENS: usize = 512;
 const GIT_CHANGED_FILE_SETS_COMMIT_LIMIT: usize = 100;
 const LAST_CHANGE_GROUPING_TIME: Duration = Duration::from_secs(1);
-const ZED_PREDICT_DATA_COLLECTION_CHOICE: &str = "zed_predict_data_collection_choice";
+const TAU_PREDICT_DATA_COLLECTION_CHOICE: &str = "zed_predict_data_collection_choice";
 const REJECT_REQUEST_DEBOUNCE: Duration = Duration::from_secs(15);
 const REQUEST_TIMEOUT_BACKOFF: Duration = Duration::from_secs(10);
 
@@ -976,10 +976,10 @@ impl EditPredictionStore {
     }
 
     fn zeta2_raw_config_from_env() -> Option<Zeta2RawConfig> {
-        let version_str = env::var("ZED_ZETA_FORMAT").ok()?;
+        let version_str = env::var("TAU_ZETA_FORMAT").ok()?;
         let format = ZetaFormat::parse(&version_str).ok()?;
-        let model_id = env::var("ZED_ZETA_MODEL").ok();
-        let environment = env::var("ZED_ZETA_ENVIRONMENT").ok();
+        let model_id = env::var("TAU_ZETA_MODEL").ok();
+        let environment = env::var("TAU_ZETA_ENVIRONMENT").ok();
         Some(Zeta2RawConfig {
             model_id,
             environment,
@@ -1065,7 +1065,7 @@ impl EditPredictionStore {
                                 .method(Method::GET)
                                 .uri(url.as_ref())
                                 .header("Authorization", format!("Bearer {token}"))
-                                .header(ZED_VERSION_HEADER_NAME, app_version.to_string())
+                                .header(TAU_VERSION_HEADER_NAME, app_version.to_string())
                                 .body(Default::default())?)
                         })
                         .await?;
@@ -1101,11 +1101,11 @@ impl EditPredictionStore {
                 edit_prediction_types::EditPredictionIconSet::new(IconName::Inception)
             }
             EditPredictionModel::Zeta => {
-                edit_prediction_types::EditPredictionIconSet::new(IconName::ZedPredict)
-                    .with_disabled(IconName::ZedPredictDisabled)
-                    .with_up(IconName::ZedPredictUp)
-                    .with_down(IconName::ZedPredictDown)
-                    .with_error(IconName::ZedPredictError)
+                edit_prediction_types::EditPredictionIconSet::new(IconName::TauPredict)
+                    .with_disabled(IconName::TauPredictDisabled)
+                    .with_up(IconName::TauPredictUp)
+                    .with_down(IconName::TauPredictDown)
+                    .with_error(IconName::TauPredictError)
             }
             EditPredictionModel::Fim { .. } => {
                 let settings = &all_language_settings(None, cx).edit_predictions;
@@ -3097,7 +3097,7 @@ impl EditPredictionStore {
                     http_client::Request::builder()
                         .method(Method::POST)
                         .header("Content-Type", "application/json")
-                        .header(ZED_VERSION_HEADER_NAME, app_version.to_string())
+                        .header(TAU_VERSION_HEADER_NAME, app_version.to_string())
                         .header("Authorization", format!("Bearer {token}")),
                 )
             })
@@ -3301,7 +3301,7 @@ impl EditPredictionStore {
 
     fn load_legacy_data_collection_enabled(cx: &App) -> bool {
         KeyValueStore::global(cx)
-            .read_kvp(ZED_PREDICT_DATA_COLLECTION_CHOICE)
+            .read_kvp(TAU_PREDICT_DATA_COLLECTION_CHOICE)
             .log_err()
             .flatten()
             .as_deref()
@@ -3516,7 +3516,7 @@ pub struct ZedUpdateRequiredError {
 #[error("Cloud request timed out")]
 pub(crate) struct CloudRequestTimeoutError;
 
-struct ZedPredictUpsell;
+struct TauPredictUpsell;
 
 fn is_upsell_dismissed(cx: &App) -> bool {
     // To make this backwards compatible with older versions of Zed, we
@@ -3525,19 +3525,19 @@ fn is_upsell_dismissed(cx: &App) -> bool {
     // the database once the user clicked on "Accept and Enable"
     let kvp = KeyValueStore::global(cx);
     if kvp
-        .read_kvp(ZED_PREDICT_DATA_COLLECTION_CHOICE)
+        .read_kvp(TAU_PREDICT_DATA_COLLECTION_CHOICE)
         .log_err()
         .is_some_and(|s| s.is_some())
     {
         return true;
     }
 
-    kvp.read_kvp(ZedPredictUpsell::KEY)
+    kvp.read_kvp(TauPredictUpsell::KEY)
         .log_err()
         .is_some_and(|s| s.is_some())
 }
 
-impl Dismissable for ZedPredictUpsell {
+impl Dismissable for TauPredictUpsell {
     const KEY: &'static str = "dismissed-edit-predict-upsell";
 
     fn dismissed(cx: &App) -> bool {
@@ -3552,8 +3552,8 @@ pub fn should_show_upsell_modal(cx: &App) -> bool {
 pub fn init(cx: &mut App) {
     cx.observe_new(move |workspace: &mut Workspace, _, _cx| {
         workspace.register_action(
-            move |workspace, _: &zed_actions::OpenZedPredictOnboarding, window, cx| {
-                ZedPredictModal::toggle(
+            move |workspace, _: &zed_actions::OpenTauPredictOnboarding, window, cx| {
+                TauPredictModal::toggle(
                     workspace,
                     workspace.user_store().clone(),
                     workspace.client().clone(),

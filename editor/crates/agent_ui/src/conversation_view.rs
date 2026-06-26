@@ -1645,7 +1645,7 @@ impl ConversationView {
                         } else {
                             "New message"
                         },
-                        IconName::ZedAssistant,
+                        IconName::TauAssistant,
                         window,
                         cx,
                     );
@@ -5125,7 +5125,7 @@ pub(crate) mod tests {
         C: 'static + AgentConnection + Send + Clone,
     {
         fn logo(&self) -> ui::IconName {
-            ui::IconName::ZedAgent
+            ui::IconName::TauAgent
         }
 
         fn agent_id(&self) -> AgentId {
@@ -5201,7 +5201,7 @@ pub(crate) mod tests {
 
     impl AgentServer for FlakyAgentServer {
         fn logo(&self) -> ui::IconName {
-            ui::IconName::ZedAgent
+            ui::IconName::TauAgent
         }
 
         fn agent_id(&self) -> AgentId {

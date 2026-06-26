@@ -286,6 +286,7 @@ dependencies = [
  "streaming_diff",
  "strsim 0.11.1",
  "task",
+ "tau_rag",
  "telemetry",
  "tempfile",
  "text",
@@ -17874,6 +17875,26 @@ dependencies = [
  "util",
  "workspace",
  "zed_actions",
+]
+
+[[package]]
+name = "tau_rag"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "collections",
+ "futures 0.3.32",
+ "gpui",
+ "http_client",
+ "log",
+ "paths",
+ "project",
+ "schemars 1.0.4",
+ "serde",
+ "serde_json",
+ "sqlez",
+ "util",
+ "walkdir",
 ]
 
 [[package]]

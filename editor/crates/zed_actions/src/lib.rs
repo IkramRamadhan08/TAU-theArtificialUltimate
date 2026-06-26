@@ -24,7 +24,7 @@ pub struct OpenBrowser {
 #[derive(Clone, PartialEq, Deserialize, JsonSchema, Action)]
 #[action(namespace = zed)]
 #[serde(deny_unknown_fields)]
-pub struct OpenZedUrl {
+pub struct OpenTauUrl {
     pub url: Arc<str>,
 }
 
@@ -388,7 +388,7 @@ pub mod feedback {
         feedback,
         [
             /// Opens email client to send feedback to TAU support.
-            EmailZed,
+            EmailTau,
             /// Opens the bug report form.
             FileBugReport,
             /// Opens the feature request form.
@@ -729,7 +729,7 @@ actions!(
     zed_predict_onboarding,
     [
         /// Opens the TAI Predict onboarding modal.
-        OpenZedPredictOnboarding
+        OpenTauPredictOnboarding
     ]
 );
 actions!(

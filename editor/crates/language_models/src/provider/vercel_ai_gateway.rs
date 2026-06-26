@@ -691,7 +691,7 @@ impl Render for ConfigurationView {
                 .size_full()
                 .on_action(cx.listener(Self::save_api_key))
                 .child(Label::new(
-                    "To use Zed's agent with Vercel AI Gateway, you need to add an API key. Follow these steps:",
+                    "To use TAU's agent with Vercel AI Gateway, you need to add an API key. Follow these steps:",
                 ))
                 .child(
                     List::new()

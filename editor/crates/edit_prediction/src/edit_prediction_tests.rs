@@ -2841,7 +2841,7 @@ fn init_test_with_fake_client_and_legacy_data_collection(
         if let Some(legacy_data_collection_choice) = legacy_data_collection_choice {
             KeyValueStore::global(cx)
                 .write_kvp(
-                    ZED_PREDICT_DATA_COLLECTION_CHOICE.into(),
+                    TAU_PREDICT_DATA_COLLECTION_CHOICE.into(),
                     legacy_data_collection_choice.to_string(),
                 )
                 .now_or_never()
@@ -4081,7 +4081,7 @@ async fn test_data_collection_default_uses_cached_legacy_value(cx: &mut TestAppC
     });
 
     cx.update(|cx| KeyValueStore::global(cx))
-        .delete_kvp(ZED_PREDICT_DATA_COLLECTION_CHOICE.into())
+        .delete_kvp(TAU_PREDICT_DATA_COLLECTION_CHOICE.into())
         .await
         .unwrap();
 
@@ -4228,10 +4228,10 @@ async fn test_toggle_data_collection_from_kv_enabled_state(cx: &mut TestAppConte
 async fn test_upsell_shown_by_default(cx: &mut TestAppContext) {
     init_test(cx);
     let kvp = cx.update(|cx| KeyValueStore::global(cx));
-    kvp.delete_kvp(ZED_PREDICT_DATA_COLLECTION_CHOICE.into())
+    kvp.delete_kvp(TAU_PREDICT_DATA_COLLECTION_CHOICE.into())
         .await
         .ok();
-    kvp.delete_kvp(ZedPredictUpsell::KEY.into()).await.ok();
+    kvp.delete_kvp(TauPredictUpsell::KEY.into()).await.ok();
 
     cx.update(|cx| assert!(should_show_upsell_modal(cx)));
 }
@@ -4244,7 +4244,7 @@ async fn test_upsell_dismissed_when_data_collection_choice_in_kv_store(cx: &mut 
     // shown, regardless of whether data collection was accepted or declined.
     for value in &["true", "false"] {
         cx.update(|cx| KeyValueStore::global(cx))
-            .write_kvp(ZED_PREDICT_DATA_COLLECTION_CHOICE.into(), value.to_string())
+            .write_kvp(TAU_PREDICT_DATA_COLLECTION_CHOICE.into(), value.to_string())
             .await
             .unwrap();
 
@@ -4257,7 +4257,7 @@ async fn test_upsell_dismissed_when_data_collection_choice_in_kv_store(cx: &mut 
     }
 
     cx.update(|cx| KeyValueStore::global(cx))
-        .delete_kvp(ZED_PREDICT_DATA_COLLECTION_CHOICE.into())
+        .delete_kvp(TAU_PREDICT_DATA_COLLECTION_CHOICE.into())
         .await
         .unwrap();
 }
@@ -4266,36 +4266,36 @@ async fn test_upsell_dismissed_when_data_collection_choice_in_kv_store(cx: &mut 
 async fn test_upsell_dismissed_when_dismissed_key_set(cx: &mut TestAppContext) {
     init_test(cx);
     let kvp = cx.update(|cx| KeyValueStore::global(cx));
-    kvp.delete_kvp(ZED_PREDICT_DATA_COLLECTION_CHOICE.into())
+    kvp.delete_kvp(TAU_PREDICT_DATA_COLLECTION_CHOICE.into())
         .await
         .ok();
-    kvp.write_kvp(ZedPredictUpsell::KEY.into(), "1".into())
+    kvp.write_kvp(TauPredictUpsell::KEY.into(), "1".into())
         .await
         .unwrap();
 
     cx.update(|cx| assert!(!should_show_upsell_modal(cx)));
 
-    kvp.delete_kvp(ZedPredictUpsell::KEY.into()).await.unwrap();
+    kvp.delete_kvp(TauPredictUpsell::KEY.into()).await.unwrap();
 }
 
 #[gpui::test]
 async fn test_upsell_dismissed_via_dismissable_api(cx: &mut TestAppContext) {
     init_test(cx);
     let kvp = cx.update(|cx| KeyValueStore::global(cx));
-    kvp.delete_kvp(ZED_PREDICT_DATA_COLLECTION_CHOICE.into())
+    kvp.delete_kvp(TAU_PREDICT_DATA_COLLECTION_CHOICE.into())
         .await
         .ok();
-    kvp.delete_kvp(ZedPredictUpsell::KEY.into()).await.ok();
+    kvp.delete_kvp(TauPredictUpsell::KEY.into()).await.ok();
 
     cx.update(|cx| {
         assert!(should_show_upsell_modal(cx));
-        ZedPredictUpsell::set_dismissed(true, cx);
+        TauPredictUpsell::set_dismissed(true, cx);
     });
     cx.run_until_parked();
 
     cx.update(|cx| assert!(!should_show_upsell_modal(cx)));
 
-    kvp.delete_kvp(ZedPredictUpsell::KEY.into()).await.unwrap();
+    kvp.delete_kvp(TauPredictUpsell::KEY.into()).await.unwrap();
 }
 
 #[ctor::ctor(unsafe)]

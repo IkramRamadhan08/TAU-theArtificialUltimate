@@ -455,7 +455,7 @@ impl Render for CopilotCodeVerification {
                 window.focus(&this.focus_handle, cx);
             }))
             .child(
-                Vector::new(VectorName::ZedXCopilot, rems(8.), rems(4.))
+                Vector::new(VectorName::TauXCopilot, rems(8.), rems(4.))
                     .color(Color::Custom(cx.theme().colors().icon)),
             )
             .child(prompt)
@@ -653,7 +653,7 @@ impl ConfigurationView {
     }
 
     fn render_for_chat(&self) -> impl IntoElement {
-        let start_label = "To use Zed's agent with GitHub Copilot, you need to be logged in to GitHub. Note that your GitHub account must have an active Copilot Chat subscription.";
+        let start_label = "To use TAU's agent with GitHub Copilot, you need to be logged in to GitHub. Note that your GitHub account must have an active Copilot Chat subscription.";
         let no_status_label = "Copilot Chat requires an active GitHub Copilot subscription. Please ensure Copilot is configured and try again, or use a different LLM provider.";
 
         if let Some(msg) = self.loading_message() {

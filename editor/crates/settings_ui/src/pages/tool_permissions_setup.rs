@@ -1409,6 +1409,7 @@ mod tests {
             "get_code_actions",
             "go_to_definition",
             "grep",
+            "search_semantic",
             "list_agents_and_models",
             "list_directory",
             "open",

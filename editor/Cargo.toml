@@ -227,6 +227,7 @@ members = [
     "crates/worktree_benchmarks",
     "crates/x_ai",
 "crates/tau",
+"crates/tau_rag",
         "crates/zed_actions",
     "crates/windows_resources",
     "crates/zed_credentials_provider",
@@ -468,6 +469,7 @@ workspace = { path = "crates/workspace" }
 worktree = { path = "crates/worktree" }
 x_ai = { path = "crates/x_ai" }
 tau = { path = "crates/tau" }
+tau_rag = { path = "crates/tau_rag" }
 zed_actions = { path = "crates/zed_actions" }
 zed_credentials_provider = { path = "crates/zed_credentials_provider" }
 zed_env_vars = { path = "crates/zed_env_vars" }

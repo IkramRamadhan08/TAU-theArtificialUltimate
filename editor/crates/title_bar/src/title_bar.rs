@@ -890,7 +890,7 @@ impl TitleBar {
             .anchor(gpui::Anchor::TopLeft)
     }
 
-    fn render_run_button(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_run_button(&self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let has_project = self.project.read(cx).visible_worktrees(cx).next().is_some();
         let run_command: Option<(String, String)> = has_project.then(|| self.detect_run_command(cx)).flatten();
         let workspace = self.workspace.clone();

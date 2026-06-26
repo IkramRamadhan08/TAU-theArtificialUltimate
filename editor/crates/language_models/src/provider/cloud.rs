@@ -283,7 +283,7 @@ impl LanguageModelProvider for CloudLanguageModelProvider {
     }
 
     fn icon(&self) -> IconOrSvg {
-        IconOrSvg::Icon(IconName::AiZed)
+        IconOrSvg::Icon(IconName::AiTau)
     }
 
     fn default_model(&self, cx: &App) -> Option<Arc<dyn LanguageModel>> {
@@ -395,7 +395,7 @@ impl LanguageModelProvider for CloudLanguageModelProvider {
 }
 
 #[derive(IntoElement, RegisterComponent)]
-struct ZedAiConfiguration {
+struct TauAiConfiguration {
     is_connected: bool,
     plan: Option<Plan>,
     is_zed_model_provider_enabled: bool,
@@ -404,7 +404,7 @@ struct ZedAiConfiguration {
     sign_in_callback: Arc<dyn Fn(&mut Window, &mut App) + Send + Sync>,
 }
 
-impl RenderOnce for ZedAiConfiguration {
+impl RenderOnce for TauAiConfiguration {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let (subscription_text, has_paid_plan) = match self.plan {
             Some(Plan::ZedPro) => (
@@ -522,7 +522,7 @@ impl Render for ConfigurationView {
             .current_organization_configuration()
             .map_or(true, |config| config.is_zed_model_provider_enabled);
 
-        ZedAiConfiguration {
+        TauAiConfiguration {
             is_connected: !state.is_signed_out(cx),
             plan: user_store.plan(),
             is_zed_model_provider_enabled,
@@ -809,7 +809,7 @@ mod tests {
     }
 }
 
-impl Component for ZedAiConfiguration {
+impl Component for TauAiConfiguration {
     fn name() -> &'static str {
         "AI Configuration Content"
     }
@@ -837,7 +837,7 @@ impl Component for ZedAiConfiguration {
         }
 
         let configuration = |config: PreviewConfiguration| -> AnyElement {
-            ZedAiConfiguration {
+            TauAiConfiguration {
                 is_connected: config.is_connected,
                 plan: config.plan,
                 is_zed_model_provider_enabled: config.is_zed_model_provider_enabled,

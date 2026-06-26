@@ -1591,7 +1591,7 @@ impl Render for ConfigurationView {
             .on_action(cx.listener(Self::on_tab))
             .on_action(cx.listener(Self::on_tab_prev))
             .on_action(cx.listener(ConfigurationView::save_credentials))
-            .child(Label::new("To use Zed's agent with Bedrock, you can set a custom authentication strategy through your settings file or use static credentials."))
+            .child(Label::new("To use TAU's agent with Bedrock, you can set a custom authentication strategy through your settings file or use static credentials."))
             .child(Label::new("But first, to access models on AWS, you need to:").mt_1())
             .child(
                 List::new()
