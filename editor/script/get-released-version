@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+echo "TAU release lookup is not wired to a public release service yet." >&2
+exit 1

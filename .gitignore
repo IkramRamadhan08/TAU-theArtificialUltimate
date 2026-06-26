@@ -29,3 +29,9 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+__pycache__/
+.tau/
+/TAU-core/agent/target/
+/editor/target/
+/benchmarks/
+/editor/.zed/

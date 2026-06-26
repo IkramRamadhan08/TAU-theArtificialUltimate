@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="TAU">
+  <defs>
+    <mask id="m">
+      <rect width="512" height="512" fill="white"/>
+      <path d="M 175 126 Q 256 114 337 126 L 337 164 Q 256 152 175 164 Z" fill="black"/>
+      <rect x="235" y="164" width="42" height="252" rx="21" fill="black"/>
+    </mask>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="currentColor" mask="url(#m)"/>
+</svg>
