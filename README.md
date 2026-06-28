@@ -34,9 +34,9 @@ TAU is a high-performance, GPU-accelerated code editor with built-in AI agent ca
 
 ## Quick Start
 
-### Install (Pre-built Binary)
+### Linux (x86-64) — Pre-built Binary
 
-Download and install TAU in one command (Linux x86-64):
+Download and install TAU in one command:
 
 ```bash
 curl -L https://github.com/IkramRamadhan08/TAU-theArtificialUltimate/releases/latest/download/tau-x86_64-linux.tar.gz | tar xz -C ~/.local/bin
@@ -48,6 +48,7 @@ tau
 ```
 
 > Requires `~/.local/bin` to be in your `PATH`. Add `export PATH="$PATH:$HOME/.local/bin"` to your shell config if needed.
+> TAU blocks the terminal while running. To keep your terminal free, run `tau &` or create a desktop entry.
 
 ### Install Script
 
@@ -55,25 +56,29 @@ tau
 curl -fsSL https://raw.githubusercontent.com/IkramRamadhan08/TAU-theArtificialUltimate/main/install.sh | bash
 ```
 
-### Build from Source
+### macOS — Build from Source
 
-Requires **Rust 1.95.0** and system dependencies:
-
-| Distro | Command |
-|--------|---------|
-| Arch | `pacman -S --noconfirm pkgconf libxkbcommon libxcb wayland fontconfig libva mesa alsa-lib` |
-| Debian/Ubuntu | `apt install -y pkg-config libxkbcommon-dev libxcb-shape0-dev libxcb-xfixes0-dev libwayland-dev libfontconfig-dev libva-dev mesa-common-dev libasound2-dev` |
-| Fedora | `dnf install -y pkg-config libxkbcommon-devel libxcb-devel wayland-devel fontconfig-devel libva-devel mesa-libGL-devel alsa-lib-devel` |
-| macOS | Xcode Command Line Tools: `xcode-select --install` |
-| Windows | Visual Studio Build Tools with C++ workload |
+Requires **Rust 1.95.0** and Xcode Command Line Tools:
 
 ```bash
+xcode-select --install
+rustup toolchain install 1.95.0
 git clone https://github.com/IkramRamadhan08/TAU-theArtificialUltimate.git
 cd TAU_Project/editor
 cargo run --release --bin tau
 ```
 
-> First build compiles ~236 crates and may take 15–30 minutes depending on your machine.
+### Windows — Build from Source
+
+Requires **Rust 1.95.0** and **Visual Studio Build Tools** (with "Desktop development with C++" workload):
+
+```powershell
+git clone https://github.com/IkramRamadhan08/TAU-theArtificialUltimate.git
+cd TAU_Project\editor
+cargo run --release --bin tau
+```
+
+> No pre-built Windows binary yet. Pre-built binaries for macOS and Windows will be added in future releases.
 
 ## Configuration
 
