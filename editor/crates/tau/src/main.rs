@@ -264,6 +264,27 @@ fn main() {
         return;
     }
 
+    // On Unix, daemonize by default: re-exec self with --foreground so the
+    // parent can exit immediately and return the terminal to the user.
+    #[cfg(unix)]
+    if !args.foreground {
+        if let Ok(exe) = std::env::current_exe() {
+            let mut cmd = process::Command::new(&exe);
+            cmd.arg("--foreground");
+            for arg in std::env::args().skip(1) {
+                if arg != "--foreground" {
+                    cmd.arg(&arg);
+                }
+            }
+            cmd.stdin(process::Stdio::null());
+            cmd.stdout(process::Stdio::null());
+            cmd.stderr(process::Stdio::null());
+            if cmd.spawn().is_ok() {
+                process::exit(0);
+            }
+        }
+    }
+
     // Set custom data directory.
     if let Some(dir) = &args.user_data_dir {
         paths::set_custom_data_dir(dir);
@@ -1680,10 +1701,9 @@ struct Args {
     #[arg(long, hide = true)]
     crash_handler: Option<PathBuf>,
 
-    /// Run TAU in the foreground, only used on Windows, to match the behavior on macOS.
+    /// Run TAU in the foreground (don't daemonize).
+    /// On Windows, also attaches to the parent console.
     #[arg(long)]
-    #[cfg(target_os = "windows")]
-    #[arg(hide = true)]
     foreground: bool,
 
     /// The dock action to perform. This is used on Windows only.

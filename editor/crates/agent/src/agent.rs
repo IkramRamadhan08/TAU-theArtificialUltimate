@@ -1966,7 +1966,7 @@ impl NativeAgent {
 
     fn send_permission_command(
         &self,
-        message_id: UserMessageId,
+        _message_id: UserMessageId,
         session_id: acp::SessionId,
         arg: &str,
         cx: &mut Context<Self>,

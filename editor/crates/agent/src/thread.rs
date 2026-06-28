@@ -1552,6 +1552,7 @@ impl Thread {
                 Some(self.project.read(cx).fs().clone()),
                 cancellation_rx,
                 self.sandbox_grants.clone(),
+                self.require_verification,
             );
             tool.replay(tool_use.input.clone(), output, tool_event_stream, cx)
                 .log_err();
@@ -3274,6 +3275,7 @@ impl Thread {
             Some(fs),
             cancellation_rx,
             self.sandbox_grants.clone(),
+            self.require_verification,
         );
         tool_event_stream.update_fields(
             acp::ToolCallUpdateFields::new().status(acp::ToolCallStatus::InProgress),
@@ -5011,6 +5013,8 @@ pub struct ToolCallEventStream {
     cancellation_rx: watch::Receiver<bool>,
     /// Shared, thread-scoped sandbox grants (see [`Thread::sandbox_grants`]).
     sandbox_grants: Rc<RefCell<ThreadSandboxGrants>>,
+    /// When true, tool calls show a confirmation dialog instead of auto-executing.
+    require_verification: bool,
 }
 
 impl ToolCallEventStream {
@@ -5031,6 +5035,7 @@ impl ToolCallEventStream {
             None,
             cancellation_rx,
             Rc::new(RefCell::new(ThreadSandboxGrants::default())),
+            false,
         );
 
         (
@@ -5052,6 +5057,7 @@ impl ToolCallEventStream {
         fs: Option<Arc<dyn Fs>>,
         cancellation_rx: watch::Receiver<bool>,
         sandbox_grants: Rc<RefCell<ThreadSandboxGrants>>,
+        require_verification: bool,
     ) -> Self {
         Self {
             tool_use_id,
@@ -5059,6 +5065,7 @@ impl ToolCallEventStream {
             fs,
             cancellation_rx,
             sandbox_grants,
+            require_verification,
         }
     }
 
@@ -5177,10 +5184,20 @@ impl ToolCallEventStream {
         // MCP tools are gated only by tool id (no per-input pattern
         // matching), so we pass a single empty input value just to satisfy
         // `decide_permission_from_settings`' signature.
+        let require_verification = self.require_verification;
         let check_settings: Box<dyn Fn(&App) -> ToolPermissionDecision> =
             Box::new(move |cx: &App| {
                 let settings = agent_settings::AgentSettings::get_global(cx);
-                decide_permission_from_settings(&tool_id, &[String::new()], settings)
+                let decision =
+                    decide_permission_from_settings(&tool_id, &[String::new()], settings);
+                if require_verification {
+                    match decision {
+                        ToolPermissionDecision::Allow => ToolPermissionDecision::Confirm,
+                        other => other,
+                    }
+                } else {
+                    decision
+                }
             });
 
         self.run_authorization_loop(title, options, None, Some(check_settings), cx)
@@ -5214,13 +5231,22 @@ impl ToolCallEventStream {
 
         let tool_name = context.tool_name.clone();
         let input_values = context.input_values.clone();
+        let require_verification = self.require_verification;
         let check_settings: Box<dyn Fn(&App) -> ToolPermissionDecision> =
             Box::new(move |cx: &App| {
-                decide_permission_from_settings(
+                let decision = decide_permission_from_settings(
                     &tool_name,
                     &input_values,
                     agent_settings::AgentSettings::get_global(cx),
-                )
+                );
+                if require_verification {
+                    match decision {
+                        ToolPermissionDecision::Allow => ToolPermissionDecision::Confirm,
+                        other => other,
+                    }
+                } else {
+                    decision
+                }
             });
 
         self.run_authorization_loop(title, options, Some(context), Some(check_settings), cx)

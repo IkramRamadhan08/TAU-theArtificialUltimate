@@ -10,30 +10,90 @@ echo "=== TAU Editor Installer ==="
 ARCH="$(uname -m)"
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 
-if [[ "$OS" != "linux" || "$ARCH" != "x86_64" ]]; then
-  echo "Pre-built binaries are currently only available for Linux x86-64."
-  echo "To build from source, see: https://github.com/$REPO"
-  exit 1
-fi
-
-ASSET="tau-x86_64-linux.tar.gz"
-
-# Install runtime deps if package manager available
-if command -v apt &>/dev/null; then
-  sudo apt install -y libxkbcommon-x11-0 libxcb-cursor0 2>/dev/null || true
-elif command -v pacman &>/dev/null; then
-  sudo pacman -S --noconfirm libxkbcommon libxcb wayland fontconfig libva mesa alsa-lib 2>/dev/null || true
-elif command -v dnf &>/dev/null; then
-  sudo dnf install -y libxkbcommon libxcb wayland fontconfig libva mesa-libGL alsa-lib 2>/dev/null || true
-fi
+# Map to asset name
+case "$OS" in
+  linux)
+    case "$ARCH" in
+      x86_64) ASSET="tau-x86_64-linux.tar.gz" ;;
+      aarch64|arm64) ASSET="tau-aarch64-linux.tar.gz" ;;
+      *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
+    esac
+    ;;
+  darwin)
+    case "$ARCH" in
+      x86_64) ASSET="tau-x86_64-macos.tar.gz" ;;
+      arm64|aarch64) ASSET="tau-aarch64-macos.tar.gz" ;;
+      *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
+    esac
+    ;;
+  mingw*|msys*|cygwin*)
+    case "$ARCH" in
+      x86_64) ASSET="tau-x86_64-windows.zip" ;;
+      *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
+    esac
+    OS="windows"
+    ;;
+  *)
+    echo "Unsupported OS: $OS"
+    echo "See https://github.com/$REPO for build instructions."
+    exit 1
+    ;;
+esac
 
 DOWNLOAD_URL="https://github.com/$REPO/releases/$VERSION/download/$ASSET"
-INSTALL_DIR="${HOME}/.local/bin"
 
-echo "Downloading TAU for $OS ($ARCH)..."
+# Install runtime deps (Linux)
+if [[ "$OS" == "linux" ]]; then
+  if command -v apt &>/dev/null; then
+    sudo apt install -y libxkbcommon-x11-0 libxcb-cursor0 2>/dev/null || true
+  elif command -v pacman &>/dev/null; then
+    sudo pacman -S --noconfirm libxkbcommon libxcb wayland fontconfig libva mesa alsa-lib 2>/dev/null || true
+  elif command -v dnf &>/dev/null; then
+    sudo dnf install -y libxkbcommon libxcb wayland fontconfig libva mesa-libGL alsa-lib 2>/dev/null || true
+  fi
+fi
+
+INSTALL_DIR="${HOME}/.local/bin"
 mkdir -p "$INSTALL_DIR"
-curl -fsSL "$DOWNLOAD_URL" | tar xz -C "$INSTALL_DIR"
-chmod +x "$INSTALL_DIR/tau"
+
+# Try pre-built binary first, fall back to building from source
+if curl -fsSL -o /dev/null --max-time 10 "$DOWNLOAD_URL" 2>/dev/null; then
+  echo "Downloading TAU for $OS ($ARCH)..."
+  if [[ "$OS" == "windows" ]]; then
+    curl -fsSL "$DOWNLOAD_URL" -o /tmp/tau.zip
+    unzip -o /tmp/tau.zip -d "$INSTALL_DIR"
+    rm /tmp/tau.zip
+  else
+    curl -fsSL "$DOWNLOAD_URL" | tar xz -C "$INSTALL_DIR"
+  fi
+  chmod +x "$INSTALL_DIR/tau" 2>/dev/null || true
+else
+  echo "No pre-built binary for $OS ($ARCH). Building from source..."
+  if ! command -v cargo &>/dev/null; then
+    echo "Rust is required to build TAU from source."
+    echo "Install it from: https://rustup.rs"
+    echo ""
+    echo "Then run this script again."
+    exit 1
+  fi
+
+  echo "Installing system dependencies..."
+  if [[ "$OS" == "darwin" ]]; then
+    if command -v brew &>/dev/null; then
+      brew install fontconfig 2>/dev/null || true
+    fi
+  fi
+
+  TMP_DIR="$(mktemp -d)"
+  git clone --depth 1 "https://github.com/$REPO.git" "$TMP_DIR"
+  cd "$TMP_DIR/editor"
+
+  echo "Building TAU (this will take a while)..."
+  cargo build --release --bin tau --jobs "$(nproc 2>/dev/null || echo 4)"
+
+  cp "target/release/tau" "$INSTALL_DIR/tau"
+  rm -rf "$TMP_DIR"
+fi
 
 # Add to PATH if not already
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then

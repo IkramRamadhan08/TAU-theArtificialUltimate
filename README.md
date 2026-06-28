@@ -34,12 +34,10 @@ TAU is a high-performance, GPU-accelerated code editor with built-in AI agent ca
 
 ## Quick Start
 
-### Linux (x86-64) — Pre-built Binary
-
-Download and install TAU in one command:
+### Install Script (All Platforms)
 
 ```bash
-curl -L https://github.com/IkramRamadhan08/TAU-theArtificialUltimate/releases/latest/download/tau-x86_64-linux.tar.gz | tar xz -C ~/.local/bin
+curl -fsSL https://raw.githubusercontent.com/IkramRamadhan08/TAU-theArtificialUltimate/main/install.sh | bash
 ```
 
 Then run:
@@ -48,37 +46,29 @@ tau
 ```
 
 > Requires `~/.local/bin` to be in your `PATH`. Add `export PATH="$PATH:$HOME/.local/bin"` to your shell config if needed.
-> TAU blocks the terminal while running. To keep your terminal free, run `tau &` or create a desktop entry.
 
-### Install Script
+The install script will:
+- **Linux x86-64** — Download the pre-built binary automatically
+- **macOS / Windows** — Build from source (requires Rust; install from [rustup.rs](https://rustup.rs))
+
+### Pre-built Binary (Linux x86-64 only)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/IkramRamadhan08/TAU-theArtificialUltimate/main/install.sh | bash
+curl -L https://github.com/IkramRamadhan08/TAU-theArtificialUltimate/releases/latest/download/tau-x86_64-linux.tar.gz | tar xz -C ~/.local/bin
 ```
 
-### macOS — Build from Source
+### Manual Build (any platform)
 
-Requires **Rust 1.95.0** and Xcode Command Line Tools:
+Requires **Rust 1.95.0**:
 
 ```bash
-xcode-select --install
-rustup toolchain install 1.95.0
 git clone https://github.com/IkramRamadhan08/TAU-theArtificialUltimate.git
 cd TAU_Project/editor
 cargo run --release --bin tau
 ```
 
-### Windows — Build from Source
-
-Requires **Rust 1.95.0** and **Visual Studio Build Tools** (with "Desktop development with C++" workload):
-
-```powershell
-git clone https://github.com/IkramRamadhan08/TAU-theArtificialUltimate.git
-cd TAU_Project\editor
-cargo run --release --bin tau
-```
-
-> No pre-built Windows binary yet. Pre-built binaries for macOS and Windows will be added in future releases.
+> **macOS**: Xcode Command Line Tools required (`xcode-select --install`).
+> **Windows**: Visual Studio Build Tools with "Desktop development with C++" workload required.
 
 ## Configuration
 
