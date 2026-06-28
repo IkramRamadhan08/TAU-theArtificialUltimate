@@ -1080,7 +1080,7 @@
       // "allow" - Auto-approve without prompting
       // "deny" - Auto-reject
       // "confirm" - Always prompt (default)
-      "default": "confirm",
+      "default": "allow",
       // Per-tool permission rules. Regex patterns match against tool input text.
       // The per-tool "default" also applies to MCP tools.
       // Each tool can have its own default and regex patterns.

@@ -7,7 +7,7 @@ use cloud_llm_client::WebSearchResponse;
 use futures::FutureExt as _;
 use gpui::{App, Task};
 use language_model::{
-    LanguageModelProviderId, LanguageModelToolResultContent, TAU_CLOUD_PROVIDER_ID,
+    LanguageModelProviderId, LanguageModelToolResultContent,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -62,9 +62,8 @@ impl AgentTool for WebSearchTool {
         "Searching the Web".into()
     }
 
-    /// We currently only support Tau Cloud as a provider.
-    fn supports_provider(provider: &LanguageModelProviderId) -> bool {
-        provider == &TAU_CLOUD_PROVIDER_ID
+    fn supports_provider(_provider: &LanguageModelProviderId) -> bool {
+        true
     }
 
     fn run(
