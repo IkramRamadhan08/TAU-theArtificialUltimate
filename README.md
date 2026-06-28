@@ -1,6 +1,8 @@
 # TAU — The Artificial Ultimate
 
-<div align="center">
+  <div align="center">
+
+<img src="TAU.png" alt="TAU Logo" width="120">
 
 **A local-first, agentic coding IDE for Linux, macOS, and Windows.**
 
@@ -9,13 +11,13 @@
 [![Build](https://img.shields.io/badge/build-passing-brightgreen)]()
 [![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-lightgrey)]()
 
+![TAU Editor screenshot](https://via.placeholder.com/800x500/1a1a2e/ffffff?text=Screenshot+coming+soon)
+
 </div>
 
 TAU is a high-performance, GPU-accelerated code editor with built-in AI agent capabilities. Forked from [Zed](https://zed.dev).
 
 > 📖 **Full documentation:** [`editor/docs/`](editor/docs/) — User guide, configuration, keybindings, and more.
-
-![TAU Editor](https://via.placeholder.com/800x500/1a1a2e/ffffff?text=TAU+Editor+Screenshot)
 
 ## Features
 
