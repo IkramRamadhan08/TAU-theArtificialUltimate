@@ -1,58 +1,61 @@
 #!/usr/bin/env bash
 set -e
 
+REPO="IkramRamadhan08/TAU-theArtificialUltimate"
+VERSION="latest"
+
 echo "=== TAU Editor Installer ==="
 
-# Check Rust
-if ! command -v rustc &>/dev/null; then
-    echo "Error: Rust not found. Install via: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
-    exit 1
-fi
+# Detect architecture and OS
+ARCH="$(uname -m)"
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 
-RUST_VERSION=$(rustc --version | cut -d' ' -f2)
-echo "Rust: $RUST_VERSION"
+case "$OS" in
+  linux)
+    case "$ARCH" in
+      x86_64) ASSET="tau-x86_64-linux.tar.gz" ;;
+      aarch64|arm64) ASSET="tau-aarch64-linux.tar.gz" ;;
+      *) echo "Unsupported architecture: $ARCH on Linux"; exit 1 ;;
+    esac
 
-# Install 1.95.0 toolchain if needed
-if ! rustup toolchain list | grep -q "1.95.0"; then
-    echo "Installing Rust 1.95.0 toolchain..."
-    rustup toolchain install 1.95.0
-fi
-
-# Linux deps
-if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    echo "Checking Linux dependencies..."
+    # Install system deps if package manager available
     if command -v apt &>/dev/null; then
-        sudo apt install -y pkg-config libxkbcommon-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            libwayland-dev libfontconfig-dev libva-dev mesa-common-dev libasound2-dev 2>/dev/null || true
+      sudo apt install -y libxkbcommon-x11-0 libxcb-cursor0 2>/dev/null || true
     elif command -v pacman &>/dev/null; then
-        sudo pacman -S --noconfirm pkgconf libxkbcommon libxcb wayland fontconfig libva mesa alsa-lib 2>/dev/null || true
+      sudo pacman -S --noconfirm libxkbcommon libxcb wayland fontconfig libva mesa alsa-lib 2>/dev/null || true
     elif command -v dnf &>/dev/null; then
-        sudo dnf install -y pkg-config libxkbcommon-devel libxcb-devel wayland-devel \
-            fontconfig-devel libva-devel mesa-libGL-devel alsa-lib-devel 2>/dev/null || true
+      sudo dnf install -y libxkbcommon libxcb wayland fontconfig libva mesa-libGL alsa-lib 2>/dev/null || true
     fi
-fi
+    ;;
+  darwin)
+    ASSET="tau-universal-apple-darwin.tar.gz"
+    ;;
+  *)
+    echo "Unsupported OS: $OS"
+    exit 1
+    ;;
+esac
 
-echo ""
-echo "Building TAU (this may take 15-30 minutes)..."
-cd "$(dirname "$0")/editor"
-cargo build --release --bin tau
+DOWNLOAD_URL="https://github.com/$REPO/releases/$VERSION/download/$ASSET"
+INSTALL_DIR="${HOME}/.local/bin"
 
-echo ""
-echo "Installing to ~/.local/bin/tau..."
-mkdir -p ~/.local/bin
-cp target/release/tau ~/.local/bin/
+echo "Downloading TAU for $OS ($ARCH)..."
+mkdir -p "$INSTALL_DIR"
+curl -fsSL "$DOWNLOAD_URL" | tar xz -C "$INSTALL_DIR"
+chmod +x "$INSTALL_DIR/tau"
 
 # Add to PATH if not already
-if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-    SHELL_CONFIG=""
-    case "$SHELL" in
-        */zsh) SHELL_CONFIG="$HOME/.zshrc" ;;
-        */bash) SHELL_CONFIG="$HOME/.bashrc" ;;
-    esac
-    if [[ -n "$SHELL_CONFIG" ]]; then
-        echo 'export PATH="$PATH:$HOME/.local/bin"' >> "$SHELL_CONFIG"
-        echo "Added ~/.local/bin to PATH in $SHELL_CONFIG"
-    fi
+if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
+  SHELL_CONFIG=""
+  case "$SHELL" in
+    */zsh) SHELL_CONFIG="$HOME/.zshrc" ;;
+    */bash) SHELL_CONFIG="$HOME/.bashrc" ;;
+    */fish) SHELL_CONFIG="$HOME/.config/fish/config.fish" ;;
+  esac
+  if [[ -n "$SHELL_CONFIG" ]]; then
+    echo "export PATH=\"\$PATH:$INSTALL_DIR\"" >> "$SHELL_CONFIG"
+    echo "Added $INSTALL_DIR to PATH in $SHELL_CONFIG"
+  fi
 fi
 
 echo ""

@@ -34,43 +34,46 @@ TAU is a high-performance, GPU-accelerated code editor with built-in AI agent ca
 
 ## Quick Start
 
-### Prerequisites
+### Install (Pre-built Binary)
 
-- **Rust toolchain 1.95.0**
-  ```bash
-  rustup toolchain install 1.95.0
-  ```
-- **System dependencies**
+Download and install TAU in one command (Linux x86-64):
 
-  | Distro | Command |
-  |--------|---------|
-  | Arch | `pacman -S --noconfirm pkgconf libxkbcommon libxcb wayland fontconfig libva mesa alsa-lib` |
-  | Debian/Ubuntu | `apt install -y pkg-config libxkbcommon-dev libxcb-shape0-dev libxcb-xfixes0-dev libwayland-dev libfontconfig-dev libva-dev mesa-common-dev libasound2-dev` |
-  | Fedora | `dnf install -y pkg-config libxkbcommon-devel libxcb-devel wayland-devel fontconfig-devel libva-devel mesa-libGL-devel alsa-lib-devel` |
-  | macOS | Xcode Command Line Tools: `xcode-select --install` |
-  | Windows | Visual Studio Build Tools with C++ workload |
+```bash
+curl -L https://github.com/IkramRamadhan08/TAU-theArtificialUltimate/releases/latest/download/tau-x86_64-linux.tar.gz | tar xz -C ~/.local/bin
+```
 
-### Build & Run
+Then run:
+```bash
+tau
+```
+
+> Requires `~/.local/bin` to be in your `PATH`. Add `export PATH="$PATH:$HOME/.local/bin"` to your shell config if needed.
+
+### Install Script
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/IkramRamadhan08/TAU-theArtificialUltimate/main/install.sh | bash
+```
+
+### Build from Source
+
+Requires **Rust 1.95.0** and system dependencies:
+
+| Distro | Command |
+|--------|---------|
+| Arch | `pacman -S --noconfirm pkgconf libxkbcommon libxcb wayland fontconfig libva mesa alsa-lib` |
+| Debian/Ubuntu | `apt install -y pkg-config libxkbcommon-dev libxcb-shape0-dev libxcb-xfixes0-dev libwayland-dev libfontconfig-dev libva-dev mesa-common-dev libasound2-dev` |
+| Fedora | `dnf install -y pkg-config libxkbcommon-devel libxcb-devel wayland-devel fontconfig-devel libva-devel mesa-libGL-devel alsa-lib-devel` |
+| macOS | Xcode Command Line Tools: `xcode-select --install` |
+| Windows | Visual Studio Build Tools with C++ workload |
 
 ```bash
 git clone https://github.com/IkramRamadhan08/TAU-theArtificialUltimate.git
 cd TAU_Project/editor
-cargo run --bin tau
+cargo run --release --bin tau
 ```
 
 > First build compiles ~236 crates and may take 15–30 minutes depending on your machine.
-
-### Install
-
-```bash
-cargo build --release --bin tau
-cp target/release/tau ~/.local/bin/
-```
-
-Or use the install script:
-```bash
-./install.sh
-```
 
 ## Configuration
 
