@@ -19,7 +19,7 @@ use std::{ops::Range, sync::Arc};
 use ui::{ButtonLike, Divider, Tooltip, prelude::*};
 use util::{debug_panic, maybe};
 use workspace::{HideStatusItem, StatusItemView, Workspace, item::ItemHandle};
-use zed_actions::agent::{
+use tau_actions::agent::{
     ConflictContent, ResolveConflictedFilesWithAgent, ResolveConflictsWithAgent,
 };
 

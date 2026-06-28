@@ -672,7 +672,7 @@ pub async fn connect(
 
 const MINIMUM_SUPPORTED_VERSION: acp::ProtocolVersion = acp::ProtocolVersion::V1;
 
-/// Build a `Client` connection over `transport` with Zed's full
+/// Build a `Client` connection over `transport` with Tau's full
 /// agent→client handler set wired up.
 ///
 /// All incoming requests and notifications are forwarded to the foreground
@@ -901,7 +901,7 @@ impl AcpConnection {
         // `ConnectionTo<Agent>` once the transport handshake is ready.
         let (connection_tx, connection_rx) = futures::channel::oneshot::channel();
         let connection_future =
-            connect_client_future("zed", transport, dispatch_tx.clone(), connection_tx);
+            connect_client_future("tau", transport, dispatch_tx.clone(), connection_tx);
         let io_task = cx.background_spawn(async move {
             if let Err(err) = connection_future.await {
                 log::error!("ACP connection error: {err}");
@@ -963,7 +963,7 @@ impl AcpConnection {
                             ])),
                     )
                     .client_info(
-                        acp::Implementation::new("zed", version)
+                        acp::Implementation::new("tau", version)
                             .title(release_channel.map(ToOwned::to_owned)),
                     ),
             ),
@@ -2397,7 +2397,7 @@ pub mod test_support {
 
         let (connection_tx, connection_rx) = futures::channel::oneshot::channel();
         let client_future = connect_client_future(
-            "zed-test",
+            "tau-test",
             client_transport,
             dispatch_tx.clone(),
             connection_tx,
@@ -3207,7 +3207,7 @@ mod tests {
 
         let (connection_tx, connection_rx) = futures::channel::oneshot::channel();
         let client_future = connect_client_future(
-            "zed-test",
+            "tau-test",
             client_transport,
             dispatch_tx.clone(),
             connection_tx,

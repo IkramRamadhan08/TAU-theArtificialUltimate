@@ -19,7 +19,7 @@ async fn test_channel_buffers(db: &Arc<Database>) {
 
     let owner_id = db.create_server("production").await.unwrap().0 as u32;
 
-    let zed_id = db.create_root_channel("zed", a_id).await.unwrap();
+    let zed_id = db.create_root_channel("tau", a_id).await.unwrap();
 
     db.invite_channel_member(zed_id, b_id, a_id, ChannelRole::Member)
         .await

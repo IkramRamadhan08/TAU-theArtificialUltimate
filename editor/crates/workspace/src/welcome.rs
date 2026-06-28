@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use settings::{DefaultOpenBehavior, Settings};
 use ui::{ButtonLike, Divider, DividerColor, KeyBinding, Vector, VectorName, prelude::*};
 use util::ResultExt;
-use zed_actions::{
+use tau_actions::{
     Extensions, OpenKeymap, OpenOnboarding, OpenSettings, assistant::ToggleFocus, command_palette,
 };
 
@@ -30,7 +30,7 @@ pub struct OpenRecentProject {
 }
 
 actions!(
-    zed,
+    tau,
     [
         /// Show the TAU welcome screen
         ShowWelcome
@@ -319,7 +319,7 @@ impl WelcomePage {
                         })
                         .log_err();
                 } else {
-                    use zed_actions::OpenRecent;
+                    use tau_actions::OpenRecent;
                     window.dispatch_action(OpenRecent::default().boxed_clone(), cx);
                 }
             }
@@ -686,8 +686,8 @@ mod tests {
     #[test]
     fn test_project_name_multiple() {
         // PathList sorts lexicographically, so filenames appear in alpha order
-        let paths = PathList::new(&["/home/user/zed", "/home/user/api"]);
-        assert_eq!(project_name(&paths), "api, zed");
+        let paths = PathList::new(&["/home/user/tau", "/home/user/api"]);
+        assert_eq!(project_name(&paths), "api, tau");
     }
 
     #[test]

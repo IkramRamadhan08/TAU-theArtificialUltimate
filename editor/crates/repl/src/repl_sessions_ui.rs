@@ -238,7 +238,7 @@ impl Render for ReplSessionsPage {
             )
         });
 
-        // When there are no kernel specifications, show a link to the Zed docs explaining how to
+        // When there are no kernel specifications, show a link to the Tau docs explaining how to
         // install kernels. It can be assumed they don't have a running kernel if we have no
         // specifications.
         if kernel_specifications.is_empty() {

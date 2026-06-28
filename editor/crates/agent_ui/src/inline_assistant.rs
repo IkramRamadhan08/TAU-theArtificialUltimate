@@ -50,7 +50,7 @@ use terminal_view::{TerminalView, terminal_panel::TerminalPanel};
 use ui::prelude::*;
 use util::{RangeExt, ResultExt, maybe};
 use workspace::{Toast, Workspace, dock::Panel, notifications::NotificationId};
-use zed_actions::agent::OpenSettings;
+use tau_actions::agent::OpenSettings;
 
 pub fn init(fs: Arc<dyn Fs>, prompt_builder: Arc<PromptBuilder>, cx: &mut App) {
     cx.set_global(InlineAssistant::new(fs, prompt_builder));
@@ -205,7 +205,7 @@ impl InlineAssistant {
 
     pub fn inline_assist(
         workspace: &mut Workspace,
-        action: &zed_actions::assistant::InlineAssist,
+        action: &tau_actions::assistant::InlineAssist,
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) {
@@ -2065,7 +2065,7 @@ pub mod evals {
                 prompt.clone(),
                 |cx| {
                     // Reconfigure to use a real model instead of the fake one
-                    let model_name = std::env::var("ZED_AGENT_MODEL")
+                    let model_name = std::env::var("TAU_AGENT_MODEL")
                         .unwrap_or("anthropic/claude-sonnet-4-latest".into());
 
                     let selected_model = SelectedModel::from_str(&model_name)

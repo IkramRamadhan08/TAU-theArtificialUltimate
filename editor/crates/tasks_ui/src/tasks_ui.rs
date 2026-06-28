@@ -411,7 +411,7 @@ mod tests {
         fs.insert_tree(
             path!("/dir"),
             json!({
-                ".zed": {
+                ".tau": {
                     "tasks.json": r#"[
                             {
                                 "label": "example task",

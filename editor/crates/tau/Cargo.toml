@@ -1,7 +1,7 @@
 [package]
-description = "The local-first agentic coding IDE — fork of Zed with built-in AI agent runtime."
+description = "The local-first agentic coding IDE — fork of Tau with built-in AI agent runtime."
 edition.workspace = true
-name = "zed"
+name = "tau"
 version = "0.1.0"
 publish.workspace = true
 license = "GPL-3.0-or-later"
@@ -15,7 +15,7 @@ workspace = true
 
 [features]
 tracy = ["ztracing/tracy"]
-# LEAK_BACKTRACE=1 cargo run --features zed/track-project-leak --profile release-fast
+# LEAK_BACKTRACE=1 cargo run --features tau/track-project-leak --profile release-fast
 track-project-leak = ["gpui/leak-detection"]
 test-support = [
     "gpui/test-support",
@@ -223,8 +223,8 @@ web_search.workspace = true
 web_search_providers.workspace = true
 which_key.workspace = true
 workspace.workspace = true
-zed_actions.workspace = true
-zed_env_vars.workspace = true
+tau_actions.workspace = true
+tau_env_vars.workspace = true
 zlog.workspace = true
 zlog_settings.workspace = true
 

@@ -27,11 +27,11 @@ pub struct AgentCliAppState {
 }
 
 pub fn init(cx: &mut App) -> Arc<AgentCliAppState> {
-    let app_commit_sha = option_env!("ZED_COMMIT_SHA").map(|s| AppCommitSha::new(s.to_owned()));
+    let app_commit_sha = option_env!("TAU_COMMIT_SHA").map(|s| AppCommitSha::new(s.to_owned()));
 
     let app_version = AppVersion::load(
-        env!("ZED_PKG_VERSION"),
-        option_env!("ZED_BUILD_ID"),
+        env!("TAU_PKG_VERSION"),
+        option_env!("TAU_BUILD_ID"),
         app_commit_sha,
     );
 
@@ -43,7 +43,7 @@ pub fn init(cx: &mut App) -> Arc<AgentCliAppState> {
     theme_settings::init(theme::LoadThemes::JustBase, cx);
 
     let user_agent = format!(
-        "Zed Agent CLI/{} ({}; {})",
+        "Tau Agent CLI/{} ({}; {})",
         app_version,
         std::env::consts::OS,
         std::env::consts::ARCH

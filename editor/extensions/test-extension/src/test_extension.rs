@@ -1,8 +1,8 @@
 use std::fs;
-use zed::lsp::CompletionKind;
-use zed::{CodeLabel, CodeLabelSpan, LanguageServerId};
-use zed_extension_api::process::Command;
-use zed_extension_api::{self as zed, Result};
+use tau::lsp::CompletionKind;
+use tau::{CodeLabel, CodeLabelSpan, LanguageServerId};
+use tau_extension_api::process::Command;
+use tau_extension_api::{self as tau, Result};
 
 struct TestExtension {
     cached_binary_path: Option<String>,
@@ -12,9 +12,9 @@ impl TestExtension {
     fn language_server_binary_path(
         &mut self,
         language_server_id: &LanguageServerId,
-        _worktree: &zed::Worktree,
+        _worktree: &tau::Worktree,
     ) -> Result<String> {
-        let (platform, arch) = zed::current_platform();
+        let (platform, arch) = tau::current_platform();
 
         let current_dir = std::env::current_dir().unwrap();
         println!("current_dir: {}", current_dir.display());
@@ -41,8 +41,8 @@ impl TestExtension {
         );
 
         let command = match platform {
-            zed::Os::Linux | zed::Os::Mac => Command::new("echo"),
-            zed::Os::Windows => Command::new("cmd").args(["/C", "echo"]),
+            tau::Os::Linux | tau::Os::Mac => Command::new("echo"),
+            tau::Os::Windows => Command::new("cmd").args(["/C", "echo"]),
         };
         let output = command.arg("hello from a child process!").output()?;
         println!(
@@ -56,39 +56,39 @@ impl TestExtension {
             return Ok(path.clone());
         }
 
-        zed::set_language_server_installation_status(
+        tau::set_language_server_installation_status(
             language_server_id,
-            &zed::LanguageServerInstallationStatus::CheckingForUpdate,
+            &tau::LanguageServerInstallationStatus::CheckingForUpdate,
         );
-        let release = zed::latest_github_release(
+        let release = tau::latest_github_release(
             "gleam-lang/gleam",
-            zed::GithubReleaseOptions {
+            tau::GithubReleaseOptions {
                 require_assets: true,
                 pre_release: false,
             },
         )?;
 
         let ext = "tar.gz";
-        let download_type = zed::DownloadedFileType::GzipTar;
+        let download_type = tau::DownloadedFileType::GzipTar;
 
         // Do this if you want to actually run this extension -
         // the actual asset is a .zip. But the integration test is simpler
         // if every platform uses .tar.gz.
         //
         // ext = "zip";
-        // download_type = zed::DownloadedFileType::Zip;
+        // download_type = tau::DownloadedFileType::Zip;
 
         let asset_name = format!(
             "gleam-{version}-{arch}-{os}.{ext}",
             version = release.version,
             arch = match arch {
-                zed::Architecture::Aarch64 => "aarch64",
-                zed::Architecture::X8664 => "x86_64",
+                tau::Architecture::Aarch64 => "aarch64",
+                tau::Architecture::X8664 => "x86_64",
             },
             os = match platform {
-                zed::Os::Mac => "apple-darwin",
-                zed::Os::Linux => "unknown-linux-musl",
-                zed::Os::Windows => "pc-windows-msvc",
+                tau::Os::Mac => "apple-darwin",
+                tau::Os::Linux => "unknown-linux-musl",
+                tau::Os::Windows => "pc-windows-msvc",
             },
         );
 
@@ -102,17 +102,17 @@ impl TestExtension {
         let binary_path = format!("{version_dir}/gleam");
 
         if !fs::metadata(&binary_path).is_ok_and(|stat| stat.is_file()) {
-            zed::set_language_server_installation_status(
+            tau::set_language_server_installation_status(
                 language_server_id,
-                &zed::LanguageServerInstallationStatus::Downloading,
+                &tau::LanguageServerInstallationStatus::Downloading,
             );
 
-            zed::download_file(&asset.download_url, &version_dir, download_type)
+            tau::download_file(&asset.download_url, &version_dir, download_type)
                 .map_err(|e| format!("failed to download file: {e}"))?;
 
-            zed::set_language_server_installation_status(
+            tau::set_language_server_installation_status(
                 language_server_id,
-                &zed::LanguageServerInstallationStatus::None,
+                &tau::LanguageServerInstallationStatus::None,
             );
 
             let entries =
@@ -132,7 +132,7 @@ impl TestExtension {
     }
 }
 
-impl zed::Extension for TestExtension {
+impl tau::Extension for TestExtension {
     fn new() -> Self {
         Self {
             cached_binary_path: None,
@@ -142,9 +142,9 @@ impl zed::Extension for TestExtension {
     fn language_server_command(
         &mut self,
         language_server_id: &LanguageServerId,
-        worktree: &zed::Worktree,
-    ) -> Result<zed::Command> {
-        Ok(zed::Command {
+        worktree: &tau::Worktree,
+    ) -> Result<tau::Command> {
+        Ok(tau::Command {
             command: self.language_server_binary_path(language_server_id, worktree)?,
             args: vec!["lsp".to_string()],
             env: Default::default(),
@@ -154,8 +154,8 @@ impl zed::Extension for TestExtension {
     fn label_for_completion(
         &self,
         _language_server_id: &LanguageServerId,
-        completion: zed::lsp::Completion,
-    ) -> Option<zed::CodeLabel> {
+        completion: tau::lsp::Completion,
+    ) -> Option<tau::CodeLabel> {
         let name = &completion.label;
         let ty = strip_newlines_from_detail(&completion.detail?);
         let let_binding = "let a";
@@ -188,12 +188,12 @@ impl zed::Extension for TestExtension {
     }
 }
 
-zed::register_extension!(TestExtension);
+tau::register_extension!(TestExtension);
 
 /// Removes newlines from the completion detail.
 ///
 /// The Gleam LSP can return types containing newlines, which causes formatting
-/// issues within the Zed completions menu.
+/// issues within the Tau completions menu.
 fn strip_newlines_from_detail(detail: &str) -> String {
     let without_newlines = detail
         .replace("->\n  ", "-> ")

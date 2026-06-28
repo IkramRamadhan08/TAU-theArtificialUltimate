@@ -826,7 +826,7 @@ mod macos {
         }
     }
 
-    /// Implementation from: https://github.com/zed-industries/cpal/blob/fd8bc2fd39f1f5fdee5a0690656caff9a26d9d50/src/host/coreaudio/macos/property_listener.rs#L15
+    /// Implementation from: https://github.com/tau-industries/cpal/blob/fd8bc2fd39f1f5fdee5a0690656caff9a26d9d50/src/host/coreaudio/macos/property_listener.rs#L15
     pub struct CoreAudioDefaultDeviceChangeListener {
         rx: UnboundedReceiver<()>,
         callback: Box<PropertyListenerCallbackWrapper>,

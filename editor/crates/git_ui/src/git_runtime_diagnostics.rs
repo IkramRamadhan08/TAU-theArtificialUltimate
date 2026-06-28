@@ -4,7 +4,7 @@
 //! never fail just because diagnostics couldn't be collected.
 //!
 //! What we gather:
-//! - All transitive descendant processes of the current Zed process
+//! - All transitive descendant processes of the current Tau process
 //!   (cross-platform via `sysinfo`).
 //! - On Linux: each descendant's `/proc/<pid>/wchan` (kernel function the
 //!   thread is currently sleeping in) and `State:` from `/proc/<pid>/status`.

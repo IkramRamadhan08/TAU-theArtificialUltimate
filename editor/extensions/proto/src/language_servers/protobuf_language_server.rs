@@ -1,4 +1,4 @@
-use zed_extension_api::{self as zed, Result, settings::LspSettings};
+use tau_extension_api::{self as tau, Result, settings::LspSettings};
 
 pub(crate) struct ProtobufLanguageServer {
     cached_binary_path: Option<String>,
@@ -15,8 +15,8 @@ impl ProtobufLanguageServer {
 
     pub(crate) fn language_server_binary(
         &mut self,
-        worktree: &zed::Worktree,
-    ) -> Result<zed::Command> {
+        worktree: &tau::Worktree,
+    ) -> Result<tau::Command> {
         let binary_settings = LspSettings::for_worktree(Self::SERVER_NAME, worktree)
             .ok()
             .and_then(|lsp_settings| lsp_settings.binary);
@@ -27,20 +27,20 @@ impl ProtobufLanguageServer {
             .unwrap_or_else(|| vec!["-logs".into(), "".into()]);
 
         if let Some(path) = binary_settings.and_then(|binary_settings| binary_settings.path) {
-            Ok(zed::Command {
+            Ok(tau::Command {
                 command: path,
                 args,
                 env: Default::default(),
             })
         } else if let Some(path) = self.cached_binary_path.clone() {
-            Ok(zed::Command {
+            Ok(tau::Command {
                 command: path,
                 args,
                 env: Default::default(),
             })
         } else if let Some(path) = worktree.which(Self::SERVER_NAME) {
             self.cached_binary_path = Some(path.clone());
-            Ok(zed::Command {
+            Ok(tau::Command {
                 command: path,
                 args,
                 env: Default::default(),

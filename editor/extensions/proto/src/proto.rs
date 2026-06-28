@@ -1,4 +1,4 @@
-use zed_extension_api::{self as zed, Result, settings::LspSettings};
+use tau_extension_api::{self as tau, Result, settings::LspSettings};
 
 use crate::language_servers::{BufLsp, ProtoLs, ProtobufLanguageServer};
 
@@ -10,7 +10,7 @@ struct ProtobufExtension {
     buf_lsp: Option<BufLsp>,
 }
 
-impl zed::Extension for ProtobufExtension {
+impl tau::Extension for ProtobufExtension {
     fn new() -> Self {
         Self {
             protobuf_language_server: None,
@@ -21,9 +21,9 @@ impl zed::Extension for ProtobufExtension {
 
     fn language_server_command(
         &mut self,
-        language_server_id: &zed_extension_api::LanguageServerId,
-        worktree: &zed_extension_api::Worktree,
-    ) -> zed_extension_api::Result<zed_extension_api::Command> {
+        language_server_id: &tau_extension_api::LanguageServerId,
+        worktree: &tau_extension_api::Worktree,
+    ) -> tau_extension_api::Result<tau_extension_api::Command> {
         match language_server_id.as_ref() {
             ProtobufLanguageServer::SERVER_NAME => self
                 .protobuf_language_server
@@ -46,21 +46,21 @@ impl zed::Extension for ProtobufExtension {
 
     fn language_server_workspace_configuration(
         &mut self,
-        server_id: &zed::LanguageServerId,
-        worktree: &zed::Worktree,
-    ) -> Result<Option<zed::serde_json::Value>> {
+        server_id: &tau::LanguageServerId,
+        worktree: &tau::Worktree,
+    ) -> Result<Option<tau::serde_json::Value>> {
         LspSettings::for_worktree(server_id.as_ref(), worktree)
             .map(|lsp_settings| lsp_settings.settings)
     }
 
     fn language_server_initialization_options(
         &mut self,
-        server_id: &zed::LanguageServerId,
-        worktree: &zed::Worktree,
-    ) -> Result<Option<zed_extension_api::serde_json::Value>> {
+        server_id: &tau::LanguageServerId,
+        worktree: &tau::Worktree,
+    ) -> Result<Option<tau_extension_api::serde_json::Value>> {
         LspSettings::for_worktree(server_id.as_ref(), worktree)
             .map(|lsp_settings| lsp_settings.initialization_options)
     }
 }
 
-zed::register_extension!(ProtobufExtension);
+tau::register_extension!(ProtobufExtension);

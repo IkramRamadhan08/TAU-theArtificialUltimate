@@ -40,7 +40,7 @@ struct DialogInfo {
 
 pub(crate) fn create_dialog_window(receiver: Receiver<Result<()>>) -> Result<HWND> {
     unsafe {
-        let class_name = windows::core::w!("Zed-Auto-Updater-Dialog-Class");
+        let class_name = windows::core::w!("Tau-Auto-Updater-Dialog-Class");
         let module = GetModuleHandleW(None).context("unable to get module handle")?;
         let handle = LoadImageW(
             Some(module.into()),
@@ -171,7 +171,7 @@ unsafe extern "system" fn wnd_proc(
                 &HSTRING::from(font_name),
             );
             let temp = SelectObject(hdc, font.into());
-            let string = HSTRING::from("Updating Zed...");
+            let string = HSTRING::from("Updating Tau...");
             return_if_failed!(TextOutW(hdc, 20, 15, &string).ok());
             return_if_failed!(DeleteObject(temp).ok());
 
@@ -189,7 +189,7 @@ unsafe extern "system" fn wnd_proc(
                 if let Ok(result) = data.borrow_mut().rx.recv()
                     && let Err(e) = result
                 {
-                    log::error!("Failed to update Zed: {:?}", e);
+                    log::error!("Failed to update Tau: {:?}", e);
                     show_error(format!("Error: {:?}", e));
                 }
             });

@@ -15,7 +15,7 @@ pub use young_account_banner::YoungAccountBanner;
 
 use std::sync::Arc;
 
-use client::{Client, UserStore, zed_urls};
+use client::{Client, UserStore, tau_urls};
 use gpui::{AnyElement, Entity, IntoElement, ParentElement, TaskExt};
 use ui::{Divider, RegisterComponent, Tooltip, Vector, VectorName, prelude::*};
 
@@ -211,7 +211,7 @@ impl ZedAiOnboarding {
                                         "Upgrade To Pro Clicked",
                                         state = "young-account"
                                     );
-                                    cx.open_url(&zed_urls::upgrade_to_zed_pro_url(cx))
+                                    cx.open_url(&tau_urls::upgrade_to_zed_pro_url(cx))
                                 }),
                         ),
                 )
@@ -273,7 +273,7 @@ impl ZedAiOnboarding {
                                         "Start Trial Clicked",
                                         state = "post-sign-in"
                                     );
-                                    cx.open_url(&zed_urls::start_trial_url(cx))
+                                    cx.open_url(&tau_urls::start_trial_url(cx))
                                 }),
                         ),
                 )
@@ -378,7 +378,7 @@ impl Component for ZedAiOnboarding {
 
     fn description() -> &'static str {
         "The onboarding surface shown to new agent panel users, \
-        guiding them through signing in to Zed and selecting a plan \
+        guiding them through signing in to Tau and selecting a plan \
         before they can start using the agent."
     }
 

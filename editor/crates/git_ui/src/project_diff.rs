@@ -50,7 +50,7 @@ use workspace::{
     notifications::NotifyTaskExt,
     searchable::SearchableItemHandle,
 };
-use zed_actions::agent::ReviewBranchDiff;
+use tau_actions::agent::ReviewBranchDiff;
 use ztracing::instrument;
 
 actions!(

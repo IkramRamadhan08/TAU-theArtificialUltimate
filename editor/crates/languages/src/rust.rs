@@ -1042,14 +1042,14 @@ impl ContextProvider for RustContextProvider {
                     "-p".into(),
                     RUST_PACKAGE_TASK_VARIABLE.template_value(),
                 ],
-                cwd: Some("$ZED_DIRNAME".to_owned()),
+                cwd: Some("$TAU_DIRNAME".to_owned()),
                 ..TaskTemplate::default()
             },
             TaskTemplate {
                 label: "Check all targets (workspace)".into(),
                 command: "cargo".into(),
                 args: vec!["check".into(), "--workspace".into(), "--all-targets".into()],
-                cwd: Some("$ZED_DIRNAME".to_owned()),
+                cwd: Some("$TAU_DIRNAME".to_owned()),
                 ..TaskTemplate::default()
             },
             TaskTemplate {
@@ -1346,10 +1346,10 @@ async fn human_readable_package_name(
 }
 
 // For providing local `cargo check -p $pkgid` task, we do not need most of the information we have returned.
-// Output example in the root of Zed project:
+// Output example in the root of Tau project:
 // ```sh
-// ❯ cargo pkgid zed
-// path+file:///absolute/path/to/project/zed/crates/zed#0.131.0
+// ❯ cargo pkgid tau
+// path+file:///absolute/path/to/project/tau/crates/tau#0.131.0
 // ```
 // Another variant, if a project has a custom package name or hyphen in the name:
 // ```
@@ -1880,7 +1880,7 @@ mod tests {
             "filter range text '{filter_text}' should contain 'ref' for filtering to work",
         );
 
-        // Test for correct range calculation with mixed empty and non-empty tabstops.(See https://github.com/zed-industries/zed/issues/44825)
+        // Test for correct range calculation with mixed empty and non-empty tabstops.(See https://github.com/tau-industries/tau/issues/44825)
         let res = adapter
             .label_for_completion(
                 &lsp::CompletionItem {
@@ -1977,7 +1977,7 @@ mod tests {
             adapter
                 .label_for_symbol(
                     &language::Symbol {
-                        name: "zed".to_string(),
+                        name: "tau".to_string(),
                         kind: lsp::SymbolKind::PACKAGE,
                         container_name: None,
                     },
@@ -1985,7 +1985,7 @@ mod tests {
                 )
                 .await,
             Some(CodeLabel::new(
-                "extern crate zed".to_string(),
+                "extern crate tau".to_string(),
                 13..16,
                 vec![(0..6, highlight_keyword), (7..12, highlight_keyword),],
             ))
@@ -2086,8 +2086,8 @@ mod tests {
     fn test_package_name_from_pkgid() {
         for (input, expected) in [
             (
-                "path+file:///absolute/path/to/project/zed/crates/zed#0.131.0",
-                "zed",
+                "path+file:///absolute/path/to/project/tau/crates/tau#0.131.0",
+                "tau",
             ),
             (
                 "path+file:///absolute/path/to/project/custom-package#my-custom-package@0.1.0",
@@ -2102,16 +2102,16 @@ mod tests {
     fn test_target_info_from_metadata() {
         for (input, absolute_path, expected) in [
             (
-                r#"{"packages":[{"id":"path+file:///absolute/path/to/project/zed/crates/zed#0.131.0","manifest_path":"/path/to/zed/Cargo.toml","targets":[{"name":"zed","kind":["bin"],"src_path":"/path/to/zed/src/main.rs"}]}]}"#,
-                "/path/to/zed/src/main.rs",
+                r#"{"packages":[{"id":"path+file:///absolute/path/to/project/tau/crates/tau#0.131.0","manifest_path":"/path/to/tau/Cargo.toml","targets":[{"name":"tau","kind":["bin"],"src_path":"/path/to/tau/src/main.rs"}]}]}"#,
+                "/path/to/tau/src/main.rs",
                 Some((
                     Some(TargetInfo {
-                        package_name: "zed".into(),
-                        target_name: "zed".into(),
+                        package_name: "tau".into(),
+                        target_name: "tau".into(),
                         required_features: Vec::new(),
                         target_kind: TargetKind::Bin,
                     }),
-                    Arc::from("/path/to/zed".as_ref()),
+                    Arc::from("/path/to/tau".as_ref()),
                 )),
             ),
             (

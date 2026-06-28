@@ -544,7 +544,7 @@ mod tests {
         Example {
             spec: ExampleSpec {
                 name: "example".to_string(),
-                repository_url: "https://github.com/zed-industries/zed.git".to_string(),
+                repository_url: "https://github.com/tau-industries/tau.git".to_string(),
                 revision: "HEAD".to_string(),
                 tags: Vec::new(),
                 reasoning: None,

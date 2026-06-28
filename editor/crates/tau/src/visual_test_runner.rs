@@ -3,8 +3,8 @@
 
 //! Visual Test Runner
 //!
-//! This binary runs visual regression tests for Zed's UI. It captures screenshots
-//! of real Zed windows and compares them against baseline images.
+//! This binary runs visual regression tests for Tau's UI. It captures screenshots
+//! of real Tau windows and compares them against baseline images.
 //!
 //! **Note: This tool is macOS-only** because it uses `VisualTestAppContext` which
 //! depends on the macOS Metal renderer for accurate screenshot capture.
@@ -25,10 +25,10 @@
 //! ## Usage
 //!
 //! Run the visual tests:
-//!   cargo run -p zed --bin zed_visual_test_runner --features visual-tests
+//!   cargo run -p tau --bin tau_visual_test_runner --features visual-tests
 //!
 //! Update baseline images (when UI intentionally changes):
-//!   UPDATE_BASELINE=1 cargo run -p zed --bin zed_visual_test_runner --features visual-tests
+//!   UPDATE_BASELINE=1 cargo run -p tau --bin tau_visual_test_runner --features visual-tests
 //!
 //! ## Environment Variables
 //!
@@ -44,11 +44,11 @@ fn main() {
 
 #[cfg(target_os = "macos")]
 fn main() {
-    // Set ZED_STATELESS early to prevent file system access to real config directories
-    // This must be done before any code accesses zed_env_vars::ZED_STATELESS
+    // Set TAU_STATELESS early to prevent file system access to real config directories
+    // This must be done before any code accesses tau_env_vars::TAU_STATELESS
     // SAFETY: We're at the start of main(), before any threads are spawned
     unsafe {
-        std::env::set_var("ZED_STATELESS", "1");
+        std::env::set_var("TAU_STATELESS", "1");
     }
 
     env_logger::builder()
@@ -120,7 +120,7 @@ use {
     },
     util::ResultExt as _,
     workspace::{AppState, MultiWorkspace, Workspace},
-    zed_actions::OpenSettingsAt,
+    tau_actions::OpenSettingsAt,
 };
 
 // All macOS-specific constants grouped together
@@ -129,9 +129,9 @@ mod constants {
     use std::time::Duration;
 
     /// Baseline images are stored relative to this file
-    pub const BASELINE_DIR: &str = "crates/zed/test_fixtures/visual_tests";
+    pub const BASELINE_DIR: &str = "crates/tau/test_fixtures/visual_tests";
 
-    /// Embedded test image (Zed app icon) for visual tests.
+    /// Embedded test image (Tau app icon) for visual tests.
     pub const EMBEDDED_TEST_IMAGE: &[u8] = include_bytes!("../resources/app-icon.png");
 
     /// Threshold for image comparison (0.0 to 1.0)
@@ -160,7 +160,7 @@ fn run_visual_tests(project_path: PathBuf, update_baseline: bool) -> Result<()> 
     });
 
     // Initialize settings store with real default settings (not test settings)
-    // Test settings use Courier font, but we want the real Zed fonts for visual tests
+    // Test settings use Courier font, but we want the real Tau fonts for visual tests
     cx.update(|cx| {
         settings::init(cx);
     });
@@ -173,7 +173,7 @@ fn run_visual_tests(project_path: PathBuf, update_baseline: bool) -> Result<()> 
         AppState::set_global(app_state.clone(), cx);
     });
 
-    // Initialize all Zed subsystems
+    // Initialize all Tau subsystems
     cx.update(|cx| {
         gpui_tokio::init(cx);
         theme_settings::init(theme::LoadThemes::JustBase, cx);
@@ -944,7 +944,7 @@ edition = "2021"
     // Create README.md
     let readme = r#"# Test Project
 
-This is a test project for visual testing of Zed.
+This is a test project for visual testing of Tau.
 
 ## Features
 
@@ -2200,7 +2200,7 @@ fn run_agent_thread_view_test(
 
     // Send the message to trigger the image response
     let send_future = thread.update(cx, |thread, cx| {
-        thread.send(vec!["Show me the Zed logo".into()], cx)
+        thread.send(vec!["Show me the Tau logo".into()], cx)
     });
 
     cx.background_executor.allow_parking();
@@ -2316,7 +2316,7 @@ fn run_tool_permissions_visual_tests(
     use agent_settings::{AgentSettings, CompiledRegex, ToolPermissions, ToolRules};
     use collections::HashMap;
     use settings::ToolPermissionMode;
-    use zed_actions::OpenSettingsAt;
+    use tau_actions::OpenSettingsAt;
 
     // Set up tool permissions with "hi" as both always_deny and always_allow for terminal
     cx.update(|cx| {
@@ -2543,7 +2543,7 @@ fn run_multi_workspace_sidebar_visual_tests(
     let canonical_temp = temp_path.canonicalize()?;
 
     let workspace1_dir = canonical_temp.join("private-test-remote");
-    let workspace2_dir = canonical_temp.join("zed");
+    let workspace2_dir = canonical_temp.join("tau");
     std::fs::create_dir_all(&workspace1_dir)?;
     std::fs::create_dir_all(&workspace2_dir)?;
 
@@ -2637,7 +2637,7 @@ fn run_multi_workspace_sidebar_visual_tests(
 
     cx.run_until_parked();
 
-    // Add worktree to workspace 2 (index 1) so it shows as "zed"
+    // Add worktree to workspace 2 (index 1) so it shows as "tau"
     let add_worktree2_task = multi_workspace_window
         .update(cx, |multi_workspace, _window, cx| {
             let workspace2 = multi_workspace.workspaces().nth(1).unwrap();
@@ -2919,7 +2919,7 @@ impl gpui::Render for ThreadItemBranchNameTestView {
                         .timestamp("5m")
                         .worktrees(vec![ThreadItemWorktreeInfo {
                             worktree_name: Some("jade-glen".into()),
-                            full_path: "/worktrees/jade-glen/zed".into(),
+                            full_path: "/worktrees/jade-glen/tau".into(),
                             highlight_positions: Vec::new(),
                             kind: WorktreeKind::Linked,
                             branch_name: Some("fix-scrolling".into()),
@@ -2936,7 +2936,7 @@ impl gpui::Render for ThreadItemBranchNameTestView {
                         .timestamp("1h")
                         .worktrees(vec![ThreadItemWorktreeInfo {
                             worktree_name: Some("focal-arrow".into()),
-                            full_path: "/worktrees/focal-arrow/zed".into(),
+                            full_path: "/worktrees/focal-arrow/tau".into(),
                             highlight_positions: Vec::new(),
                             kind: WorktreeKind::Linked,
                             branch_name: None,
@@ -2950,8 +2950,8 @@ impl gpui::Render for ThreadItemBranchNameTestView {
                         .icon(IconName::TauAgent)
                         .timestamp("2d")
                         .worktrees(vec![ThreadItemWorktreeInfo {
-                            worktree_name: Some("zed".into()),
-                            full_path: "/projects/zed".into(),
+                            worktree_name: Some("tau".into()),
+                            full_path: "/projects/tau".into(),
                             highlight_positions: Vec::new(),
                             kind: WorktreeKind::Main,
                             branch_name: Some("main".into()),
@@ -2967,8 +2967,8 @@ impl gpui::Render for ThreadItemBranchNameTestView {
                         .icon(IconName::TauAgent)
                         .timestamp("3d")
                         .worktrees(vec![ThreadItemWorktreeInfo {
-                            worktree_name: Some("zed".into()),
-                            full_path: "/projects/zed".into(),
+                            worktree_name: Some("tau".into()),
+                            full_path: "/projects/tau".into(),
                             highlight_positions: Vec::new(),
                             kind: WorktreeKind::Main,
                             branch_name: None,
@@ -2983,7 +2983,7 @@ impl gpui::Render for ThreadItemBranchNameTestView {
                         .timestamp("6d")
                         .worktrees(vec![ThreadItemWorktreeInfo {
                             worktree_name: Some("stoic-reed".into()),
-                            full_path: "/worktrees/stoic-reed/zed".into(),
+                            full_path: "/worktrees/stoic-reed/tau".into(),
                             highlight_positions: Vec::new(),
                             kind: WorktreeKind::Linked,
                             branch_name: Some("stoic-reed".into()),
@@ -3000,7 +3000,7 @@ impl gpui::Render for ThreadItemBranchNameTestView {
                         .timestamp("40m")
                         .worktrees(vec![ThreadItemWorktreeInfo {
                             worktree_name: Some("focal-arrow".into()),
-                            full_path: "/worktrees/focal-arrow/zed".into(),
+                            full_path: "/worktrees/focal-arrow/tau".into(),
                             highlight_positions: Vec::new(),
                             kind: WorktreeKind::Linked,
                             branch_name: Some("persist-worktree-3-wiring".into()),
@@ -3019,7 +3019,7 @@ impl gpui::Render for ThreadItemBranchNameTestView {
                         .removed(17)
                         .worktrees(vec![ThreadItemWorktreeInfo {
                             worktree_name: Some("jade-glen".into()),
-                            full_path: "/worktrees/jade-glen/zed".into(),
+                            full_path: "/worktrees/jade-glen/tau".into(),
                             highlight_positions: Vec::new(),
                             kind: WorktreeKind::Linked,
                             branch_name: Some("feature-branch".into()),
@@ -3036,7 +3036,7 @@ impl gpui::Render for ThreadItemBranchNameTestView {
                         .removed(53)
                         .worktrees(vec![ThreadItemWorktreeInfo {
                             worktree_name: Some("my-project".into()),
-                            full_path: "/worktrees/my-project/zed".into(),
+                            full_path: "/worktrees/my-project/tau".into(),
                             highlight_positions: Vec::new(),
                             kind: WorktreeKind::Linked,
                             branch_name: Some(
@@ -3056,8 +3056,8 @@ impl gpui::Render for ThreadItemBranchNameTestView {
                         .added(23)
                         .removed(8)
                         .worktrees(vec![ThreadItemWorktreeInfo {
-                            worktree_name: Some("zed".into()),
-                            full_path: "/projects/zed".into(),
+                            worktree_name: Some("tau".into()),
+                            full_path: "/projects/tau".into(),
                             highlight_positions: Vec::new(),
                             kind: WorktreeKind::Main,
                             branch_name: Some("sidebar-show-branch-name".into()),
@@ -3493,21 +3493,21 @@ fn run_sidebar_duplicate_project_names_visual_tests(
     let temp_path = temp_dir.keep();
     let canonical_temp = temp_path.canonicalize()?;
 
-    // Create directory structure where every leaf directory is named "zed" but
+    // Create directory structure where every leaf directory is named "tau" but
     // lives at a distinct path. This lets us test that the sidebar correctly
     // disambiguates projects whose names would otherwise collide.
     //
-    //   code/zed/       — project1 (single worktree)
-    //   code/foo/zed/   — project2 (single worktree)
-    //   code/bar/zed/   — project3, first worktree
-    //   code/baz/zed/   — project3, second worktree
+    //   code/tau/       — project1 (single worktree)
+    //   code/foo/tau/   — project2 (single worktree)
+    //   code/bar/tau/   — project3, first worktree
+    //   code/baz/tau/   — project3, second worktree
     //
     // No two projects share a worktree path, so ProjectGroupBuilder will
     // place each in its own group.
-    let code_zed = canonical_temp.join("code").join("zed");
-    let foo_zed = canonical_temp.join("code").join("foo").join("zed");
-    let bar_zed = canonical_temp.join("code").join("bar").join("zed");
-    let baz_zed = canonical_temp.join("code").join("baz").join("zed");
+    let code_zed = canonical_temp.join("code").join("tau");
+    let foo_zed = canonical_temp.join("code").join("foo").join("tau");
+    let bar_zed = canonical_temp.join("code").join("bar").join("tau");
+    let baz_zed = canonical_temp.join("code").join("baz").join("tau");
     std::fs::create_dir_all(&code_zed)?;
     std::fs::create_dir_all(&foo_zed)?;
     std::fs::create_dir_all(&bar_zed)?;
@@ -3519,7 +3519,7 @@ fn run_sidebar_duplicate_project_names_visual_tests(
 
     let mut has_baseline_update = None;
 
-    // Two single-worktree projects whose leaf name is "zed"
+    // Two single-worktree projects whose leaf name is "tau"
     {
         let project1 = create_project_with_worktree(&code_zed, &app_state, cx)?;
         let project2 = create_project_with_worktree(&foo_zed, &app_state, cx)?;
@@ -3542,11 +3542,11 @@ fn run_sidebar_duplicate_project_names_visual_tests(
         }
     }
 
-    // Three projects, third has two worktrees (all leaf names "zed")
+    // Three projects, third has two worktrees (all leaf names "tau")
     //
-    // project1: code/zed
-    // project2: code/foo/zed
-    // project3: code/bar/zed + code/baz/zed
+    // project1: code/tau
+    // project2: code/foo/tau
+    // project3: code/bar/tau + code/baz/tau
     //
     // Each project has a unique set of worktree paths, so they form
     // separate groups. The sidebar must disambiguate all three.

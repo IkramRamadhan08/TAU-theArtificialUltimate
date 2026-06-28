@@ -4965,7 +4965,7 @@ async fn test_exact_filename_stem_preferred(cx: &mut TestAppContext) {
                     }
                 },
                 "crates": {
-                    "zed": {
+                    "tau": {
                         "resources": {
                             "app-icon-nightly@2x.png": "",
                             "app-icon-preview@2x.png": "",

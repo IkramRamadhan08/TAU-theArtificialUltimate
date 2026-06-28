@@ -2,7 +2,7 @@
 -- To regenerate, run `cargo xtask db dump-schema app --collab` from the Cloud repository.
 --
 -- WARNING: If you are modifying this file you MUST open a PR to the Cloud repository prior to merging any changes.
--- If you are not Zed staff you MUST coordinate with a staff member to apply the schema migrations before this PR is merged.
+-- If you are not Tau staff you MUST coordinate with a staff member to apply the schema migrations before this PR is merged.
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;
 

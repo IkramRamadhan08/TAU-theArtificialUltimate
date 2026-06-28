@@ -187,8 +187,8 @@ fn connect_denied_host_returns_511_with_via_header() {
         response.starts_with("HTTP/1.1 511 "),
         "expected 511, got: {response}"
     );
-    assert!(response.contains("Via: 1.1 zed-sandbox-proxy"));
-    assert!(response.contains("Proxy-Status: zed-sandbox-proxy"));
+    assert!(response.contains("Via: 1.1 tau-sandbox-proxy"));
+    assert!(response.contains("Proxy-Status: tau-sandbox-proxy"));
     assert!(response.contains("denied.example"));
     assert!(response.contains("not in this conversation's network allowlist"));
 

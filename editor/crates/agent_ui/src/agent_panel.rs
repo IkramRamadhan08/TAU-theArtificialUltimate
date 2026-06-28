@@ -22,7 +22,7 @@ use project::{AgentId, ProjectItem};
 use serde::{Deserialize, Serialize};
 use settings::{LanguageModelProviderSetting, LanguageModelSelection};
 
-use zed_actions::{
+use tau_actions::{
     DecreaseBufferFontSize, IncreaseBufferFontSize, ResetBufferFontSize,
     agent::{
         AddSelectionToThread, ConflictContent, LogoutAgent, OpenSettings, ReauthenticateAgent,
@@ -3394,8 +3394,8 @@ impl AgentPanel {
         cx: &mut Context<Self>,
     ) {
         window.dispatch_action(
-            Box::new(zed_actions::OpenSettingsAt {
-                path: zed_actions::AGENT_SKILLS_SETTINGS_PATH.to_string(),
+            Box::new(tau_actions::OpenSettingsAt {
+                path: tau_actions::AGENT_SKILLS_SETTINGS_PATH.to_string(),
                 target: None,
             }),
             cx,
@@ -4719,7 +4719,7 @@ impl agent::SiblingThreadHost for AgentPanelSiblingHost {
         cx.spawn(async move |cx| {
             let agent_choice = match request.agent_id.as_deref() {
                 None => None,
-                Some(id) if id == agent::ZED_AGENT_ID.as_ref() => Some(Agent::NativeAgent),
+                Some(id) if id == agent::TAU_AGENT_ID.as_ref() => Some(Agent::NativeAgent),
                 Some(id) => {
                     // Reject unknown agent ids up front so the model gets a
                     // structured error pointing at `list_agents_and_models`,
@@ -4781,12 +4781,12 @@ impl agent::SiblingThreadHost for AgentPanelSiblingHost {
                 // detached HEAD state — the agent can attach to a branch via
                 // git afterwards.
                 let branch_target = match request.base_ref.as_ref() {
-                    Some(ref_name) => zed_actions::NewWorktreeBranchTarget::ExistingBranch {
+                    Some(ref_name) => tau_actions::NewWorktreeBranchTarget::ExistingBranch {
                         name: ref_name.clone(),
                     },
-                    None => zed_actions::NewWorktreeBranchTarget::CurrentBranch,
+                    None => tau_actions::NewWorktreeBranchTarget::CurrentBranch,
                 };
-                let action = zed_actions::CreateWorktree {
+                let action = tau_actions::CreateWorktree {
                     worktree_name: request.worktree_name.clone(),
                     branch_target,
                 };
@@ -4895,7 +4895,7 @@ impl agent::SiblingThreadHost for AgentPanelSiblingHost {
             models
         };
         agents.push(agent::AvailableAgent {
-            id: agent::ZED_AGENT_ID.to_string(),
+            id: agent::TAU_AGENT_ID.to_string(),
             name: Agent::NativeAgent.label(),
             is_native: true,
             models: native_models,
@@ -5627,9 +5627,9 @@ impl AgentPanel {
                                 .action("Add Custom Server…", Box::new(AddContextServer))
                                 .action(
                                     "Install New Servers…",
-                                    Box::new(zed_actions::Extensions {
+                                    Box::new(tau_actions::Extensions {
                                         category_filter: Some(
-                                            zed_actions::ExtensionCategoryFilter::ContextServers,
+                                            tau_actions::ExtensionCategoryFilter::ContextServers,
                                         ),
                                         id: None,
                                     }),
@@ -5982,7 +5982,7 @@ impl AgentPanel {
                                 .handler({
                                     move |window, cx| {
                                         window
-                                            .dispatch_action(Box::new(zed_actions::AcpRegistry), cx)
+                                            .dispatch_action(Box::new(tau_actions::AcpRegistry), cx)
                                     }
                                 }),
                         )
@@ -6173,7 +6173,7 @@ impl AgentPanel {
                     .read(cx)
                     .default_model()
                     .is_some_and(|model| {
-                        model.provider.id() != language_model::ZED_CLOUD_PROVIDER_ID
+                        model.provider.id() != language_model::TAU_CLOUD_PROVIDER_ID
                     })
                 {
                     return false;
@@ -6227,7 +6227,7 @@ impl AgentPanel {
             .iter()
             .any(|provider| {
                 provider.is_authenticated(cx)
-                    && provider.id() != language_model::ZED_CLOUD_PROVIDER_ID
+                    && provider.id() != language_model::TAU_CLOUD_PROVIDER_ID
             });
 
         match &self.base_view {
@@ -6906,7 +6906,7 @@ mod tests {
 
     impl AgentConnection for SessionTrackingConnection {
         fn agent_id(&self) -> AgentId {
-            agent::ZED_AGENT_ID.clone()
+            agent::TAU_AGENT_ID.clone()
         }
 
         fn telemetry_id(&self) -> SharedString {
@@ -8117,8 +8117,8 @@ mod tests {
             "resource text should be the raw conflict"
         );
         assert!(
-            uri.starts_with("zed:///agent/merge-conflict"),
-            "URI should use the zed merge-conflict scheme, got: {uri}"
+            uri.starts_with("tau:///agent/merge-conflict"),
+            "URI should use the tau merge-conflict scheme, got: {uri}"
         );
         assert!(uri.contains("utils.rs"), "URI should encode the file path");
     }
@@ -12520,7 +12520,7 @@ mod tests {
 
     impl AgentConnection for DisassociationTrackingConnection {
         fn agent_id(&self) -> AgentId {
-            agent::ZED_AGENT_ID.clone()
+            agent::TAU_AGENT_ID.clone()
         }
 
         fn telemetry_id(&self) -> SharedString {

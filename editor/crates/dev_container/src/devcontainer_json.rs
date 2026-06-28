@@ -128,7 +128,7 @@ impl std::fmt::Display for FeatureOptionValue {
 
 #[derive(Clone, Debug, Serialize, Eq, PartialEq, Default)]
 pub(crate) struct ZedCustomizationsWrapper {
-    pub(crate) zed: ZedCustomization,
+    pub(crate) tau: ZedCustomization,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq, Default)]
@@ -306,7 +306,7 @@ impl DevContainer {
 }
 
 // Custom deserializer that parses the entire customizations object as a
-// serde_json_lenient::Value first, then extracts the "zed" portion.
+// serde_json_lenient::Value first, then extracts the "tau" portion.
 // This avoids a bug in serde_json_lenient's `ignore_value` codepath which
 // does not handle trailing commas in skipped values.
 impl<'de> Deserialize<'de> for ZedCustomizationsWrapper {
@@ -315,13 +315,13 @@ impl<'de> Deserialize<'de> for ZedCustomizationsWrapper {
         D: Deserializer<'de>,
     {
         let value = Value::deserialize(deserializer)?;
-        let zed = value
-            .get("zed")
+        let tau = value
+            .get("tau")
             .map(|zed_value| serde_json_lenient::from_value::<ZedCustomization>(zed_value.clone()))
             .transpose()
             .map_err(serde::de::Error::custom)?
             .unwrap_or_default();
-        Ok(ZedCustomizationsWrapper { zed })
+        Ok(ZedCustomizationsWrapper { tau })
     }
 }
 
@@ -646,7 +646,7 @@ mod test {
                       "GitHub.vscode-pull-request-github",
                     ],
                   },
-                  "zed": {
+                  "tau": {
                     "extensions": ["vue", "ruby"],
                   },
                   "codespaces": {
@@ -674,7 +674,7 @@ mod test {
         assert_eq!(
             devcontainer.customizations,
             Some(ZedCustomizationsWrapper {
-                zed: ZedCustomization {
+                tau: ZedCustomization {
                     extensions: vec!["vue".to_string(), "ruby".to_string()]
                 }
             })
@@ -698,14 +698,14 @@ mod test {
 
         assert!(
             result.is_ok(),
-            "Should handle missing zed key in customizations, but got: {:?}",
+            "Should handle missing tau key in customizations, but got: {:?}",
             result.err()
         );
         let devcontainer = result.expect("ok");
         assert_eq!(
             devcontainer.customizations,
             Some(ZedCustomizationsWrapper {
-                zed: ZedCustomization { extensions: vec![] }
+                tau: ZedCustomization { extensions: vec![] }
             })
         );
     }
@@ -815,7 +815,7 @@ mod test {
                     "vscode": {
                         // Just confirm that this can be included and ignored
                     },
-                    "zed": {
+                    "tau": {
                         "extensions": [
                             "html"
                         ]
@@ -948,7 +948,7 @@ mod test {
                     mount_type: Some("bind".to_string())
                 }),
                 customizations: Some(ZedCustomizationsWrapper {
-                    zed: ZedCustomization {
+                    tau: ZedCustomization {
                         extensions: vec!["html".to_string()]
                     }
                 }),
@@ -1591,7 +1591,7 @@ mod test {
                     "vscode": {
                         // Just confirm that this can be included and ignored
                     },
-                    "zed": {
+                    "tau": {
                         "extensions": [
                             "html"
                         ]
@@ -1629,7 +1629,7 @@ mod test {
                     "vscode": {
                         // Just confirm that this can be included and ignored
                     },
-                    "zed": {
+                    "tau": {
                         "extensions": [
                             "html"
                         ]
@@ -1666,7 +1666,7 @@ mod test {
                     "vscode": {
                         // Just confirm that this can be included and ignored
                     },
-                    "zed": {
+                    "tau": {
                         "extensions": [
                             "html"
                         ]

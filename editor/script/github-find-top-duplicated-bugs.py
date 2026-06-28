@@ -28,8 +28,8 @@ from collections import Counter, defaultdict
 
 import requests
 
-OWNER = "zed-industries"
-REPO = "zed"
+OWNER = "tau-industries"
+REPO = "tau"
 
 GRAPHQL_URL = "https://api.github.com/graphql"
 REST_API_URL = "https://api.github.com"

@@ -6,7 +6,7 @@ use fs::Fs;
 use gpui::{App, BorrowAppContext, Subscription};
 use settings::{Settings, SettingsStore, update_settings_file};
 
-use crate::{FeatureFlag, FeatureFlagValue, FeatureFlagsSettings, ZED_DISABLE_STAFF};
+use crate::{FeatureFlag, FeatureFlagValue, FeatureFlagsSettings, TAU_DISABLE_STAFF};
 
 pub struct FeatureFlagDescriptor {
     pub name: &'static str,
@@ -100,10 +100,10 @@ impl FeatureFlagStore {
     ///
     /// Overrides are a staff-only affordance, so non-staff users in release
     /// builds can't flip flags through `settings.json` or the settings UI.
-    /// Debug builds are always treated as staff, and `ZED_DISABLE_STAFF`
+    /// Debug builds are always treated as staff, and `TAU_DISABLE_STAFF`
     /// forces the user to be treated as non-staff for testing.
     pub fn overrides_enabled(&self) -> bool {
-        (cfg!(debug_assertions) || self.staff) && !*ZED_DISABLE_STAFF
+        (cfg!(debug_assertions) || self.staff) && !*TAU_DISABLE_STAFF
     }
 
     pub fn server_flags_received(&self) -> bool {
@@ -177,7 +177,7 @@ impl FeatureFlagStore {
         }
 
         // Staff default: resolve to the enabled variant.
-        if (cfg!(debug_assertions) || self.staff) && !*ZED_DISABLE_STAFF && T::enabled_for_staff() {
+        if (cfg!(debug_assertions) || self.staff) && !*TAU_DISABLE_STAFF && T::enabled_for_staff() {
             return Some(T::Value::on_variant());
         }
 
@@ -224,7 +224,7 @@ impl FeatureFlagStore {
         }
 
         if (cfg!(debug_assertions) || self.staff)
-            && !*ZED_DISABLE_STAFF
+            && !*TAU_DISABLE_STAFF
             && (descriptor.enabled_for_staff)()
         {
             return on_variant_key;
@@ -249,7 +249,7 @@ impl FeatureFlagStore {
         if T::enabled_for_all() {
             return true;
         }
-        cfg!(debug_assertions) && T::enabled_for_staff() && !*ZED_DISABLE_STAFF
+        cfg!(debug_assertions) && T::enabled_for_staff() && !*TAU_DISABLE_STAFF
     }
 }
 

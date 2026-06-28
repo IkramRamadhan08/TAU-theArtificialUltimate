@@ -516,7 +516,7 @@ impl LanguageModel for OpenAiSubscribedLanguageModel {
             let mut header_pairs: Vec<(HeaderName, HeaderValue)> = vec![
                 (
                     HeaderName::from_static("originator"),
-                    HeaderValue::from_static("zed"),
+                    HeaderValue::from_static("tau"),
                 ),
                 (
                     HeaderName::from_static("openai-beta"),
@@ -751,7 +751,7 @@ async fn do_oauth_flow(
         .append_pair("id_token_add_organizations", "true")
         .append_pair("state", &oauth_state)
         .append_pair("codex_cli_simplified_flow", "true")
-        .append_pair("originator", "zed");
+        .append_pair("originator", "tau");
 
     // Open browser AFTER the listener is ready
     cx.update(|cx| cx.open_url(auth_url.as_str()));

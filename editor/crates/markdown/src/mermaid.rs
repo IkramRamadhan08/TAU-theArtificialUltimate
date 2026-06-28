@@ -633,7 +633,7 @@ mod tests {
             "IBM Plex Sans, sans-serif"
         );
         assert_eq!(
-            super::mermaid_font_family("Zed Plex Sans"),
+            super::mermaid_font_family("Tau Plex Sans"),
             "IBM Plex Sans, sans-serif"
         );
         assert_eq!(super::mermaid_font_family(".ZedMono"), "Lilex, sans-serif");

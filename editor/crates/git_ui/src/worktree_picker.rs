@@ -24,7 +24,7 @@ use workspace::{
 };
 
 use crate::git_panel::show_error_toast;
-use zed_actions::{
+use tau_actions::{
     CreateWorktree, NewWorktreeBranchTarget, OpenWorktreeInNewWindow, SwitchWorktree,
 };
 

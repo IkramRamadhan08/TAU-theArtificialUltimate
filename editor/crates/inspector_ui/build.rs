@@ -16,5 +16,5 @@ fn main() {
     }
     path.pop();
 
-    println!("cargo:rustc-env=ZED_REPO_DIR={}", path.display());
+    println!("cargo:rustc-env=TAU_REPO_DIR={}", path.display());
 }

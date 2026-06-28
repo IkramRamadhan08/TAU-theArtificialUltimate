@@ -49,7 +49,7 @@ fn dismiss_path_for_worktree(
         .filter_map(|repo| {
             let repo = repo.read(cx);
             let work_dir = repo.work_directory_abs_path.clone();
-            // The folder opened in Zed isn't necessarily the repo root; it may be
+            // The folder opened in Tau isn't necessarily the repo root; it may be
             // a subdirectory of it, e.g. opening `~/code/myrepo/backend` when the
             // repo lives at `~/code/myrepo`. So match any repo whose work directory
             // contains the folder. Nested repos can produce multiple matches, e.g.
@@ -114,7 +114,7 @@ pub fn suggest_on_worktree_updated(
                     .any(|wt| !find_configs_in_snapshot(wt.read(cx)).is_empty());
                 if has_configs {
                     cx.on_next_frame(window, move |_workspace, window, cx| {
-                        window.dispatch_action(Box::new(zed_actions::OpenDevContainer), cx);
+                        window.dispatch_action(Box::new(tau_actions::OpenDevContainer), cx);
                     });
                 } else {
                     log::warn!("--dev-container: no devcontainer configuration found in project");
@@ -171,7 +171,7 @@ pub fn suggest_on_worktree_updated(
                 .primary_icon_color(Color::Success)
                 .primary_on_click({
                     move |window, cx| {
-                        window.dispatch_action(Box::new(zed_actions::OpenDevContainer), cx);
+                        window.dispatch_action(Box::new(tau_actions::OpenDevContainer), cx);
                     }
                 })
                 .secondary_message("Don't Show Again")

@@ -81,7 +81,7 @@ pub struct ProjectSettingsContent {
     /// The list of custom Git hosting providers.
     pub git_hosting_providers: Option<ExtendingVec<GitHostingProviderConfig>>,
 
-    /// Whether to disable all AI features in Zed.
+    /// Whether to disable all AI features in Tau.
     ///
     /// Default: false
     pub disable_ai: Option<SaturatingBool>,
@@ -182,7 +182,7 @@ pub struct LspSettings {
     /// Consult the documentation for the specific language server to see which settings are supported.
     pub settings: Option<serde_json::Value>,
     /// If the server supports sending tasks over LSP extensions,
-    /// this setting can be used to enable or disable them in Zed.
+    /// this setting can be used to enable or disable them in Tau.
     /// Default: true
     #[serde(default = "default_true")]
     pub enable_lsp_tasks: bool,
@@ -557,15 +557,15 @@ pub struct GitSettings {
     /// When the resolved directory is outside the project root, the
     /// project's directory name is automatically appended so that
     /// sibling repos don't collide. For example, with the default
-    /// `"../worktrees"` and a project at `~/code/zed`, worktrees are
-    /// created under `~/code/worktrees/zed/`.
+    /// `"../worktrees"` and a project at `~/code/tau`, worktrees are
+    /// created under `~/code/worktrees/tau/`.
     ///
     /// When the resolved directory is inside the project root, no
     /// extra component is added (it's already project-scoped).
     ///
     /// Examples:
     /// - `"../worktrees"` — `~/code/worktrees/<project>/` (default)
-    /// - `".git/zed-worktrees"` — `<project>/.git/zed-worktrees/`
+    /// - `".git/tau-worktrees"` — `<project>/.git/tau-worktrees/`
     /// - `"my-worktrees"` — `<project>/my-worktrees/`
     ///
     /// Trailing slashes are ignored.
@@ -720,7 +720,7 @@ pub struct DiagnosticsSettingsContent {
     /// Default: true
     pub include_warnings: Option<bool>,
 
-    /// Settings for using LSP pull diagnostics mechanism in Zed.
+    /// Settings for using LSP pull diagnostics mechanism in Tau.
     pub lsp_pull_diagnostics: Option<LspPullDiagnosticsSettingsContent>,
 
     /// Settings for showing inline diagnostics.
@@ -777,9 +777,9 @@ pub struct InlineDiagnosticsSettingsContent {
 pub struct NodeBinarySettings {
     /// The path to the Node binary.
     pub path: Option<String>,
-    /// The path to the npm binary Zed should use (defaults to `.path/../npm`).
+    /// The path to the npm binary Tau should use (defaults to `.path/../npm`).
     pub npm_path: Option<String>,
-    /// If enabled, Zed will download its own copy of Node.
+    /// If enabled, Tau will download its own copy of Node.
     pub ignore_system_version: Option<bool>,
 }
 

@@ -40,7 +40,7 @@ use language_model::{
     LanguageModelRequest, LanguageModelRequestMessage, LanguageModelRequestTool,
     LanguageModelToolResult, LanguageModelToolResultContent, LanguageModelToolSchemaFormat,
     LanguageModelToolUse, LanguageModelToolUseId, MessageContent, Role, SelectedModel, Speed,
-    StopReason, TokenUsage, ZED_CLOUD_PROVIDER_ID,
+    StopReason, TokenUsage, TAU_CLOUD_PROVIDER_ID,
 };
 use project::Project;
 use prompt_store::ProjectContext;
@@ -1382,7 +1382,7 @@ impl Thread {
         }
 
         let temp_dir = tempfile::Builder::new()
-            .prefix("zed-agent-terminal-")
+            .prefix("tau-agent-terminal-")
             .tempdir()
             .context("failed to create sandboxed terminal temp directory")?;
         let temp_dir = temp_dir.keep();
@@ -3000,7 +3000,7 @@ impl Thread {
             return Err(anyhow!(error));
         };
 
-        let auto_retry = if model.provider_id() == ZED_CLOUD_PROVIDER_ID {
+        let auto_retry = if model.provider_id() == TAU_CLOUD_PROVIDER_ID {
             plan.is_some()
         } else {
             true

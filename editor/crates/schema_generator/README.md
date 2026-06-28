@@ -1,6 +1,6 @@
-# Zed Schema Generator
+# Tau Schema Generator
 
-Prints various Zed schemas to stdout.
+Prints various Tau schemas to stdout.
 
 ## Usage
 

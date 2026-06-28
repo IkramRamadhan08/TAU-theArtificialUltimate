@@ -624,7 +624,7 @@ pub struct OpenAtCommit {
 fn timestamp_format() -> &'static [BorrowedFormatItem<'static>] {
     static FORMAT: OnceLock<Vec<BorrowedFormatItem<'static>>> = OnceLock::new();
     FORMAT.get_or_init(|| {
-        time::format_description::parse("[day] [month repr:short] [year] [hour]:[minute]")
+        time::format_description::parse_borrowed::<2>("[day] [month repr:short] [year] [hour]:[minute]")
             .unwrap_or_default()
     })
 }
@@ -2827,7 +2827,7 @@ impl GitGraph {
                 let local_offset = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
                 let local_datetime = datetime.to_offset(local_offset);
                 let format =
-                    time::format_description::parse("[month repr:short] [day], [year]").ok();
+                    time::format_description::parse_borrowed::<2>("[month repr:short] [day], [year]").ok();
                 format
                     .and_then(|f| local_datetime.format(&f).ok())
                     .unwrap_or_default()
@@ -6651,12 +6651,12 @@ mod tests {
                         &serde_json::to_string(&json!([
                             // Tagged global task that should be scheduled from the Git graph context menu.
                             {
-                                "label": "Git Show $ZED_GIT_SHA_SHORT",
+                                "label": "Git Show $TAU_GIT_SHA_SHORT",
                                 "command": "git",
-                                "args": ["show", "$ZED_GIT_SHA"],
-                                "cwd": "$ZED_GIT_REPOSITORY_PATH",
+                                "args": ["show", "$TAU_GIT_SHA"],
+                                "cwd": "$TAU_GIT_REPOSITORY_PATH",
                                 "env": {
-                                    "REPOSITORY": "$ZED_GIT_REPOSITORY_NAME",
+                                    "REPOSITORY": "$TAU_GIT_REPOSITORY_NAME",
                                 },
                                 "tags": [GIT_COMMAND_TASK_TAG],
                             },
@@ -6669,9 +6669,9 @@ mod tests {
                             // Tagged task that still should not appear because Git graph task contexts
                             // do not provide editor-specific variables.
                             {
-                                "label": "Print File $ZED_FILE",
+                                "label": "Print File $TAU_FILE",
                                 "command": "echo",
-                                "args": ["$ZED_FILE"],
+                                "args": ["$TAU_FILE"],
                                 "tags": [GIT_COMMAND_TASK_TAG],
                             },
                         ]))
@@ -6804,10 +6804,10 @@ mod tests {
                     Some(
                         &serde_json::to_string(&json!([
                             {
-                                "label": "Check out $ZED_GIT_REF",
+                                "label": "Check out $TAU_GIT_REF",
                                 "command": "git",
-                                "args": ["checkout", "$ZED_GIT_REF"],
-                                "cwd": "$ZED_GIT_REPOSITORY_PATH",
+                                "args": ["checkout", "$TAU_GIT_REF"],
+                                "cwd": "$TAU_GIT_REPOSITORY_PATH",
                                 "tags": [GIT_COMMAND_TASK_TAG],
                             },
                         ]))

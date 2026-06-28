@@ -619,8 +619,8 @@ pub struct GitExcludeOverride {
 }
 
 impl GitExcludeOverride {
-    const START_BLOCK_MARKER: &str = "\n\n#  ====== Auto-added by Zed: =======\n";
-    const END_BLOCK_MARKER: &str = "\n#  ====== End of auto-added by Zed =======\n";
+    const START_BLOCK_MARKER: &str = "\n\n#  ====== Auto-added by Tau: =======\n";
+    const END_BLOCK_MARKER: &str = "\n#  ====== End of auto-added by Tau =======\n";
 
     pub async fn new(git_exclude_path: PathBuf) -> Result<Self> {
         let original_excludes =
@@ -684,7 +684,7 @@ impl GitExcludeOverride {
             }
         }
 
-        // Older versions of Zed didn't have end-of-block markers,
+        // Older versions of Tau didn't have end-of-block markers,
         // so it's impossible to determine auto-generated lines.
         // Conservatively remove the standard list of excludes
         let standard_excludes = format!(
@@ -1284,7 +1284,7 @@ pub async fn get_git_committer(cx: &AsyncApp) -> GitCommitter {
     }
 
     let git_binary_path =
-        if cfg!(target_os = "macos") && option_env!("ZED_BUNDLE").as_deref() == Some("true") {
+        if cfg!(target_os = "macos") && option_env!("TAU_BUNDLE").as_deref() == Some("true") {
             cx.update(|cx| {
                 cx.path_for_auxiliary_executable("git")
                     .context("could not find git binary path")
@@ -3582,7 +3582,7 @@ async fn run_git_command(
             .env("SSH_ASKPASS", ask_pass.script_path())
             .env("SSH_ASKPASS_REQUIRE", "force");
         #[cfg(target_os = "windows")]
-        command.env("ZED_ASKPASS_SOCKET", ask_pass.socket_path());
+        command.env("TAU_ASKPASS_SOCKET", ask_pass.socket_path());
         let git_process = command.spawn()?;
 
         run_askpass_command(ask_pass, git_process).await
@@ -3828,9 +3828,9 @@ mod tests {
             .env("GIT_CONFIG_GLOBAL", "")
             .env("GIT_CONFIG_SYSTEM", "")
             .env("GIT_AUTHOR_NAME", "test")
-            .env("GIT_AUTHOR_EMAIL", "test@zed.dev")
+            .env("GIT_AUTHOR_EMAIL", "test@tau.dev")
             .env("GIT_COMMITTER_NAME", "test")
-            .env("GIT_COMMITTER_EMAIL", "test@zed.dev")
+            .env("GIT_COMMITTER_EMAIL", "test@tau.dev")
             .output()
             .expect("failed to run git command");
         assert!(
@@ -4636,14 +4636,14 @@ mod tests {
     fn test_branches_parsing() {
         // suppress "help: octal escapes are not supported, `\0` is always null"
         #[allow(clippy::octal_escapes)]
-        let input = "*\0060964da10574cd9bf06463a53bf6e0769c5c45e\0\0refs/heads/zed-patches\0refs/remotes/origin/zed-patches\0\01733187470\0John Doe\0generated protobuf\n";
+        let input = "*\0060964da10574cd9bf06463a53bf6e0769c5c45e\0\0refs/heads/tau-patches\0refs/remotes/origin/tau-patches\0\01733187470\0John Doe\0generated protobuf\n";
         assert_eq!(
             parse_branch_input(input).unwrap(),
             vec![Branch {
                 is_head: true,
-                ref_name: "refs/heads/zed-patches".into(),
+                ref_name: "refs/heads/tau-patches".into(),
                 upstream: Some(Upstream {
-                    ref_name: "refs/remotes/origin/zed-patches".into(),
+                    ref_name: "refs/remotes/origin/tau-patches".into(),
                     tracking: UpstreamTracking::Tracked(UpstreamTrackingStatus {
                         ahead: 0,
                         behind: 0
@@ -5320,7 +5320,7 @@ mod tests {
             "remote",
             "add",
             "origin",
-            "https://github.com/zed-industries/zed.git",
+            "https://github.com/tau-industries/tau.git",
         ])
         .await
         .unwrap();
@@ -5337,7 +5337,7 @@ mod tests {
         assert_eq!(remote_urls.len(), 2);
         assert_eq!(
             remote_urls.get("origin").unwrap(),
-            "https://github.com/zed-industries/zed.git"
+            "https://github.com/tau-industries/tau.git"
         );
         assert_eq!(
             remote_urls.get("upstream").unwrap(),

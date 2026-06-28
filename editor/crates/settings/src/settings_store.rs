@@ -43,7 +43,7 @@ use crate::{
 
 use settings_json::{infer_json_indent_size, update_value_in_json_text};
 
-pub const LSP_SETTINGS_SCHEMA_URL_PREFIX: &str = "zed://schemas/settings/lsp/";
+pub const LSP_SETTINGS_SCHEMA_URL_PREFIX: &str = "tau://schemas/settings/lsp/";
 
 pub trait SettingsKey: 'static + Send + Sync {
     /// The name of a key within the JSON file from which this setting should
@@ -2924,9 +2924,9 @@ mod tests {
 
         let schema = SettingsStore::json_schema(&SettingsJsonSchemaParams {
             language_names: &["Rust".to_string(), "TypeScript".to_string()],
-            font_names: &["Zed Mono".to_string()],
+            font_names: &["Tau Mono".to_string()],
             theme_names: &["One Dark".into()],
-            icon_theme_names: &["Zed Icons".into()],
+            icon_theme_names: &["Tau Icons".into()],
             lsp_adapter_names: &[
                 "rust-analyzer".to_string(),
                 "typescript-language-server".to_string(),
@@ -2956,7 +2956,7 @@ mod tests {
 
         assert_eq!(
             init_options_ref,
-            "zed://schemas/settings/lsp/rust-analyzer/initialization_options"
+            "tau://schemas/settings/lsp/rust-analyzer/initialization_options"
         );
 
         let settings_ref = properties
@@ -2969,7 +2969,7 @@ mod tests {
 
         assert_eq!(
             settings_ref,
-            "zed://schemas/settings/lsp/rust-analyzer/settings"
+            "tau://schemas/settings/lsp/rust-analyzer/settings"
         );
     }
 
@@ -2979,9 +2979,9 @@ mod tests {
 
         let schema = SettingsStore::project_json_schema(&SettingsJsonSchemaParams {
             language_names: &["Rust".to_string(), "TypeScript".to_string()],
-            font_names: &["Zed Mono".to_string()],
+            font_names: &["Tau Mono".to_string()],
             theme_names: &["One Dark".into()],
-            icon_theme_names: &["Zed Icons".into()],
+            icon_theme_names: &["Tau Icons".into()],
             lsp_adapter_names: &[
                 "rust-analyzer".to_string(),
                 "typescript-language-server".to_string(),
@@ -3011,7 +3011,7 @@ mod tests {
 
         assert_eq!(
             init_options_ref,
-            "zed://schemas/settings/lsp/rust-analyzer/initialization_options"
+            "tau://schemas/settings/lsp/rust-analyzer/initialization_options"
         );
 
         let settings_ref = properties
@@ -3024,7 +3024,7 @@ mod tests {
 
         assert_eq!(
             settings_ref,
-            "zed://schemas/settings/lsp/rust-analyzer/settings"
+            "tau://schemas/settings/lsp/rust-analyzer/settings"
         );
     }
 
@@ -3034,9 +3034,9 @@ mod tests {
 
         let params = SettingsJsonSchemaParams {
             language_names: &["Rust".to_string()],
-            font_names: &["Zed Mono".to_string()],
+            font_names: &["Tau Mono".to_string()],
             theme_names: &["One Dark".into()],
-            icon_theme_names: &["Zed Icons".into()],
+            icon_theme_names: &["Tau Icons".into()],
             lsp_adapter_names: &["rust-analyzer".to_string()],
             action_names: &[],
             action_documentation: &HashMap::default(),

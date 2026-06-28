@@ -1,5 +1,5 @@
 [package]
-name = "zed_proto"
+name = "tau_proto"
 version = "0.3.2"
 edition.workspace = true
 publish.workspace = true
@@ -13,4 +13,4 @@ path = "src/proto.rs"
 crate-type = ["cdylib"]
 
 [dependencies]
-zed_extension_api = "0.7.0"
+tau_extension_api = "0.7.0"

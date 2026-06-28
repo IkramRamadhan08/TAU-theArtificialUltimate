@@ -61,7 +61,7 @@ impl KeymapOverlay {
     }
 }
 
-const FRONT_MATTER_COMMENT: &str = "<!-- ZED_META {} -->";
+const FRONT_MATTER_COMMENT: &str = "<!-- TAU_META {} -->";
 
 fn main() -> Result<()> {
     zlog::init();
@@ -664,14 +664,14 @@ fn handle_postprocessing() -> Result<()> {
         .expect("has output")
         .as_table_mut()
         .expect("output is table");
-    let zed_html = output.remove("zed-html").expect("zed-html output defined");
-    let default_description = zed_html
+    let tau_html = output.remove("tau-html").expect("tau-html output defined");
+    let default_description = tau_html
         .get("default-description")
         .expect("Default description not found")
         .as_str()
         .expect("Default description not a string")
         .to_string();
-    let default_title = zed_html
+    let default_title = tau_html
         .get("default-title")
         .expect("Default title not found")
         .as_str()
@@ -686,7 +686,7 @@ fn handle_postprocessing() -> Result<()> {
         ""
     };
 
-    output.insert("html".to_string(), zed_html);
+    output.insert("html".to_string(), tau_html);
     mdbook::Renderer::render(&mdbook::renderer::HtmlHandlebars::new(), &ctx)?;
     let ignore_list = ["toc.html"];
 
@@ -780,7 +780,7 @@ fn handle_postprocessing() -> Result<()> {
 
         title_tag_contents
             .trim()
-            .strip_suffix("- Zed")
+            .strip_suffix("- Tau")
             .unwrap_or(title_tag_contents)
             .trim()
             .to_string()

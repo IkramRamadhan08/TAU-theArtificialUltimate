@@ -2,7 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod reliability;
-mod zed;
+mod app;
 
 // Ensure the binary name stays in sync with APP_NAME so that the paths used
 // at runtime (data dir, config dir, etc.) match what the binary is called.
@@ -20,7 +20,7 @@ use agent_ui::AgentPanel;
 use anyhow::{Context as _, Result};
 use clap::Parser;
 use cli::FORCE_CLI_MODE_ENV_VAR_NAME;
-use client::{Client, ProxySettings, RefreshLlmTokenListener, UserStore, parse_zed_link};
+use client::{Client, ProxySettings, RefreshLlmTokenListener, UserStore, parse_tau_link};
 use collections::HashMap;
 use crashes::InitCrashHandler;
 use db::kvp::{GlobalKeyValueStore, KeyValueStore};
@@ -73,13 +73,13 @@ use workspace::{
     AppState, MultiWorkspace, SerializedWorkspaceLocation, SessionWorkspace, Toast,
     WorkspaceSettings, WorkspaceStore, notifications::NotificationId, restore_multiworkspace,
 };
-use zed::{
+use app::{
     OpenListener, OpenRequest, RawOpenRequest, app_menus, build_window_options,
     derive_paths_with_position, edit_prediction_registry, handle_cli_connection,
     handle_keymap_file_changes, initialize_workspace, open_paths_with_positions,
 };
 
-use crate::zed::{CrashHandler, OpenRequestKind, eager_load_active_theme_and_icon_theme};
+use crate::app::{CrashHandler, OpenRequestKind, eager_load_active_theme_and_icon_theme};
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
@@ -87,7 +87,7 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 fn build_application() -> Application {
     let platform = gpui_platform::current_platform(false);
-    if std::env::var("ZED_EXPERIMENTAL_A11Y").as_deref() == Ok("1") {
+    if std::env::var("TAU_EXPERIMENTAL_A11Y").as_deref() == Ok("1") {
         Application::with_platform(platform)
     } else {
         Application::new_inaccessible(platform)
@@ -253,7 +253,7 @@ fn main() {
         }
     }
 
-    // `zed --printenv` Outputs environment variables as JSON to stdout
+    // `tau --printenv` Outputs environment variables as JSON to stdout
     if args.printenv {
         util::shell_env::print_env();
         return;
@@ -274,7 +274,7 @@ fn main() {
         Ok(path) => askpass::set_askpass_program(path),
         Err(err) => {
             eprintln!("Error: {}", err);
-            if std::option_env!("ZED_BUNDLE").is_some() {
+            if std::option_env!("TAU_BUNDLE").is_some() {
                 process::exit(1);
             }
         }
@@ -299,9 +299,9 @@ fn main() {
     }
     ztracing::init();
 
-    let version = option_env!("ZED_BUILD_ID");
+    let version = option_env!("TAU_BUILD_ID");
     let app_commit_sha =
-        option_env!("ZED_COMMIT_SHA").map(|commit_sha| AppCommitSha::new(commit_sha.to_string()));
+        option_env!("TAU_COMMIT_SHA").map(|commit_sha| AppCommitSha::new(commit_sha.to_string()));
     let app_version = AppVersion::load(env!("CARGO_PKG_VERSION"), version, app_commit_sha.clone());
 
     if args.system_specs {
@@ -352,24 +352,24 @@ fn main() {
 
     let (open_listener, mut open_rx) = OpenListener::new();
 
-    let failed_single_instance_check = if *zed_env_vars::ZED_STATELESS
+    let failed_single_instance_check = if *tau_env_vars::TAU_STATELESS
         || *release_channel::RELEASE_CHANNEL == ReleaseChannel::Dev
     {
         false
     } else {
         #[cfg(any(target_os = "linux", target_os = "freebsd"))]
         {
-            crate::zed::listen_for_cli_connections(open_listener.clone()).is_err()
+            crate::app::listen_for_cli_connections(open_listener.clone()).is_err()
         }
 
         #[cfg(target_os = "windows")]
         {
-            !crate::zed::windows_only_instance::handle_single_instance(open_listener.clone(), &args)
+            !crate::app::windows_only_instance::handle_single_instance(open_listener.clone(), &args)
         }
 
         #[cfg(target_os = "macos")]
         {
-            use zed::mac_only_instance::*;
+            use app::mac_only_instance::*;
             ensure_only_instance() != IsOnlyInstance::Yes
         }
     };
@@ -379,7 +379,7 @@ fn main() {
     }
 
     let should_install_crash_handler = matches!(
-        env::var("ZED_GENERATE_MINIDUMPS").as_deref(),
+        env::var("TAU_GENERATE_MINIDUMPS").as_deref(),
         Ok("true" | "1")
     ) || *release_channel::RELEASE_CHANNEL
         != ReleaseChannel::Dev;
@@ -420,7 +420,7 @@ fn main() {
 
     let git_hosting_provider_registry = Arc::new(GitHostingProviderRegistry::new());
     let git_binary_path =
-        if cfg!(target_os = "macos") && option_env!("ZED_BUNDLE").as_deref() == Some("true") {
+        if cfg!(target_os = "macos") && option_env!("TAU_BUNDLE").as_deref() == Some("true") {
             app.path_for_auxiliary_executable("git")
                 .context("could not find git binary path")
                 .log_err()
@@ -485,7 +485,7 @@ fn main() {
         };
         trusted_worktrees::init(db_trusted_paths, cx);
         menu::init();
-        zed_actions::init();
+        tau_actions::init();
 
         release_channel::init(app_version, cx);
         gpui_tokio::init(cx);
@@ -494,7 +494,7 @@ fn main() {
         }
         settings::init(cx);
         zlog_settings::init(cx);
-        zed::watch_settings_files(fs.clone(), cx);
+        app::watch_settings_files(fs.clone(), cx);
         handle_keymap_file_changes(user_keymap_file_rx, user_keymap_watcher, cx);
 
         let user_agent = format!(
@@ -582,9 +582,9 @@ fn main() {
 
         Client::set_global(client.clone(), cx);
 
-        zed::init(cx);
+        app::init(cx);
         #[cfg(target_os = "macos")]
-        zed::move_to_applications::init(cx);
+        app::move_to_applications::init(cx);
         project::Project::init(&client, cx);
         debugger_ui::init(cx);
         debugger_tools::init(cx);
@@ -638,7 +638,7 @@ fn main() {
         );
         language_models::init(app_state.user_store.clone(), app_state.client.clone(), cx);
         acp_tools::init(cx);
-        zed::remote_debug::init(cx);
+        app::remote_debug::init(cx);
         edit_prediction_ui::init(cx);
         web_search::init(cx);
         web_search_providers::init(app_state.client.clone(), app_state.user_store.clone(), cx);
@@ -658,7 +658,7 @@ fn main() {
             false,
             cx,
         );
-        zed::watch_user_agents_md(app_state.fs.clone(), cx);
+        app::watch_user_agents_md(app_state.fs.clone(), cx);
 
         repl::init(app_state.fs.clone(), cx);
         recent_projects::init(cx);
@@ -923,7 +923,7 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
                         workspace::get_any_active_multi_workspace(app_state, cx.clone()).await?;
                     workspace.update(cx, |_, window, cx| {
                         window.dispatch_action(
-                            Box::new(zed_actions::Extensions {
+                            Box::new(tau_actions::Extensions {
                                 category_filter: None,
                                 id: Some(extension_id),
                             }),
@@ -961,7 +961,7 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
                                 });
                             } else {
                                 log::warn!(
-                                    "zed://agent received but the AgentPanel is not registered \
+                                    "tau://agent received but the AgentPanel is not registered \
                                      (is `disable_ai` enabled?)"
                                 );
                             }
@@ -1098,7 +1098,7 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
                                     .project()
                                     .update(cx, |project, _| project.lsp_store())
                             })?;
-                            let uri = format!("zed://schemas/{}", schema_path);
+                            let uri = format!("tau://schemas/{}", schema_path);
                             let json_schema_content =
                                 json_schema_store::handle_schema_request(lsp_store, uri, cx)
                                     .await?;
@@ -1147,8 +1147,8 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
                 });
             }
             OpenRequestKind::Setting { setting_path } => {
-                // zed://settings/languages/$(language)/tab_size  - DONT SUPPORT
-                // zed://settings/languages/Rust/tab_size  - SUPPORT
+                // tau://settings/languages/$(language)/tab_size  - DONT SUPPORT
+                // tau://settings/languages/Rust/tab_size  - SUPPORT
                 // languages.$(language).tab_size
                 // [ languages $(language) tab_size]
                 cx.spawn(async move |cx| {
@@ -1156,9 +1156,9 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
                         workspace::get_any_active_multi_workspace(app_state, cx.clone()).await?;
 
                     workspace.update(cx, |_, window, cx| match setting_path {
-                        None => window.dispatch_action(Box::new(zed_actions::OpenSettings), cx),
+                        None => window.dispatch_action(Box::new(tau_actions::OpenSettings), cx),
                         Some(setting_path) => window.dispatch_action(
-                            Box::new(zed_actions::OpenSettingsAt {
+                            Box::new(tau_actions::OpenSettingsAt {
                                 path: setting_path,
                                 target: None,
                             }),
@@ -1204,7 +1204,7 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
                 });
             }
             OpenRequestKind::GitCommit { sha } => {
-                let base_open_options = zed::open_options_for_request(
+                let base_open_options = app::open_options_for_request(
                     request.open_behavior,
                     &workspace::SerializedWorkspaceLocation::Local,
                     cx,
@@ -1261,7 +1261,7 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
     if let Some(connection_options) = request.remote_connection {
         let open_behavior = request.open_behavior;
         let location = workspace::SerializedWorkspaceLocation::Remote(connection_options.clone());
-        let base_open_options = zed::open_options_for_request(open_behavior, &location, cx);
+        let base_open_options = app::open_options_for_request(open_behavior, &location, cx);
         cx.spawn(async move |cx| {
             let paths: Vec<PathBuf> = request.open_paths.into_iter().map(PathBuf::from).collect();
             open_remote_project(connection_options, paths, app_state, base_open_options, cx).await
@@ -1274,7 +1274,7 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
     let dev_container = request.dev_container;
     if !request.open_paths.is_empty() || !request.diff_paths.is_empty() {
         let app_state = app_state.clone();
-        let base_open_options = zed::open_options_for_request(
+        let base_open_options = app::open_options_for_request(
             request.open_behavior,
             &workspace::SerializedWorkspaceLocation::Local,
             cx,
@@ -1746,10 +1746,10 @@ fn parse_url_arg(arg: &str, cx: &App) -> String {
         Ok(path) => format!("file://{}", path.display()),
         Err(_) => {
             if arg.starts_with("file://")
-                || arg.starts_with("zed://")
-                || arg.starts_with("zed-cli://")
+                || arg.starts_with("tau://")
+                || arg.starts_with("tau-cli://")
                 || arg.starts_with("ssh://")
-                || parse_zed_link(arg, cx).is_some()
+                || parse_tau_link(arg, cx).is_some()
             {
                 arg.into()
             } else {

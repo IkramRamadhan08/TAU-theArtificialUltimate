@@ -1,7 +1,7 @@
 use ai_onboarding::YoungAccountBanner;
 use anyhow::{Result, anyhow};
 use client::{
-    Client, RefreshLlmTokenListener, TelemetrySettings, UserStore, global_llm_token, zed_urls,
+    Client, RefreshLlmTokenListener, TelemetrySettings, UserStore, global_llm_token, tau_urls,
 };
 use cloud_api_client::LlmApiToken;
 use cloud_api_types::OrganizationId;
@@ -13,7 +13,7 @@ use gpui::{AnyElement, AnyView, App, AppContext, Context, Entity, Subscription, 
 use language_model::{
     AuthenticateError, FastModeConfirmation, IconOrSvg, LanguageModel, LanguageModelProvider,
     LanguageModelProviderId, LanguageModelProviderName, LanguageModelProviderState,
-    ZED_CLOUD_PROVIDER_ID, ZED_CLOUD_PROVIDER_NAME,
+    TAU_CLOUD_PROVIDER_ID, TAU_CLOUD_PROVIDER_NAME,
 };
 use language_models_cloud::{CloudLlmTokenProvider, CloudModelProvider};
 use rand::{Rng as _, SeedableRng as _, rngs::StdRng};
@@ -26,8 +26,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use ui::{TintColor, prelude::*};
 
-const PROVIDER_ID: LanguageModelProviderId = ZED_CLOUD_PROVIDER_ID;
-const PROVIDER_NAME: LanguageModelProviderName = ZED_CLOUD_PROVIDER_NAME;
+const PROVIDER_ID: LanguageModelProviderId = TAU_CLOUD_PROVIDER_ID;
+const PROVIDER_NAME: LanguageModelProviderName = TAU_CLOUD_PROVIDER_NAME;
 const MODELS_REFRESH_DEBOUNCE: Duration = Duration::from_secs(5 * 60);
 
 struct ClientTokenProvider {
@@ -374,11 +374,11 @@ impl LanguageModelProvider for CloudLanguageModelProvider {
     }
 
     fn authentication_error_message(&self) -> SharedString {
-        "Failed to sign in with your Zed account (401).".into()
+        "Failed to sign in with your Tau account (401).".into()
     }
 
     fn missing_credentials_error_message(&self) -> SharedString {
-        "You are not signed in to your Zed account. \
+        "You are not signed in to your Tau account. \
         Sign in to continue."
             .into()
     }
@@ -408,30 +408,30 @@ impl RenderOnce for TauAiConfiguration {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let (subscription_text, has_paid_plan) = match self.plan {
             Some(Plan::ZedPro) => (
-                "You have access to Zed's hosted models through your Pro subscription.",
+                "You have access to Tau's hosted models through your Pro subscription.",
                 true,
             ),
             Some(Plan::ZedProTrial) => (
-                "You have access to Zed's hosted models through your Pro trial.",
+                "You have access to Tau's hosted models through your Pro trial.",
                 false,
             ),
             Some(Plan::ZedStudent) => (
-                "You have access to Zed's hosted models through your Student subscription.",
+                "You have access to Tau's hosted models through your Student subscription.",
                 true,
             ),
             Some(Plan::ZedBusiness) => (
                 if self.is_zed_model_provider_enabled {
-                    "You have access to Zed's hosted models through your organization."
+                    "You have access to Tau's hosted models through your organization."
                 } else {
-                    "Zed's hosted models are disabled by your organization's configuration."
+                    "Tau's hosted models are disabled by your organization's configuration."
                 },
                 true,
             ),
             Some(Plan::ZedFree) | None => (
                 if self.eligible_for_trial {
-                    "Subscribe for access to Zed's hosted models. Start with a 14 day free trial."
+                    "Subscribe for access to Tau's hosted models. Start with a 14 day free trial."
                 } else {
-                    "Subscribe for access to Zed's hosted models."
+                    "Subscribe for access to Tau's hosted models."
                 },
                 false,
             ),
@@ -442,28 +442,28 @@ impl RenderOnce for TauAiConfiguration {
                 .full_width()
                 .label_size(LabelSize::Small)
                 .style(ButtonStyle::Tinted(TintColor::Accent))
-                .on_click(|_, _, cx| cx.open_url(&zed_urls::account_url(cx)))
+                .on_click(|_, _, cx| cx.open_url(&tau_urls::account_url(cx)))
                 .into_any_element()
         } else if self.plan.is_none() || self.eligible_for_trial {
             Button::new("start_trial", "Start 14-day Free Pro Trial")
                 .full_width()
                 .style(ui::ButtonStyle::Tinted(ui::TintColor::Accent))
-                .on_click(|_, _, cx| cx.open_url(&zed_urls::start_trial_url(cx)))
+                .on_click(|_, _, cx| cx.open_url(&tau_urls::start_trial_url(cx)))
                 .into_any_element()
         } else {
             Button::new("upgrade", "Upgrade to Pro")
                 .full_width()
                 .style(ui::ButtonStyle::Tinted(ui::TintColor::Accent))
-                .on_click(|_, _, cx| cx.open_url(&zed_urls::upgrade_to_zed_pro_url(cx)))
+                .on_click(|_, _, cx| cx.open_url(&tau_urls::upgrade_to_zed_pro_url(cx)))
                 .into_any_element()
         };
 
         if !self.is_connected {
             return v_flex()
                 .gap_2()
-                .child(Label::new("Sign in to have access to Zed's complete agentic experience with hosted models."))
+                .child(Label::new("Sign in to have access to Tau's complete agentic experience with hosted models."))
                 .child(
-                    Button::new("sign_in", "Sign In to use Zed AI")
+                    Button::new("sign_in", "Sign In to use Tau AI")
                         .start_icon(Icon::new(IconName::Github).size(IconSize::Small).color(Color::Muted))
                         .full_width()
                         .on_click({
@@ -479,7 +479,7 @@ impl RenderOnce for TauAiConfiguration {
                     Button::new("upgrade", "Upgrade to Pro")
                         .style(ui::ButtonStyle::Tinted(ui::TintColor::Accent))
                         .full_width()
-                        .on_click(|_, _, cx| cx.open_url(&zed_urls::upgrade_to_zed_pro_url(cx))),
+                        .on_click(|_, _, cx| cx.open_url(&tau_urls::upgrade_to_zed_pro_url(cx))),
                 )
             } else {
                 this.text_sm()
@@ -823,9 +823,9 @@ impl Component for TauAiConfiguration {
     }
 
     fn description() -> &'static str {
-        "The configuration surface for Zed's hosted AI models, \
+        "The configuration surface for Tau's hosted AI models, \
         showing the user's connection status, current plan, trial eligibility, \
-        and entry points for enabling the Zed model provider."
+        and entry points for enabling the Tau model provider."
     }
 
     fn preview(_window: &mut Window, _cx: &mut App) -> AnyElement {
@@ -898,7 +898,7 @@ impl Component for TauAiConfiguration {
                     }),
                 ),
                 single_example(
-                    "Zed Pro Trial Plan",
+                    "Tau Pro Trial Plan",
                     configuration(PreviewConfiguration {
                         plan: Some(Plan::ZedProTrial),
                         is_connected: true,
@@ -907,7 +907,7 @@ impl Component for TauAiConfiguration {
                     }),
                 ),
                 single_example(
-                    "Zed Pro Plan",
+                    "Tau Pro Plan",
                     configuration(PreviewConfiguration {
                         plan: Some(Plan::ZedPro),
                         is_connected: true,
@@ -916,7 +916,7 @@ impl Component for TauAiConfiguration {
                     }),
                 ),
                 single_example(
-                    "Business Plan - Zed models enabled",
+                    "Business Plan - Tau models enabled",
                     configuration(PreviewConfiguration {
                         plan: Some(Plan::ZedBusiness),
                         is_connected: true,
@@ -925,7 +925,7 @@ impl Component for TauAiConfiguration {
                     }),
                 ),
                 single_example(
-                    "Business Plan - Zed models disabled",
+                    "Business Plan - Tau models disabled",
                     configuration(PreviewConfiguration {
                         plan: Some(Plan::ZedBusiness),
                         is_connected: true,

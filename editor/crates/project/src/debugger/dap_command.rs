@@ -1534,7 +1534,7 @@ pub(super) struct Initialize {
 
 fn dap_client_capabilities(adapter_id: String) -> InitializeRequestArguments {
     InitializeRequestArguments {
-        client_id: Some("zed".to_owned()),
+        client_id: Some("tau".to_owned()),
         client_name: Some("TAU".to_owned()),
         adapter_id,
         locale: Some("en-US".to_owned()),

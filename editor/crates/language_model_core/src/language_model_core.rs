@@ -227,7 +227,7 @@ impl LanguageModelCompletionError {
             .strip_prefix("http_")
             .and_then(|code| StatusCode::from_str(code).ok())
         {
-            Self::from_http_status(ZED_CLOUD_PROVIDER_NAME, status_code, message, retry_after)
+            Self::from_http_status(TAU_CLOUD_PROVIDER_NAME, status_code, message, retry_after)
         } else {
             anyhow!("completion request failed, code: {code}, message: {message}").into()
         }

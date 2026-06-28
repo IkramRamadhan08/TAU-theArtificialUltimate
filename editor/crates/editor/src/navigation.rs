@@ -1081,9 +1081,9 @@ impl Editor {
 
             if let Some(url) = url {
                 cx.update(|window, cx| {
-                    if parse_zed_link(&url, cx).is_some() {
+                    if parse_tau_link(&url, cx).is_some() {
                         window.dispatch_action(
-                            Box::new(zed_actions::OpenTauUrl { url: url.into() }),
+                            Box::new(tau_actions::OpenTauUrl { url: url.into() }),
                             cx,
                         );
                     } else {
@@ -1729,9 +1729,9 @@ impl Editor {
                 match first_url_or_file {
                     Some(Either::Left(url)) => {
                         cx.update(|window, cx| {
-                            if parse_zed_link(&url, cx).is_some() {
+                            if parse_tau_link(&url, cx).is_some() {
                                 window.dispatch_action(
-                                    Box::new(zed_actions::OpenTauUrl { url: url.into() }),
+                                    Box::new(tau_actions::OpenTauUrl { url: url.into() }),
                                     cx,
                                 );
                             } else {

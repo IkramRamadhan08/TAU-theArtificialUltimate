@@ -6,9 +6,9 @@ use std::process::Stdio;
 /// groups, and on Windows by using job objects.
 ///
 /// On Windows, dropping this struct closes the job object handle, which
-/// terminates all processes in the job. This also applies when the Zed
+/// terminates all processes in the job. This also applies when the Tau
 /// process exits for any reason (including crashes), since the OS closes
-/// its handles, so spawned process trees can never outlive Zed.
+/// its handles, so spawned process trees can never outlive Tau.
 pub struct Child {
     process: smol::process::Child,
     #[cfg(windows)]

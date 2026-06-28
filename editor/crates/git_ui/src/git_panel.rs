@@ -84,7 +84,7 @@ use workspace::{
     dock::{DockPosition, Panel, PanelEvent},
     notifications::{DetachAndPromptErr, NotificationId, NotifyTaskExt},
 };
-use zed_actions::{DecreaseBufferFontSize, IncreaseBufferFontSize, ResetBufferFontSize};
+use tau_actions::{DecreaseBufferFontSize, IncreaseBufferFontSize, ResetBufferFontSize};
 
 actions!(
     git_panel,
@@ -190,7 +190,7 @@ fn git_panel_context_menu(
                 StashAll.boxed_clone(),
             )
             .action_disabled_when(!state.has_stash_items, "Stash Pop", StashPop.boxed_clone())
-            .action("View Stash", zed_actions::git::ViewStash.boxed_clone())
+            .action("View Stash", tau_actions::git::ViewStash.boxed_clone())
             .separator()
             .action("Open Diff", project_diff::Diff.boxed_clone())
             .separator()
@@ -4152,7 +4152,7 @@ impl GitPanel {
                     (Toast | ToastWithLog { .. }, true) => {
                         this.action("Create Pull Request", move |window, cx| {
                             window
-                                .dispatch_action(Box::new(zed_actions::git::CreatePullRequest), cx);
+                                .dispatch_action(Box::new(tau_actions::git::CreatePullRequest), cx);
                         })
                     }
                     (Toast, false) => this,
@@ -4775,10 +4775,10 @@ impl GitPanel {
                                 this.flex_1().min_h_0().pb(footer_size)
                             })
                             .pr_2p5()
-                            .on_action(|&zed_actions::editor::MoveUp, _, cx| {
+                            .on_action(|&tau_actions::editor::MoveUp, _, cx| {
                                 cx.stop_propagation();
                             })
-                            .on_action(|&zed_actions::editor::MoveDown, _, cx| {
+                            .on_action(|&tau_actions::editor::MoveDown, _, cx| {
                                 cx.stop_propagation();
                             })
                             .child(EditorElement::new(&self.commit_editor, panel_editor_style)),
@@ -7124,7 +7124,7 @@ impl RenderOnce for PanelRepoFooter {
             .label_size(LabelSize::Small)
             .truncate(true)
             .on_click(|_, window, cx| {
-                window.dispatch_action(zed_actions::git::Switch.boxed_clone(), cx);
+                window.dispatch_action(tau_actions::git::Switch.boxed_clone(), cx);
             });
 
         let branch_selector = PopoverMenu::new("popover-button")
@@ -7135,7 +7135,7 @@ impl RenderOnce for PanelRepoFooter {
             })
             .trigger_with_tooltip(
                 branch_selector_button,
-                Tooltip::for_action_title("Switch Branch", &zed_actions::git::Switch),
+                Tooltip::for_action_title("Switch Branch", &tau_actions::git::Switch),
             )
             .anchor(Anchor::BottomLeft)
             .offset(gpui::Point {
@@ -7246,7 +7246,7 @@ impl Component for PanelRepoFooter {
                 is_head: true,
                 ref_name: branch_name.to_string().into(),
                 upstream: upstream.map(|tracking| Upstream {
-                    ref_name: format!("zed/{}", branch_name).into(),
+                    ref_name: format!("tau/{}", branch_name).into(),
                     tracking,
                 }),
                 most_recent_commit: Some(CommitSummary {
@@ -7362,7 +7362,7 @@ impl Component for PanelRepoFooter {
                                 .w(example_width)
                                 .overflow_hidden()
                                 .child(PanelRepoFooter::new_preview(
-                                    SharedString::from("zed"),
+                                    SharedString::from("tau"),
                                     Some(custom("main", behind_upstream)),
                                 ))
                                 .into_any_element(),
@@ -7373,7 +7373,7 @@ impl Component for PanelRepoFooter {
                                 .w(example_width)
                                 .overflow_hidden()
                                 .child(PanelRepoFooter::new_preview(
-                                    SharedString::from("zed"),
+                                    SharedString::from("tau"),
                                     Some(custom(
                                         "redesign-and-update-git-ui-list-entry-style",
                                         behind_upstream,
@@ -7387,7 +7387,7 @@ impl Component for PanelRepoFooter {
                                 .w(example_width)
                                 .overflow_hidden()
                                 .child(PanelRepoFooter::new_preview(
-                                    SharedString::from("zed-industries-community-examples"),
+                                    SharedString::from("tau-industries-community-examples"),
                                     Some(custom("gpui", ahead_of_upstream)),
                                 ))
                                 .into_any_element(),
@@ -7398,7 +7398,7 @@ impl Component for PanelRepoFooter {
                                 .w(example_width)
                                 .overflow_hidden()
                                 .child(PanelRepoFooter::new_preview(
-                                    SharedString::from("zed-industries-community-examples"),
+                                    SharedString::from("tau-industries-community-examples"),
                                     Some(custom(
                                         "redesign-and-update-git-ui-list-entry-style",
                                         behind_upstream,
@@ -7423,7 +7423,7 @@ impl Component for PanelRepoFooter {
                                 .w(example_width)
                                 .overflow_hidden()
                                 .child(PanelRepoFooter::new_preview(
-                                    SharedString::from("zed"),
+                                    SharedString::from("tau"),
                                     Some(custom("update-README", behind_upstream)),
                                 ))
                                 .into_any_element(),
@@ -7600,7 +7600,7 @@ mod tests {
         fs.insert_tree(
             "/root",
             json!({
-                "zed": {
+                "tau": {
                     ".git": {},
                     "crates": {
                         "gpui": {
@@ -7616,7 +7616,7 @@ mod tests {
         .await;
 
         fs.set_status_for_repo(
-            Path::new(path!("/root/zed/.git")),
+            Path::new(path!("/root/tau/.git")),
             &[
                 ("crates/gpui/gpui.rs", StatusCode::Modified.worktree()),
                 ("crates/util/util.rs", StatusCode::Modified.worktree()),
@@ -7624,7 +7624,7 @@ mod tests {
         );
 
         let project =
-            Project::test(fs.clone(), [path!("/root/zed/crates/gpui").as_ref()], cx).await;
+            Project::test(fs.clone(), [path!("/root/tau/crates/gpui").as_ref()], cx).await;
         let window_handle =
             cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
         let workspace = window_handle

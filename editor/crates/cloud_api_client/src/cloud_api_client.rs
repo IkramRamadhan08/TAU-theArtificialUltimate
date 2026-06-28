@@ -92,7 +92,7 @@ impl CloudApiClient {
             .build_zed_cloud_url("/")
             .ok()
             .and_then(|url| url.host_str().map(String::from))
-            .unwrap_or_else(|| "cloud.zed.dev".into())
+            .unwrap_or_else(|| "cloud.tau.dev".into())
     }
 
     fn build_request(
@@ -118,7 +118,7 @@ impl CloudApiClient {
                     .as_ref(),
             )
             .when_some(system_id, |builder, system_id| {
-                builder.header(ZED_SYSTEM_ID_HEADER_NAME, system_id)
+                builder.header(TAU_SYSTEM_ID_HEADER_NAME, system_id)
             });
 
         let request = self.build_request(request_builder, AsyncBody::default())?;
@@ -168,7 +168,7 @@ impl CloudApiClient {
                     .as_ref(),
             )
             .when_some(system_id, |builder, system_id| {
-                builder.header(ZED_SYSTEM_ID_HEADER_NAME, system_id)
+                builder.header(TAU_SYSTEM_ID_HEADER_NAME, system_id)
             });
 
         let request = self.build_request(
@@ -191,7 +191,7 @@ impl CloudApiClient {
                     .map_err(ClientApiError::RequestBuildFailed)?
                     .as_ref(),
             )
-            .header(ZED_SYSTEM_ID_HEADER_NAME, system_id);
+            .header(TAU_SYSTEM_ID_HEADER_NAME, system_id);
 
         let request = self.build_request(request_builder, Json(body))?;
         self.send_authenticated_json_request(request).await

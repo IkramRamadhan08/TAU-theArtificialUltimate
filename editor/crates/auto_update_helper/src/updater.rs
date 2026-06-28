@@ -172,10 +172,10 @@ pub(crate) static JOBS: LazyLock<[Job; 22]> = LazyLock::new(|| {
         // Move old files
         // Not deleting because installing new files can fail
         Job::mkdir(p("old")),
-        Job::move_file(p("Zed.exe"), p("old\\Zed.exe")),
+        Job::move_file(p("Tau.exe"), p("old\\Tau.exe")),
         Job::mkdir(p("old\\bin")),
-        Job::move_file(p("bin\\Zed.exe"), p("old\\bin\\Zed.exe")),
-        Job::move_file(p("bin\\zed"), p("old\\bin\\zed")),
+        Job::move_file(p("bin\\Tau.exe"), p("old\\bin\\Tau.exe")),
+        Job::move_file(p("bin\\tau"), p("old\\bin\\tau")),
         //
         // TODO: remove after a few weeks once everyone is on the new version and this file never exists
         Job::move_if_exists(p("OpenConsole.exe"), p("old\\OpenConsole.exe")),
@@ -189,9 +189,9 @@ pub(crate) static JOBS: LazyLock<[Job; 22]> = LazyLock::new(|| {
         //
         Job::move_file(p("conpty.dll"), p("old\\conpty.dll")),
         // Copy new files
-        Job::move_file(p("install\\Zed.exe"), p("Zed.exe")),
-        Job::move_file(p("install\\bin\\Zed.exe"), p("bin\\Zed.exe")),
-        Job::move_file(p("install\\bin\\zed"), p("bin\\zed")),
+        Job::move_file(p("install\\Tau.exe"), p("Tau.exe")),
+        Job::move_file(p("install\\bin\\Tau.exe"), p("bin\\Tau.exe")),
+        Job::move_file(p("install\\bin\\tau"), p("bin\\tau")),
         //
         Job::mkdir_if_exists(p("x64"), p("install\\x64")),
         Job::mkdir_if_exists(p("arm64"), p("install\\arm64")),
@@ -222,18 +222,18 @@ pub(crate) static JOBS: LazyLock<[Job; 9]> = LazyLock::new(|| {
         Job {
             apply: Box::new(|_| {
                 std::thread::sleep(Duration::from_millis(1000));
-                if let Ok(config) = std::env::var("ZED_AUTO_UPDATE") {
+                if let Ok(config) = std::env::var("TAU_AUTO_UPDATE") {
                     match config.as_str() {
                         "err1" => Err(std::io::Error::other("Simulated error")).context("Anyhow!"),
                         "err2" => Ok(()),
-                        _ => panic!("Unknown ZED_AUTO_UPDATE value: {}", config),
+                        _ => panic!("Unknown TAU_AUTO_UPDATE value: {}", config),
                     }
                 } else {
                     Ok(())
                 }
             }),
             rollback: Box::new(|_| {
-                unsafe { std::env::set_var("ZED_AUTO_UPDATE_RB", "rollback1") };
+                unsafe { std::env::set_var("TAU_AUTO_UPDATE_RB", "rollback1") };
                 Ok(())
             }),
         },
@@ -255,11 +255,11 @@ pub(crate) static JOBS: LazyLock<[Job; 9]> = LazyLock::new(|| {
         Job {
             apply: Box::new(|_| {
                 std::thread::sleep(Duration::from_millis(1000));
-                if let Ok(config) = std::env::var("ZED_AUTO_UPDATE") {
+                if let Ok(config) = std::env::var("TAU_AUTO_UPDATE") {
                     match config.as_str() {
                         "err1" => Ok(()),
                         "err2" => Err(std::io::Error::other("Simulated error")).context("Anyhow!"),
-                        _ => panic!("Unknown ZED_AUTO_UPDATE value: {}", config),
+                        _ => panic!("Unknown TAU_AUTO_UPDATE value: {}", config),
                     }
                 } else {
                     Ok(())
@@ -279,9 +279,9 @@ pub(crate) static JOBS: LazyLock<[Job; 9]> = LazyLock::new(|| {
 fn release_file_handles(app_dir: &Path) -> Result<()> {
     // Files that commonly get locked by Explorer or other processes
     let files_to_release = [
-        app_dir.join("Zed.exe"),
-        app_dir.join("bin\\Zed.exe"),
-        app_dir.join("bin\\zed"),
+        app_dir.join("Tau.exe"),
+        app_dir.join("bin\\Tau.exe"),
+        app_dir.join("bin\\tau"),
         app_dir.join("conpty.dll"),
     ];
 
@@ -428,7 +428,7 @@ pub(crate) fn perform_update(app_dir: &Path, hwnd: Option<isize>, launch: bool) 
 
     if launch {
         #[allow(clippy::disallowed_methods, reason = "doesn't run in the main binary")]
-        let _ = std::process::Command::new(app_dir.join("Zed.exe")).spawn();
+        let _ = std::process::Command::new(app_dir.join("Tau.exe")).spawn();
     }
     log::info!("Update completed successfully");
     Ok(())
@@ -447,7 +447,7 @@ mod test {
         let app_dir = tempfile::tempdir().unwrap();
         let app_dir = app_dir.path();
         // Simulate a timeout
-        unsafe { std::env::set_var("ZED_AUTO_UPDATE", "err1") };
+        unsafe { std::env::set_var("TAU_AUTO_UPDATE", "err1") };
         let ret = perform_update(app_dir, None, false);
         assert!(
             ret.is_err_and(|e| e.to_string().as_str() == "Autoupdate failed, nothing to rollback")
@@ -456,11 +456,11 @@ mod test {
         let app_dir = tempfile::tempdir().unwrap();
         let app_dir = app_dir.path();
         // Simulate a timeout
-        unsafe { std::env::set_var("ZED_AUTO_UPDATE", "err2") };
+        unsafe { std::env::set_var("TAU_AUTO_UPDATE", "err2") };
         let ret = perform_update(app_dir, None, false);
         assert!(
             ret.is_err_and(|e| e.to_string().as_str() == "Autoupdate failed, rollback successful")
         );
-        assert!(std::env::var("ZED_AUTO_UPDATE_RB").is_ok_and(|e| e == "rollback1"));
+        assert!(std::env::var("TAU_AUTO_UPDATE_RB").is_ok_and(|e| e == "rollback1"));
     }
 }

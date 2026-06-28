@@ -3024,7 +3024,7 @@ mod test {
         cx.assert_state("«ˇone» two three", Mode::HelixSelect);
     }
 
-    // Regression test for ZED-758: helix motions called
+    // Regression test for TAU-758: helix motions called
     // `Editor::text_layout_details` on an editor whose `style` had never
     // been set, panicking on `unwrap()`.
     #[gpui::test]

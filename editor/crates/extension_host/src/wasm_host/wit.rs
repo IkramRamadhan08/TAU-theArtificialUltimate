@@ -32,11 +32,11 @@ use wasmtime::{
 pub use latest::CodeLabelSpanLiteral;
 pub use latest::{
     CodeLabel, CodeLabelSpan, Command, DebugAdapterBinary, ExtensionProject, Range, SlashCommand,
-    zed::extension::context_server::ContextServerConfiguration,
-    zed::extension::lsp::{
+    tau::extension::context_server::ContextServerConfiguration,
+    tau::extension::lsp::{
         Completion, CompletionKind, CompletionLabelDetails, InsertTextFormat, Symbol, SymbolKind,
     },
-    zed::extension::slash_command::{SlashCommandArgumentCompletion, SlashCommandOutput},
+    tau::extension::slash_command::{SlashCommandArgumentCompletion, SlashCommandOutput},
 };
 pub use since_v0_0_4::LanguageServerConfig;
 
@@ -85,7 +85,7 @@ pub fn authorize_access_to_unreleased_wasm_api_version(
 
     anyhow::ensure!(
         allow_unreleased_version,
-        "unreleased versions of the extension API can only be used on development builds of Zed"
+        "unreleased versions of the extension API can only be used on development builds of Tau"
     );
 
     Ok(())

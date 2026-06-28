@@ -27,7 +27,7 @@ where
     let thread = new_test_thread(server(&fs, cx).await, project.clone(), "/private/tmp", cx).await;
 
     thread
-        .update(cx, |thread, cx| thread.send_raw("Hello from Zed!", cx))
+        .update(cx, |thread, cx| thread.send_raw("Hello from Tau!", cx))
         .await
         .unwrap();
 
@@ -490,7 +490,7 @@ pub fn get_zed_path() -> PathBuf {
         }
     }
 
-    zed_path.push("zed");
+    zed_path.push("tau");
 
     if !zed_path.exists() {
         panic!("\n🚨 Run `cargo build` at least once before running e2e tests\n\n");

@@ -40,7 +40,7 @@ pub struct SystemPromptTemplate<'a> {
     pub available_tools: Vec<SharedString>,
     pub model_name: Option<String>,
     pub date: String,
-    /// Contents of the user-global `~/.config/zed/AGENTS.md` file (or the
+    /// Contents of the user-global `~/.config/tau/AGENTS.md` file (or the
     /// platform equivalent), if present and non-empty.
     pub user_agents_md: Option<SharedString>,
     /// Whether agent-run terminal commands are wrapped in an OS-level

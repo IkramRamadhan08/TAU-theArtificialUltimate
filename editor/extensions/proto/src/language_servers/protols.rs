@@ -1,5 +1,5 @@
-use zed_extension_api::{
-    self as zed, Architecture, DownloadedFileType, GithubReleaseOptions, Os, Result,
+use tau_extension_api::{
+    self as tau, Architecture, DownloadedFileType, GithubReleaseOptions, Os, Result,
     settings::LspSettings,
 };
 
@@ -20,8 +20,8 @@ impl ProtoLs {
 
     pub(crate) fn language_server_binary(
         &mut self,
-        worktree: &zed::Worktree,
-    ) -> Result<zed::Command> {
+        worktree: &tau::Worktree,
+    ) -> Result<tau::Command> {
         let binary_settings = LspSettings::for_worktree(Self::SERVER_NAME, worktree)
             .ok()
             .and_then(|lsp_settings| lsp_settings.binary);
@@ -34,27 +34,27 @@ impl ProtoLs {
         let env = worktree.shell_env();
 
         if let Some(path) = binary_settings.and_then(|binary_settings| binary_settings.path) {
-            return Ok(zed::Command {
+            return Ok(tau::Command {
                 command: path,
                 args,
                 env,
             });
         } else if let Some(path) = self.cached_binary_path.clone() {
-            return Ok(zed::Command {
+            return Ok(tau::Command {
                 command: path,
                 args,
                 env,
             });
         } else if let Some(path) = worktree.which(Self::SERVER_NAME) {
             self.cached_binary_path = Some(path.clone());
-            return Ok(zed::Command {
+            return Ok(tau::Command {
                 command: path,
                 args,
                 env,
             });
         }
 
-        let latest_release = zed::latest_github_release(
+        let latest_release = tau::latest_github_release(
             "coder3101/protols",
             GithubReleaseOptions {
                 require_assets: true,
@@ -62,7 +62,7 @@ impl ProtoLs {
             },
         )?;
 
-        let (os, arch) = zed::current_platform();
+        let (os, arch) = tau::current_platform();
 
         let release_suffix = match (os, arch) {
             (Os::Mac, Architecture::Aarch64) => "aarch64-apple-darwin.tar.gz",
@@ -97,14 +97,14 @@ impl ProtoLs {
                 )
             })?;
 
-        zed::download_file(&download_target.download_url, &version_dir, file_type)?;
-        zed::make_file_executable(&binary_path)?;
+        tau::download_file(&download_target.download_url, &version_dir, file_type)?;
+        tau::make_file_executable(&binary_path)?;
 
         util::remove_outdated_versions(Self::SERVER_NAME, &version_dir)?;
 
         self.cached_binary_path = Some(binary_path.clone());
 
-        Ok(zed::Command {
+        Ok(tau::Command {
             command: binary_path,
             args,
             env,

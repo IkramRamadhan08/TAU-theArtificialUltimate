@@ -7,7 +7,7 @@ use gpui::{AppContext as _, BenchAppContext, Focusable as _, TestAppContext, Tes
 use rand::{Rng as _, SeedableRng as _, rngs::StdRng};
 use settings::SettingsStore;
 use util::RandomCharIter;
-use zed_actions::editor::{MoveDown, MoveUp};
+use tau_actions::editor::{MoveDown, MoveUp};
 
 #[gpui::bench]
 fn editor_input_with_1000_cursors(cx: &mut BenchAppContext) {

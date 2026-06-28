@@ -145,7 +145,7 @@ pub(crate) fn write_event_with_relative_paths(
 }
 
 fn generate_timestamp_name() -> String {
-    let format = time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]");
+    let format = time::format_description::parse_borrowed::<2>("[year]-[month]-[day] [hour]:[minute]:[second]");
     match format {
         Ok(format) => {
             let now = time::OffsetDateTime::now_local()

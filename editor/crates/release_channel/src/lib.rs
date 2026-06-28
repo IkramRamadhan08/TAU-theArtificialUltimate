@@ -7,12 +7,12 @@ use std::{env, str::FromStr, sync::LazyLock};
 use gpui::{App, Global};
 use semver::Version;
 
-const ZED_DOCS_URL: &str = "https://tau.ai/docs";
+const TAU_DOCS_URL: &str = "https://tau.ai/docs";
 
 /// stable | dev | nightly | preview
 pub static RELEASE_CHANNEL_NAME: LazyLock<String> = LazyLock::new(|| {
     if cfg!(debug_assertions) {
-        env::var("ZED_RELEASE_CHANNEL")
+        env::var("TAU_RELEASE_CHANNEL")
             .unwrap_or_else(|_| include_str!("../../tau/RELEASE_CHANNEL").trim().to_string())
     } else {
         include_str!("../../tau/RELEASE_CHANNEL").trim().to_string()
@@ -87,8 +87,8 @@ impl AppVersion {
         build_id: Option<&str>,
         commit_sha: Option<AppCommitSha>,
     ) -> Version {
-        let mut version: Version = if let Ok(from_env) = env::var("ZED_APP_VERSION") {
-            from_env.parse().expect("invalid ZED_APP_VERSION")
+        let mut version: Version = if let Ok(from_env) = env::var("TAU_APP_VERSION") {
+            from_env.parse().expect("invalid TAU_APP_VERSION")
         } else {
             pkg_version.parse().expect("invalid version in Cargo.toml")
         };
@@ -120,7 +120,7 @@ impl AppVersion {
     }
 }
 
-/// A Zed release channel.
+/// A Tau release channel.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub enum ReleaseChannel {
     /// The development release channel.
@@ -155,7 +155,7 @@ pub fn init_test(app_version: Version, release_channel: ReleaseChannel, cx: &mut
     cx.set_global(GlobalReleaseChannel(release_channel))
 }
 
-/// Returns the Zed docs URL for the current release channel for the given
+/// Returns the Tau docs URL for the current release channel for the given
 /// `slug`.
 pub fn docs_url(slug: &str, cx: &App) -> String {
     ReleaseChannel::try_global(cx)
@@ -213,10 +213,10 @@ impl ReleaseChannel {
     /// This also has to match the bundle identifier for TAU on macOS.
     pub fn app_id(&self) -> &'static str {
         match self {
-            ReleaseChannel::Dev => "ai.tau.TAU-Dev",
-            ReleaseChannel::Nightly => "ai.tau.TAU-Nightly",
-            ReleaseChannel::Preview => "ai.tau.TAU-Preview",
-            ReleaseChannel::Stable => "ai.tau.TAU",
+            ReleaseChannel::Dev => "TAU-Dev",
+            ReleaseChannel::Nightly => "TAU-Nightly",
+            ReleaseChannel::Preview => "TAU-Preview",
+            ReleaseChannel::Stable => "TAU",
         }
     }
 
@@ -230,7 +230,7 @@ impl ReleaseChannel {
         }
     }
 
-    /// Returns the Zed docs URL for this [`ReleaseChannel`] for the given
+    /// Returns the Tau docs URL for this [`ReleaseChannel`] for the given
     /// `slug`.
     pub fn docs_url(&self, slug: &str) -> String {
         let channel_path_segment = match self {
@@ -240,10 +240,10 @@ impl ReleaseChannel {
         };
 
         match channel_path_segment {
-            Some(channel) if slug.is_empty() => format!("{ZED_DOCS_URL}/{channel}"),
-            Some(channel) => format!("{ZED_DOCS_URL}/{channel}/{slug}"),
-            None if slug.is_empty() => ZED_DOCS_URL.to_string(),
-            None => format!("{ZED_DOCS_URL}/{slug}"),
+            Some(channel) if slug.is_empty() => format!("{TAU_DOCS_URL}/{channel}"),
+            Some(channel) => format!("{TAU_DOCS_URL}/{channel}/{slug}"),
+            None if slug.is_empty() => TAU_DOCS_URL.to_string(),
+            None => format!("{TAU_DOCS_URL}/{slug}"),
         }
     }
 }

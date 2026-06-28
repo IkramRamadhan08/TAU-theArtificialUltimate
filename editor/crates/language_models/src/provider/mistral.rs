@@ -402,7 +402,7 @@ pub fn into_mistral(
                                         text_parts.push(text.to_string());
                                     }
                                     LanguageModelToolResultContent::Image(_) => {
-                                        text_parts.push("[Tool responded with an image, but Zed doesn't support these in Mistral models yet]".to_string());
+                                        text_parts.push("[Tool responded with an image, but Tau doesn't support these in Mistral models yet]".to_string());
                                     }
                                 }
                             }
@@ -860,7 +860,7 @@ impl Render for ConfigurationView {
                 .child(self.api_key_editor.clone())
                 .child(
                     Label::new(
-                        format!("You can also set the {API_KEY_ENV_VAR_NAME} environment variable and restart Zed."),
+                        format!("You can also set the {API_KEY_ENV_VAR_NAME} environment variable and restart Tau."),
                     )
                     .size(LabelSize::Small).color(Color::Muted),
                 )

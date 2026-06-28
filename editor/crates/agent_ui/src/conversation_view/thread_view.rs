@@ -461,7 +461,7 @@ mod numbered_code_block_tests {
     #[test]
     fn parses_cat_numbered_markdown_code_block() {
         let parsed = parse_cat_numbered_markdown_code_block(
-            "```rs zed/crates/example.rs\n     2\tfn main() {\n     3\t    println!(\"hi\");\n     4\t}\n```\n",
+            "```rs tau/crates/example.rs\n     2\tfn main() {\n     3\t    println!(\"hi\");\n     4\t}\n```\n",
         )
         .expect("cat-numbered block should parse");
 
@@ -1782,7 +1782,7 @@ impl ThreadView {
                 ThreadError::PaymentRequired => (
                     "payment_required",
                     None,
-                    "You reached your free usage limit. Upgrade to Zed Pro for more prompts."
+                    "You reached your free usage limit. Upgrade to Tau Pro for more prompts."
                         .into(),
                 ),
                 ThreadError::Refusal => {
@@ -2168,7 +2168,7 @@ impl ThreadView {
 
     fn handle_message_editor_move_up(
         &mut self,
-        _: &zed_actions::editor::MoveUp,
+        _: &tau_actions::editor::MoveUp,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -2599,7 +2599,7 @@ impl ThreadView {
                 })
                 .await?;
 
-            let share_url = client::zed_urls::shared_agent_thread_url(&session_id);
+            let share_url = client::tau_urls::shared_agent_thread_url(&session_id);
 
             cx.update(|cx| {
                 if let Some(workspace) = workspace.upgrade() {
@@ -5169,7 +5169,7 @@ impl ThreadView {
                         .handler({
                             move |window, cx| {
                                 window.dispatch_action(
-                                    zed_actions::agent::AddSelectionToThread.boxed_clone(),
+                                    tau_actions::agent::AddSelectionToThread.boxed_clone(),
                                     cx,
                                 );
                             }
@@ -5215,13 +5215,13 @@ impl ThreadView {
         let following = self.is_following(cx);
 
         let tooltip_label = if following {
-            if self.agent_id.as_ref() == agent::ZED_AGENT_ID.as_ref() {
+            if self.agent_id.as_ref() == agent::TAU_AGENT_ID.as_ref() {
                 format!("Stop Following the {}", self.agent_id)
             } else {
                 format!("Stop Following {}", self.agent_id)
             }
         } else {
-            if self.agent_id.as_ref() == agent::ZED_AGENT_ID.as_ref() {
+            if self.agent_id.as_ref() == agent::TAU_AGENT_ID.as_ref() {
                 format!("Follow the {}", self.agent_id)
             } else {
                 format!("Follow {}", self.agent_id)
@@ -6058,7 +6058,7 @@ impl ThreadView {
 
             let tooltip_meta = || {
                 SharedString::new(
-                    "Rating the thread sends all of your current conversation to the Zed team.",
+                    "Rating the thread sends all of your current conversation to the Tau team.",
                 )
             };
 
@@ -9598,7 +9598,7 @@ impl ThreadView {
             ThreadError::RateLimitExceeded { provider } => self.render_error_callout(
                 "Rate Limit Reached",
                 format!(
-                    "{provider}'s rate limit was reached. Zed will retry automatically. \
+                    "{provider}'s rate limit was reached. Tau will retry automatically. \
                     You can also wait a moment and try again."
                 )
                 .into(),
@@ -9609,7 +9609,7 @@ impl ThreadView {
             ThreadError::ServerOverloaded { provider } => self.render_error_callout(
                 "Provider Unavailable",
                 format!(
-                    "{provider}'s servers are temporarily unavailable. Zed will retry \
+                    "{provider}'s servers are temporarily unavailable. Tau will retry \
                     automatically. If the problem persists, check the provider's status page."
                 )
                 .into(),
@@ -9629,7 +9629,7 @@ impl ThreadView {
             ThreadError::StreamError { provider } => self.render_error_callout(
                 "Connection Interrupted",
                 format!(
-                    "The connection to {provider}'s API was interrupted. Zed will retry \
+                    "The connection to {provider}'s API was interrupted. Tau will retry \
                     automatically. If the problem persists, check your network connection."
                 )
                 .into(),
@@ -9680,7 +9680,7 @@ impl ThreadView {
                 "API Error",
                 format!(
                     "{provider}'s API returned an unexpected error. \
-                    If the problem persists, try switching models or restarting Zed."
+                    If the problem persists, try switching models or restarting Tau."
                 )
                 .into(),
                 true,
@@ -9731,7 +9731,7 @@ impl ThreadView {
 
     fn render_payment_required_error(&self, cx: &mut Context<Self>) -> Callout {
         const ERROR_MESSAGE: &str =
-            "You reached your free usage limit. Upgrade to Zed Pro for more prompts.";
+            "You reached your free usage limit. Upgrade to Tau Pro for more prompts.";
 
         Callout::new()
             .severity(Severity::Error)
@@ -9820,7 +9820,7 @@ impl ThreadView {
             .on_click(cx.listener({
                 move |this, _, _, cx| {
                     this.clear_thread_error(cx);
-                    cx.open_url(&zed_urls::upgrade_to_zed_pro_url(cx));
+                    cx.open_url(&tau_urls::upgrade_to_zed_pro_url(cx));
                 }
             }))
     }
@@ -9856,7 +9856,7 @@ impl ThreadView {
     }
 
     fn current_model_name(&self, cx: &App) -> SharedString {
-        // For native agent (Zed Agent), use the specific model name (e.g., "Claude 3.5 Sonnet")
+        // For native agent (Tau Agent), use the specific model name (e.g., "Claude 3.5 Sonnet")
         // For ACP agents, use the agent name (e.g., "Claude Agent", "Gemini CLI")
         // This provides better clarity about what refused the request
         if self.as_native_connection(cx).is_some() {
@@ -9973,7 +9973,7 @@ impl ThreadView {
                     move |_, _, _window, cx| {
                         #[cfg(windows)]
                         _window.dispatch_action(
-                            zed_actions::wsl_actions::OpenWsl::default().boxed_clone(),
+                            tau_actions::wsl_actions::OpenWsl::default().boxed_clone(),
                             cx,
                         );
                         cx.notify();

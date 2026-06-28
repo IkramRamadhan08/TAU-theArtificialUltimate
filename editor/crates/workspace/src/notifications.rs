@@ -1295,7 +1295,7 @@ pub mod simple_message_notification {
                     "Linux desktop portal initialization failed.".into()
                 }
                 fn secondary_message(&self) -> Option<SharedString> {
-                    Some("Zed needs an xdg-desktop-portal implementation to open files.".into())
+                    Some("Tau needs an xdg-desktop-portal implementation to open files.".into())
                 }
                 fn severity(&self) -> ErrorSeverity {
                     ErrorSeverity::Critical
@@ -1303,7 +1303,7 @@ pub mod simple_message_notification {
                 fn primary_action(&self) -> ErrorAction {
                     ErrorAction::link(
                         "See Docs",
-                        "https://zed.dev/docs/linux#i-cant-open-any-files",
+                        "https://tau.dev/docs/linux#i-cant-open-any-files",
                     )
                 }
             }
@@ -1319,7 +1319,7 @@ pub mod simple_message_notification {
                     ErrorSeverity::Critical
                 }
                 fn primary_action(&self) -> ErrorAction {
-                    ErrorAction::link("Update TAU", "https://zed.dev/releases")
+                    ErrorAction::link("Update TAU", "https://tau.dev/releases")
                 }
                 fn secondary_action(&self) -> Option<ErrorAction> {
                     Some(ErrorAction::dismiss())

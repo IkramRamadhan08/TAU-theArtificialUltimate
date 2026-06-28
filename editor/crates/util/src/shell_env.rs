@@ -41,7 +41,7 @@ pub async fn capture(
 /// Try to parse the environment output before checking the exit status.
 /// The user's shell rc files may contain commands that fail (e.g. editor
 /// integrations that call posix_spawnp outside a real PTY), causing a
-/// non-zero exit status even though `zed --printenv` ran successfully and
+/// non-zero exit status even though `tau --printenv` ran successfully and
 /// produced valid output on its separate fd.
 fn parse_env_output(
     env_output: &str,
@@ -89,7 +89,7 @@ async fn capture_unix(
     command.args(args);
     // In some shells, file descriptors greater than 2 cannot be used in interactive mode,
     // so file descriptor 0 (stdin) is used instead. This impacts zsh, old bash; perhaps others.
-    // See: https://github.com/zed-industries/zed/pull/32136#issuecomment-2999645482
+    // See: https://github.com/tau-industries/tau/pull/32136#issuecomment-2999645482
     const FD_STDIN: std::os::fd::RawFd = 0;
     const FD_STDOUT: std::os::fd::RawFd = 1;
     const FD_STDERR: std::os::fd::RawFd = 2;
@@ -213,7 +213,7 @@ async fn capture_windows(
     use std::process::Stdio;
 
     let zed_path =
-        std::env::current_exe().context("Failed to determine current zed executable path.")?;
+        std::env::current_exe().context("Failed to determine current tau executable path.")?;
 
     let shell_kind = ShellKind::new(shell_path, true);
     // Prefix with "./" if the path starts with "-" to prevent cd from interpreting it as a flag

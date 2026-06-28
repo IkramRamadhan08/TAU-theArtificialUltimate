@@ -22,16 +22,16 @@ wasmtime::component::bindgen!({
         "worktree": ExtensionWorktree,
         "project": ExtensionProject,
         "key-value-store": ExtensionKeyValueStore,
-        "zed:extension/github": since_v0_6_0::zed::extension::github,
-        "zed:extension/http-client": latest::zed::extension::http_client,
-        "zed:extension/lsp": since_v0_6_0::zed::extension::lsp,
-        "zed:extension/nodejs": latest::zed::extension::nodejs,
-        "zed:extension/platform": since_v0_6_0::zed::extension::platform,
-        "zed:extension/slash-command": latest::zed::extension::slash_command,
+        "tau:extension/github": since_v0_6_0::tau::extension::github,
+        "tau:extension/http-client": latest::tau::extension::http_client,
+        "tau:extension/lsp": since_v0_6_0::tau::extension::lsp,
+        "tau:extension/nodejs": latest::tau::extension::nodejs,
+        "tau:extension/platform": since_v0_6_0::tau::extension::platform,
+        "tau:extension/slash-command": latest::tau::extension::slash_command,
     },
 });
 
-pub use self::zed::extension::*;
+pub use self::tau::extension::*;
 
 mod settings {
     #![allow(dead_code)]

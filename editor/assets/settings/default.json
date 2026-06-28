@@ -1,5 +1,5 @@
 {
-  "$schema": "zed://schemas/settings",
+  "$schema": "tau://schemas/settings",
   // The name of the TAU theme to use for the UI.
   //
   // `mode` is one of:
@@ -11,7 +11,7 @@
     "light": "One Light",
     "dark": "One Dark",
   },
-  "icon_theme": "Zed (Default)",
+  "icon_theme": "Tau (Default)",
   // The name of a base set of key bindings to use.
   // This setting can take six values, each named after another
   // text editor:
@@ -1655,15 +1655,15 @@
     // When the resolved directory is outside the project root, the
     // project's directory name is automatically appended so that
     // sibling repos don't collide. For example, with the default
-    // "../worktrees" and a project at ~/code/zed, worktrees are
-    // created under ~/code/worktrees/zed/.
+    // "../worktrees" and a project at ~/code/tau, worktrees are
+    // created under ~/code/worktrees/tau/.
     //
     // When the resolved directory is inside the project root, no
     // extra component is added (it's already project-scoped).
     //
     // Examples:
     //   "../worktrees" — ~/code/worktrees/<project>/ (default)
-    //   ".git/zed-worktrees" — <project>/.git/zed-worktrees/
+    //   ".git/tau-worktrees" — <project>/.git/tau-worktrees/
     //   "my-worktrees" — <project>/my-worktrees/
     //
     // Trailing slashes are ignored.
@@ -1687,7 +1687,7 @@
   "load_direnv": "direct",
   "edit_predictions": {
     // Which edit prediction provider to use.
-    "provider": "zed",
+    "provider": "tau",
     // A list of globs representing files that edit predictions should be disabled for.
     // There's a sensible default list of globs already included.
     // Any addition to this list will be merged with the default list.
@@ -1701,9 +1701,9 @@
       "**/*.crt",
       "**/.dev.vars",
       "**/secrets.yml",
-      "**/.zed/settings.json", // zed project settings
-      "/**/zed/settings.json", // zed user settings
-      "/**/zed/keymap.json",
+      "**/.tau/settings.json", // tau project settings
+      "/**/tau/settings.json", // tau user settings
+      "/**/tau/keymap.json",
     ],
     // When to show edit predictions previews in buffer.
     // This setting takes two possible values:
@@ -1820,7 +1820,7 @@
     //    this platform's home directory  (if we can find it)
     //      "working_directory": {
     //        "always": {
-    //          "directory": "~/zed/projects/"
+    //          "directory": "~/tau/projects/"
     //        }
     //      }
     "working_directory": "current_project_directory",
@@ -2046,9 +2046,9 @@
   //
   "file_types": {
     "JSONC": [
-      "**/.zed/*.json",
+      "**/.tau/*.json",
       "**/.vscode/**/*.json",
-      "**/{zed,Zed}/{settings,keymap,tasks,debug}.json",
+      "**/{tau,Tau}/{settings,keymap,tasks,debug}.json",
       "tsconfig*.json",
     ],
     "Markdown": [".rules", ".cursorrules", ".windsurfrules", ".clinerules"],
@@ -2434,7 +2434,7 @@
     "x_ai": {
       "api_url": "https://api.x.ai/v1",
     },
-    "zed.dev": {},
+    "tau.dev": {},
   },
   "session": {
     // Whether or not to restore unsaved buffers on restart.
@@ -2538,7 +2538,7 @@
     //   }
     // ]
     //
-    // Default rules are viewable via the "zed: show default semantic token rules" action.
+    // Default rules are viewable via the "tau: show default semantic token rules" action.
     "semantic_token_rules": [],
   },
   // Jupyter settings
@@ -2597,7 +2597,7 @@
     "delay_ms": 1000,
   },
   // The server to connect to. If the environment variable
-  // ZED_SERVER_URL is set, it will override this setting.
+  // TAU_SERVER_URL is set, it will override this setting.
   "server_url": "http://127.0.0.1:3000",
   // Settings overrides to use when using TAU Preview.
   // Mostly useful for developers who are managing multiple instances of TAU.
@@ -2679,7 +2679,7 @@
   //     // "port": 22, "username": "test", "args": ["-i", "/home/user/.ssh/id_rsa"]
   //     "projects": [
   //       {
-  //         "paths": ["/home/user/code/zed"]
+  //         "paths": ["/home/user/code/tau"]
   //       }
   //     ]
   //   }
@@ -2765,7 +2765,7 @@
   // Configuration for developer-oriented instrumentation tools that can be
   // toggled at runtime.
   "instrumentation": {
-    // Performance profiler, accessed via the `zed: open performance profiler`
+    // Performance profiler, accessed via the `tau: open performance profiler`
     // action. Collects timing data for foreground and background executor
     // tasks. Enabling this may lead to increased memory usage, hence it's
     // disabled by default for regular builds.

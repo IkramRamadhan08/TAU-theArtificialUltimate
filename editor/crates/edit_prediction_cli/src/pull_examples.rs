@@ -23,9 +23,9 @@ pub(crate) const SNOWFLAKE_SUCCESS_CODE: &str = "090001";
 pub(crate) const SNOWFLAKE_ASYNC_IN_PROGRESS_CODE: &str = "333334";
 const SNOWFLAKE_TIMEOUT_CODE: &str = "000630";
 
-/// Minimum Zed version for filtering captured examples.
+/// Minimum Tau version for filtering captured examples.
 /// For example, `MinCaptureVersion { major: 0, minor: 224, patch: 1 }` means only pull
-/// examples where `zed_version >= 0.224.1`. The `major` component is required because Zed
+/// examples where `zed_version >= 0.224.1`. The `major` component is required because Tau
 /// moved from the `0.<minor>.<patch>` scheme to `1.<minor>.<patch>`; comparing on `minor`
 /// alone would exclude all `1.*` versions (whose `minor` resets to small values).
 #[derive(Clone, Copy, Debug)]
@@ -595,7 +595,7 @@ pub async fn fetch_rejected_examples_after(
                 is_ep_shown_before_rejected AS was_shown,
                 ep_rejected_reason AS reason,
                 zed_version AS zed_version
-            FROM ZED_DBT.DBT_PROD.fct_edit_prediction_examples
+            FROM TAU_DBT.DBT_PROD.fct_edit_prediction_examples
             WHERE ep_outcome LIKE ?
                 AND is_ep_shown_before_rejected = true
                 AND requested_at > TRY_TO_TIMESTAMP_NTZ(?)
@@ -689,7 +689,7 @@ pub async fn fetch_accepted_examples_after(
                 requested_output AS output,
                 settled_editable_region AS settled_editable_region,
                 zed_version AS zed_version
-            FROM ZED_DBT.DBT_PROD.fct_edit_prediction_examples
+            FROM TAU_DBT.DBT_PROD.fct_edit_prediction_examples
             WHERE ep_outcome = 'Accepted'
                 AND requested_at > TRY_TO_TIMESTAMP_NTZ(?)
                 AND (? IS NULL OR (
@@ -780,7 +780,7 @@ pub async fn fetch_requested_examples_after(
                 requested_at::string AS time,
                 input_payload AS input,
                 zed_version AS zed_version
-            FROM ZED_DBT.DBT_PROD.fct_edit_prediction_examples
+            FROM TAU_DBT.DBT_PROD.fct_edit_prediction_examples
             WHERE requested_at > TRY_TO_TIMESTAMP_NTZ(?)
                 AND (? IS NULL OR (
                     COALESCE(TRY_CAST(SPLIT_PART(zed_version, '.', 1) AS INTEGER), 0) * 1000000
@@ -859,7 +859,7 @@ pub async fn fetch_captured_examples_after(
                 settled_editable_region AS settled_editable_region,
                 example_payload AS example,
                 zed_version AS zed_version
-            FROM ZED_DBT.DBT_PROD.fct_edit_prediction_examples
+            FROM TAU_DBT.DBT_PROD.fct_edit_prediction_examples
             WHERE settled_editable_region IS NOT NULL
                 AND example_payload IS NOT NULL
                 AND requested_at > TRY_TO_TIMESTAMP_NTZ(?)
@@ -945,7 +945,7 @@ pub async fn fetch_settled_examples_after(
                 settled_editable_region AS settled_editable_region,
                 requested_format AS requested_format,
                 zed_version AS zed_version
-            FROM ZED_DBT.DBT_PROD.fct_edit_prediction_examples
+            FROM TAU_DBT.DBT_PROD.fct_edit_prediction_examples
             WHERE settled_editable_region IS NOT NULL
                 AND requested_at > TRY_TO_TIMESTAMP_NTZ(?)
             ORDER BY requested_at ASC
@@ -1035,7 +1035,7 @@ pub async fn fetch_rated_examples_after(
                 NULL AS experiment_name,
                 NULL AS environment,
                 zed_version AS zed_version
-            FROM ZED_DBT.DBT_PROD.fct_edit_prediction_examples
+            FROM TAU_DBT.DBT_PROD.fct_edit_prediction_examples
             WHERE rating IS NOT NULL
                 AND (? IS NULL OR rating = ?)
                 AND requested_at > TRY_TO_TIMESTAMP_NTZ(?)

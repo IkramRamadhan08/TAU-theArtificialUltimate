@@ -1,5 +1,5 @@
 use crate::multibuffer_hint::MultibufferHint;
-use client::{Client, UserStore, zed_urls};
+use client::{Client, UserStore, tau_urls};
 use cloud_api_types::Plan;
 use db::kvp::KeyValueStore;
 use fs::Fs;
@@ -28,7 +28,7 @@ use workspace::{
     notifications::NotifyResultExt as _,
     open_new, register_serializable_item, with_active_or_new_workspace,
 };
-use zed_actions::OpenOnboarding;
+use tau_actions::OpenOnboarding;
 
 mod base_keymap_picker;
 mod basics_page;
@@ -37,7 +37,7 @@ mod theme_preview;
 
 /// Imports settings from Visual Studio Code.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Deserialize, JsonSchema, Action)]
-#[action(namespace = zed)]
+#[action(namespace = tau)]
 #[serde(deny_unknown_fields)]
 pub struct ImportVsCodeSettings {
     #[serde(default)]
@@ -46,7 +46,7 @@ pub struct ImportVsCodeSettings {
 
 /// Imports settings from Cursor editor.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Deserialize, JsonSchema, Action)]
-#[action(namespace = zed)]
+#[action(namespace = tau)]
 #[serde(deny_unknown_fields)]
 pub struct ImportCursorSettings {
     #[serde(default)]
@@ -62,7 +62,7 @@ actions!(
         Finish,
         /// Sign in while in the onboarding flow.
         SignIn,
-        /// Open the user account in zed.dev while in the onboarding flow.
+        /// Open the user account in tau.dev while in the onboarding flow.
         OpenAccount,
         /// Resets the welcome screen hints to their initial state.
         ResetHints
@@ -292,7 +292,7 @@ impl Onboarding {
     }
 
     fn handle_open_account(_: &OpenAccount, _: &mut Window, cx: &mut App) {
-        cx.open_url(&zed_urls::account_url(cx))
+        cx.open_url(&tau_urls::account_url(cx))
     }
 
     fn render_page(&mut self, cx: &mut Context<Self>) -> AnyElement {

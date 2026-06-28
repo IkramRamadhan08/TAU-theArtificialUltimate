@@ -1,11 +1,11 @@
 # eval-cli
 
-Headless CLI binary for running Zed's agent in evaluation/benchmark
+Headless CLI binary for running Tau's agent in evaluation/benchmark
 environments. Designed to work inside containerized environments like
 [Harbor](https://harborframework.com/) where the repository is already
 checked out and API keys are provided via environment variables.
 
-Uses the same `NativeAgent` + `AcpThread` pipeline as the production Zed
+Uses the same `NativeAgent` + `AcpThread` pipeline as the production Tau
 editor — full agentic loop with tool calls, subagents, and retries, just
 without a GUI.
 

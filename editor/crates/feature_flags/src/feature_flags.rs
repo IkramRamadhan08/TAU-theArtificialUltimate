@@ -17,8 +17,8 @@ pub use flags::*;
 pub use settings::{FeatureFlagsSettings, generate_feature_flags_schema};
 pub use store::*;
 
-pub static ZED_DISABLE_STAFF: LazyLock<bool> = LazyLock::new(|| {
-    std::env::var("ZED_DISABLE_STAFF").is_ok_and(|value| !value.is_empty() && value != "0")
+pub static TAU_DISABLE_STAFF: LazyLock<bool> = LazyLock::new(|| {
+    std::env::var("TAU_DISABLE_STAFF").is_ok_and(|value| !value.is_empty() && value != "0")
 });
 
 impl Global for FeatureFlagStore {}
@@ -108,9 +108,9 @@ impl FeatureFlagValue for PresenceFlag {
 /// To create a feature flag, implement this trait on a trivial type and use it as
 /// a generic parameter when called [`FeatureFlagAppExt::has_flag`].
 ///
-/// Feature flags are enabled for members of Zed staff by default. To disable this behavior
-/// so you can test flags being disabled, set ZED_DISABLE_STAFF=1 in your environment,
-/// which will force Zed to treat the current user as non-staff.
+/// Feature flags are enabled for members of Tau staff by default. To disable this behavior
+/// so you can test flags being disabled, set TAU_DISABLE_STAFF=1 in your environment,
+/// which will force Tau to treat the current user as non-staff.
 pub trait FeatureFlag {
     const NAME: &'static str;
 
@@ -118,7 +118,7 @@ pub trait FeatureFlag {
     /// on/off flags.
     type Value: FeatureFlagValue;
 
-    /// Returns whether this feature flag is enabled for Zed staff.
+    /// Returns whether this feature flag is enabled for Tau staff.
     fn enabled_for_staff() -> bool {
         true
     }

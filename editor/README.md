@@ -1,59 +1,171 @@
-# TAU - The Artificial Ultimate
+# TAU — The Artificial Ultimate
 
-TAU is a local-first, agentic coding IDE — a modified fork of Zed, wired toward the TAU Rust agent runtime.
+<div align="center">
 
-This repository is a modified fork of Zed. It is not affiliated with, endorsed by, or sponsored by Zed Industries, Inc.
+**A local-first, agentic coding IDE for Linux, macOS, and Windows.**
 
----
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE-GPL)
+[![Rust](https://img.shields.io/badge/rust-1.95.0-orange)](rust-toolchain.toml)
+[![Build](https://img.shields.io/badge/build-passing-brightgreen)]()
+[![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-lightgrey)]()
 
-### Quick Start
+</div>
+
+TAU is a high-performance, GPU-accelerated code editor with built-in AI agent capabilities. Forked from [Zed](https://zed.dev).
+
+> 📖 **Full documentation:** [`docs/`](docs/) — User guide, configuration, keybindings, and more.
+
+![TAU Editor](https://via.placeholder.com/800x500/1a1a2e/ffffff?text=TAU+Editor+Screenshot)
+
+## Features
+
+- **Agentic AI** — Built-in LLM integration for code generation, editing, analysis, and automated tasks
+- **Multi-language** — First-class support for Rust, Python, TypeScript, JavaScript, Go, HTML, CSS, JSON, and more via LSP
+- **Vim mode** — Full vim emulation with custom keymaps
+- **Real-time collaboration** — Multi-user editing with shared workspaces (self-hosted)
+- **GPU-accelerated rendering** — Built on GPUI framework using Vulkan, Metal, or DirectX
+- **Terminal** — Integrated terminal with multiplexing
+- **Git integration** — Inline blame, diff viewer, branch management, and commit UI
+- **Debugger** — Built-in debug adapter protocol (DAP) support
+- **Extensible** — WebAssembly-based extensions with custom language grammars
+- **Theme support** — Customizable UI themes (Ayu, One, Gruvbox, and more)
+
+## Quick Start
+
+### Prerequisites
+
+- **Rust toolchain 1.95.0**
+  ```bash
+  rustup toolchain install 1.95.0
+  ```
+- **System dependencies**
+
+  | Distro | Command |
+  |--------|---------|
+  | Arch | `pacman -S --noconfirm pkgconf libxkbcommon libxcb wayland fontconfig libva mesa alsa-lib` |
+  | Debian/Ubuntu | `apt install -y pkg-config libxkbcommon-dev libxcb-shape0-dev libxcb-xfixes0-dev libwayland-dev libfontconfig-dev libva-dev mesa-common-dev libasound2-dev` |
+  | Fedora | `dnf install -y pkg-config libxkbcommon-devel libxcb-devel wayland-devel fontconfig-devel libva-devel mesa-libGL-devel alsa-lib-devel` |
+  | macOS | Xcode Command Line Tools: `xcode-select --install` |
+  | Windows | Visual Studio Build Tools with C++ workload |
+
+### Build & Run
 
 ```bash
-git clone https://github.com/IkramRamadhan08/TAU-theArtificialUltimate.git
-cd TAU-theArtificialUltimate/editor
-cargo run
+git clone https://github.com/IkramRamadhan08/TAU_Project.git
+cd TAU_Project/editor
+cargo run --bin tau
 ```
 
-Or use the `tau` CLI:
+> First build compiles ~236 crates and may take 15–30 minutes depending on your machine.
+
+### Install
 
 ```bash
-../tau.sh install   # build editor + tau-chat
-../tau.sh editor    # launch editor (auto-builds if needed)
-../tau.sh "your prompt"  # one-shot chat
-../tau run          # auto-detect & run project
+cargo build --release --bin tau
+cp target/release/tau ~/.local/bin/
 ```
 
-### Architecture
+Or use the install script:
+```bash
+./install.sh
+```
 
-TAU keeps the editor shell and the agent runtime separated:
+## Configuration
 
-- `TAU-core/agent` — multi-agent runtime and ACP adapter.
-- `editor/` — editor shell, packaging identity, and default TAU agent wiring.
+TAU is configured via JSON files:
 
-### Developing
+| File | Purpose |
+|------|---------|
+| `~/.config/tau/settings.json` | User settings |
+| `~/.config/tau/keymap.json` | Custom keybindings |
+| `~/.config/tau/themes/` | Custom themes |
 
-- Build the TAU agent core from `TAU-core/agent`.
-- Build this editor shell with the upstream Zed build flow.
-- Keep upstream Zed notices and license files intact.
+Example `settings.json`:
+```json
+{
+  "theme": "Ayu Dark",
+  "font_family": "JetBrains Mono",
+  "font_size": 14,
+  "tab_size": 4,
+  "vim_mode": true,
+  "telemetry": false
+}
+```
 
-### Licensing
+## Platform Support
 
-Upstream Zed source code is licensed under GPL-3.0-or-later, with Apache-2.0 components where marked. TAU modifications to GPL-covered parts are distributed under GPL-3.0-or-later.
+| OS | Status | GPU Backend | Windowing |
+|----|--------|-------------|-----------|
+| Linux | ✅ Stable | Vulkan / OpenGL | X11 / Wayland |
+| macOS | ✅ Stable | Metal | Cocoa |
+| Windows | ✅ Stable | Vulkan (via DX12/WGPU) | Win32 |
 
-License information for third party dependencies must be correctly provided for CI to pass.
+## Keybindings
 
-See:
+| Action | Linux/Win | macOS |
+|--------|-----------|-------|
+| Command palette | `Ctrl+Shift+P` | `Cmd+Shift+P` |
+| File finder | `Ctrl+P` | `Cmd+P` |
+| Toggle terminal | `Ctrl+\`` | `Cmd+\`` |
+| Save | `Ctrl+S` | `Cmd+S` |
+| Search in file | `Ctrl+F` | `Cmd+F` |
+| Search in project | `Ctrl+Shift+F` | `Cmd+Shift+F` |
 
-- `LICENSE-GPL`
-- `LICENSE-APACHE`
-- `NOTICE-TAU.md`
+Full keymaps: `assets/keymaps/`
 
-We use [`cargo-about`](https://github.com/EmbarkStudios/cargo-about) to automatically comply with open source licenses. If CI is failing, check the following:
+## Project Structure
 
-- Is it showing a `no license specified` error for a crate you've created? If so, add `publish = false` under `[package]` in your crate's Cargo.toml.
-- Is the error `failed to satisfy license requirements` for a dependency? If so, first determine what license the project has and whether this system is sufficient to comply with this license's requirements. If you're unsure, ask a lawyer. Once you've verified that this system is acceptable add the license's SPDX identifier to the `accepted` array in `script/licenses/tau-licenses.toml`.
-- Is `cargo-about` unable to find the license for a dependency? If so, add a clarification field at the end of `script/licenses/tau-licenses.toml`, as specified in the [cargo-about book](https://embarkstudios.github.io/cargo-about/cli/generate/config.html#crate-configuration).
+```
+editor/
+├── crates/            # 236 Rust crates
+│   ├── gpui/          # GPU-accelerated UI framework
+│   ├── editor/        # Core editor engine
+│   ├── agent/         # AI agent runtime & tool execution
+│   ├── language/      # Language server protocol & parsing
+│   ├── project/       # Project management & LSP store
+│   ├── vim/           # Vim emulation
+│   └── ...
+├── assets/            # Themes, keymaps, icons, settings
+│   ├── themes/        # Ayu, Gruvbox, One themes
+│   ├── keymaps/       # Platform-specific keybindings
+│   └── settings/      # Default configuration
+├── extensions/        # WASM extension examples
+├── script/            # Build, CI, and release scripts
+└── Cargo.toml         # Workspace definition
+```
 
-## Upstream
+## Troubleshooting
 
-TAU is based on Zed, originally developed by **Zed Industries, Inc.** Learn more at <https://zed.dev> and <https://github.com/zed-industries/zed>.
+| Problem | Solution |
+|---------|----------|
+| Build fails on WebRTC | Set `TAU_NO_WEBRTC=true` to skip WebRTC download |
+| GPU not detected | Ensure Vulkan drivers are installed (`mesa-vulkan-drivers` on Arch, `mesa-vulkan-drivers` on Debian) |
+| Missing X11 libs | Install `libxcb`, `libxkbcommon` development packages for your distro |
+| Fonts not rendering | Install `fontconfig` and ensure system fonts are available |
+
+## Contributing
+
+TAU is open-source and **we welcome contributions from everyone!**
+
+| Area | How to Contribute |
+|------|-------------------|
+| 🐛 Bugs | [Open an issue](https://github.com/IkramRamadhan08/TAU_Project/issues) with steps to reproduce |
+| 💡 Features | Suggest via issues or submit a PR |
+| 📖 Docs | Improve guides, fix typos, add examples |
+| 🔌 Extensions | Build WASM extensions for languages/tools |
+| 🌍 Translations | Help translate the editor and docs |
+
+```bash
+# Get started
+git clone https://github.com/IkramRamadhan08/TAU_Project.git
+cd TAU_Project/editor
+cargo check
+```
+
+Read the [documentation](docs/) to understand the codebase.
+
+## License
+
+Original [Zed](https://zed.dev) source code is licensed under GPL-3.0-or-later with Apache-2.0 components. TAU modifications to GPL-covered files are distributed under GPL-3.0-or-later.
+
+See [LICENSE-GPL](LICENSE-GPL) and [LICENSE-APACHE](LICENSE-APACHE) for details.

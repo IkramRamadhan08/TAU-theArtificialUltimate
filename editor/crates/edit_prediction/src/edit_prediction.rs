@@ -87,7 +87,7 @@ pub mod udiff;
 
 mod capture_example;
 pub mod open_ai_compatible;
-mod zed_edit_prediction_delegate;
+mod tau_edit_prediction_delegate;
 pub mod zeta;
 
 #[cfg(test)]
@@ -110,7 +110,7 @@ pub use crate::prediction::EditPredictionId;
 use crate::prediction::EditPredictionResult;
 pub use language_model::ApiKeyState;
 pub use telemetry_events::EditPredictionRating;
-pub use zed_edit_prediction_delegate::TauEditPredictionDelegate;
+pub use tau_edit_prediction_delegate::TauEditPredictionDelegate;
 
 actions!(
     edit_prediction,
@@ -130,7 +130,7 @@ const EDIT_HISTORY_DIFF_SIZE_LIMIT: usize = 2048 * 3; // ~2048 tokens or ~50% of
 const COLLABORATOR_EDIT_LOCALITY_CONTEXT_TOKENS: usize = 512;
 const GIT_CHANGED_FILE_SETS_COMMIT_LIMIT: usize = 100;
 const LAST_CHANGE_GROUPING_TIME: Duration = Duration::from_secs(1);
-const TAU_PREDICT_DATA_COLLECTION_CHOICE: &str = "zed_predict_data_collection_choice";
+const TAU_PREDICT_DATA_COLLECTION_CHOICE: &str = "tau_predict_data_collection_choice";
 const REJECT_REQUEST_DEBOUNCE: Duration = Duration::from_secs(15);
 const REQUEST_TIMEOUT_BACKOFF: Duration = Duration::from_secs(10);
 
@@ -945,7 +945,7 @@ impl EditPredictionStore {
             .log_err();
         });
 
-        let credentials_provider = zed_credentials_provider::global(cx);
+        let credentials_provider = tau_credentials_provider::global(cx);
 
         let this = Self {
             projects: HashMap::default(),
@@ -2460,7 +2460,7 @@ fn currently_following(project: &Entity<Project>, cx: &App) -> bool {
 
 fn is_ep_store_provider(provider: EditPredictionProvider) -> bool {
     match provider {
-        EditPredictionProvider::Zed
+        EditPredictionProvider::Tau
         | EditPredictionProvider::Mercury
         | EditPredictionProvider::Ollama
         | EditPredictionProvider::OpenAiCompatibleApi => true,
@@ -2499,7 +2499,7 @@ impl EditPredictionStore {
 
         let (needs_acceptance_tracking, max_pending_predictions) =
             match all_language_settings(None, cx).edit_predictions.provider {
-                EditPredictionProvider::Zed | EditPredictionProvider::Mercury => (true, 2),
+                EditPredictionProvider::Tau | EditPredictionProvider::Mercury => (true, 2),
                 EditPredictionProvider::Ollama => (false, 1),
                 EditPredictionProvider::OpenAiCompatibleApi => (false, 2),
                 EditPredictionProvider::None
@@ -3506,7 +3506,7 @@ fn merge_anchor_ranges(
 
 #[derive(Error, Debug)]
 #[error(
-    "You must update to Zed version {minimum_version} or higher to continue using edit predictions."
+    "You must update to Tau version {minimum_version} or higher to continue using edit predictions."
 )]
 pub struct ZedUpdateRequiredError {
     minimum_version: Version,
@@ -3519,7 +3519,7 @@ pub(crate) struct CloudRequestTimeoutError;
 struct TauPredictUpsell;
 
 fn is_upsell_dismissed(cx: &App) -> bool {
-    // To make this backwards compatible with older versions of Zed, we
+    // To make this backwards compatible with older versions of Tau, we
     // check if the user has seen the previous Edit Prediction Onboarding
     // before, by checking the data collection choice which was written to
     // the database once the user clicked on "Accept and Enable"
@@ -3552,7 +3552,7 @@ pub fn should_show_upsell_modal(cx: &App) -> bool {
 pub fn init(cx: &mut App) {
     cx.observe_new(move |workspace: &mut Workspace, _, _cx| {
         workspace.register_action(
-            move |workspace, _: &zed_actions::OpenTauPredictOnboarding, window, cx| {
+            move |workspace, _: &tau_actions::OpenTauPredictOnboarding, window, cx| {
                 TauPredictModal::toggle(
                     workspace,
                     workspace.user_store().clone(),
@@ -3599,9 +3599,9 @@ pub fn init(cx: &mut App) {
 }
 
 fn is_zed_industries_repo(url: &str) -> bool {
-    url.strip_prefix("https://github.com/zed-industries/")
-        .or_else(|| url.strip_prefix("http://github.com/zed-industries/"))
-        .or_else(|| url.strip_prefix("git@github.com:zed-industries/"))
-        .or_else(|| url.strip_prefix("ssh://git@github.com/zed-industries/"))
+    url.strip_prefix("https://github.com/tau-industries/")
+        .or_else(|| url.strip_prefix("http://github.com/tau-industries/"))
+        .or_else(|| url.strip_prefix("git@github.com:tau-industries/"))
+        .or_else(|| url.strip_prefix("ssh://git@github.com/tau-industries/"))
         .is_some_and(|repo| !repo.is_empty())
 }

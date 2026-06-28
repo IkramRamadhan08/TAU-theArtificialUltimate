@@ -2547,15 +2547,15 @@ fn model_id_to_selection(model_id: &AgentModelId, cx: &App) -> LanguageModelSele
     agent_settings::language_model_to_selection(&resolved, current_user_selection.as_ref())
 }
 
-pub static ZED_AGENT_ID: LazyLock<AgentId> = LazyLock::new(|| AgentId::new("TAU Agent"));
+pub static TAU_AGENT_ID: LazyLock<AgentId> = LazyLock::new(|| AgentId::new("TAU Agent"));
 
 impl acp_thread::AgentConnection for NativeAgentConnection {
     fn agent_id(&self) -> AgentId {
-        ZED_AGENT_ID.clone()
+        TAU_AGENT_ID.clone()
     }
 
     fn telemetry_id(&self) -> SharedString {
-        "zed".into()
+        "tau".into()
     }
 
     fn new_session(
@@ -4051,17 +4051,17 @@ mod internal_tests {
         // Hand-typed `/global:<name>` is not aliased to the global
         // source; it looks for a worktree literally named `global`.
         assert!(!global.matches_scope("global"));
-        assert!(!global.matches_scope("zed"));
+        assert!(!global.matches_scope("tau"));
 
         let project = SkillSource::ProjectLocal {
             worktree_id: SkillScopeId(1),
-            worktree_root_name: "zed".into(),
+            worktree_root_name: "tau".into(),
         };
         // Project-local skills are scoped by their worktree root name
         // so multiple open worktrees with same-named skills can each
         // be addressed unambiguously.
-        assert_eq!(project.scope_prefix(), "zed");
-        assert!(project.matches_scope("zed"));
+        assert_eq!(project.scope_prefix(), "tau");
+        assert!(project.matches_scope("tau"));
         // The empty scope is reserved for globals.
         assert!(!project.matches_scope(""));
         // An unrelated worktree name (or MCP server name) must not

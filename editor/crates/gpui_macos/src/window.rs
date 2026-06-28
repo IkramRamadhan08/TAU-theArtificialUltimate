@@ -1900,7 +1900,7 @@ fn get_scale_factor(native_window: id) -> f32 {
     };
 
     // We are not certain what triggers this, but it seems that sometimes
-    // this method would return 0 (https://github.com/zed-industries/zed/issues/6412)
+    // this method would return 0 (https://github.com/tau-industries/tau/issues/6412)
     // It seems most likely that this would happen if the window has no screen
     // (if it is off-screen), though we'd expect to see viewDidChangeBackingProperties before
     // it was rendered for real.

@@ -1,9 +1,9 @@
 // TAU keymap
 //
-// For information on binding keys, see the Zed
+// For information on binding keys, see the Tau
 // documentation: https://tau.ai/docs/key-bindings
 //
-// To see the default key bindings run `zed: open default keymap`
+// To see the default key bindings run `tau: open default keymap`
 // from the command palette.
 [
   {

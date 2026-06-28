@@ -7,7 +7,7 @@
 use std::process::Command;
 
 fn git_sha() -> Option<String> {
-    if let Ok(sha) = std::env::var("ZED_COMMIT_SHA") {
+    if let Ok(sha) = std::env::var("TAU_COMMIT_SHA") {
         return Some(sha);
     }
 
@@ -38,7 +38,7 @@ fn product_version() -> String {
     format!("{pkg_version}+{metadata}")
 }
 
-const ICON_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../zed/resources/windows");
+const ICON_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../tau/resources/windows");
 const MANIFEST_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/resources/manifest.xml");
 
 pub fn compile(manifest: bool) -> Result<(), Box<dyn std::error::Error>> {
@@ -110,7 +110,7 @@ END
     let rc_path = out_dir.join("zed_resources.rc");
     std::fs::write(&rc_path, rc_content)?;
 
-    if let Ok(toolkit_path) = std::env::var("ZED_RC_TOOLKIT_PATH") {
+    if let Ok(toolkit_path) = std::env::var("TAU_RC_TOOLKIT_PATH") {
         let rc_exe = std::path::Path::new(&toolkit_path).join("rc.exe");
         unsafe {
             std::env::set_var("RC", rc_exe);

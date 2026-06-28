@@ -42,7 +42,7 @@ fn zed_dispatcher(cx: &mut App) -> impl Dispatcher {
     // PlatformDispatcher is _super_ close to the same interface we put in
     // async-dispatcher, except for the task label in dispatch. Later we should
     // just make that consistent so we have this dispatcher ready to go for
-    // other crates in Zed.
+    // other crates in Tau.
     impl Dispatcher for ZedDispatcher {
         #[track_caller]
         fn dispatch(&self, runnable: Runnable) {

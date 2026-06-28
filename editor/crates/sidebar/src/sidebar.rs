@@ -2,7 +2,7 @@ mod thread_switcher;
 
 use acp_thread::ThreadStatus;
 use action_log::DiffStats;
-use agent::{ThreadStore, ZED_AGENT_ID};
+use agent::{ThreadStore, TAU_AGENT_ID};
 use agent_client_protocol::schema as acp;
 use agent_settings::AgentSettings;
 use agent_ui::terminal_thread_metadata_store::{
@@ -69,10 +69,10 @@ use workspace::{
     notifications::NotificationId, sidebar_side_context_menu,
 };
 
-use zed_actions::OpenRecent;
-use zed_actions::editor::{MoveDown, MoveUp};
+use tau_actions::OpenRecent;
+use tau_actions::editor::{MoveDown, MoveUp};
 
-use zed_actions::agents_sidebar::{FocusSidebarFilter, ToggleThreadSwitcher};
+use tau_actions::agents_sidebar::{FocusSidebarFilter, ToggleThreadSwitcher};
 
 use crate::thread_switcher::{
     ThreadSwitcher, ThreadSwitcherEntry, ThreadSwitcherEvent, ThreadSwitcherSelection,
@@ -6347,7 +6347,7 @@ impl Sidebar {
             ThreadEntryWorkspace::Closed { .. } => None,
         };
 
-        let is_zed_thread = thread.metadata.agent_id.as_ref() == ZED_AGENT_ID.as_ref();
+        let is_zed_thread = thread.metadata.agent_id.as_ref() == TAU_AGENT_ID.as_ref();
         let can_open_as_markdown = thread.is_live || is_zed_thread;
         let folder_paths = thread.metadata.folder_paths().clone();
 
@@ -7560,7 +7560,7 @@ impl Sidebar {
         render_import_onboarding_banner(
             "acp",
             "Looking for threads from external agents?",
-            "Import threads from agents like Claude Agent, Codex, and more, whether started in Zed or another client.",
+            "Import threads from agents like Claude Agent, Codex, and more, whether started in Tau or another client.",
             if verbose_labels {
                 "Import Threads from External Agents"
             } else {

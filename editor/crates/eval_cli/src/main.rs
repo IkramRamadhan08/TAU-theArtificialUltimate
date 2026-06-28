@@ -64,7 +64,7 @@ use crate::headless::AgentCliAppState;
 )]
 struct Args {
     /// Output current environment variables as JSON to stdout.
-    /// Used internally by Zed's shell environment capture.
+    /// Used internally by Tau's shell environment capture.
     #[arg(long, hide = true)]
     printenv: bool,
 

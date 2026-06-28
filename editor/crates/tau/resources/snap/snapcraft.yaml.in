@@ -4,7 +4,7 @@ base: core24
 version: "$RELEASE_VERSION"
 summary: Local-first agentic coding IDE
 description: |
-  TAU is a local-first, agentic coding IDE forked from Zed and wired toward
+  TAU is a local-first, agentic coding IDE forked from Tau and wired toward
   the TAU Rust agent runtime.
 grade: stable
 confinement: classic
@@ -26,10 +26,10 @@ parts:
 
     stage-packages:
       - libasound2t64
-      # snapcraft has a lint that this is unused, but without it Zed exits with
+      # snapcraft has a lint that this is unused, but without it Tau exits with
       # "Missing Vulkan entry points: LibraryLoadFailure" in wgpu.
       - libvulkan1
-      # snapcraft has a lint that this is unused, but without it Zed exits with
+      # snapcraft has a lint that this is unused, but without it Tau exits with
       # "NoWaylandLib" when run with Wayland.
       - libwayland-client0
       - libxcb1
@@ -56,4 +56,4 @@ apps:
     command: usr/bin/tau
     common-id: ai.tau.TAU
     environment:
-      ZED_BUNDLE_TYPE: snap
+      TAU_BUNDLE_TYPE: snap

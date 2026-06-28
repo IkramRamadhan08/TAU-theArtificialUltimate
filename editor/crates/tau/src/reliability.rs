@@ -207,7 +207,7 @@ async fn upload_minidump(
         form = form
             .text(
                 format!("{root}[Description]"),
-                "A GPU found on the users system. May or may not be the GPU Zed is running on",
+                "A GPU found on the users system. May or may not be the GPU Tau is running on",
             )
             .text(format!("{root}[type]"), "gpu")
             .text(format!("{root}[name]"), device_name.unwrap_or(name))
@@ -224,7 +224,7 @@ async fn upload_minidump(
         form = form
             .text(
                 "sentry[contexts][Active_GPU][Description]",
-                "The GPU Zed is running on",
+                "The GPU Tau is running on",
             )
             .text("sentry[contexts][Active_GPU][type]", "gpu")
             .text("sentry[contexts][Active_GPU][name]", active_gpu.device_name)
@@ -281,7 +281,7 @@ struct BuildTiming {
 
 // NOTE: this is a bit of a hack. We want to be able to have internal
 // metrics around build times, but we don't have an easy way to authenticate
-// users - except - we know internal users use Zed.
+// users - except - we know internal users use Tau.
 // So, we have it upload the timings on their behalf, it'd be better to do
 // this more directly in ./script/cargo-timing-info.js.
 async fn upload_build_timings(_client: Arc<Client>) -> Result<()> {

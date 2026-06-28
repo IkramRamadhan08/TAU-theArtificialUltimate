@@ -146,7 +146,7 @@ impl Config {
         self.zed_environment == "development".into()
     }
 
-    /// Returns the base `zed.dev` URL.
+    /// Returns the base `tau.dev` URL.
     pub fn zed_dot_dev_url(&self) -> &str {
         match self.zed_environment.as_ref() {
             "development" => "http://localhost:3000",
@@ -155,11 +155,11 @@ impl Config {
         }
     }
 
-    /// Returns the base Zed Cloud URL.
+    /// Returns the base Tau Cloud URL.
     pub fn zed_cloud_url(&self) -> &str {
         match self.zed_environment.as_ref() {
             "development" => "http://localhost:8787",
-            _ => "https://cloud.zed.dev",
+            _ => "https://cloud.tau.dev",
         }
     }
 

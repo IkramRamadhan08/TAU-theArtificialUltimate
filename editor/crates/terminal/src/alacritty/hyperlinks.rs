@@ -19,7 +19,7 @@ use util::paths::{PathStyle, UrlExt};
 
 use crate::Range;
 
-const URL_REGEX: &str = r#"(ipfs:|ipns:|magnet:|mailto:|gemini://|gopher://|https://|http://|news:|file://|git://|ssh:|ftp://|zed://)[^\u{0000}-\u{001F}\u{007F}-\u{009F}<>"\s{-}\^⟨⟩`']+"#;
+const URL_REGEX: &str = r#"(ipfs:|ipns:|magnet:|mailto:|gemini://|gopher://|https://|http://|news:|file://|git://|ssh:|ftp://|tau://)[^\u{0000}-\u{001F}\u{007F}-\u{009F}<>"\s{-}\^⟨⟩`']+"#;
 const WIDE_CHAR_SPACERS: Flags =
     Flags::from_bits(Flags::LEADING_WIDE_CHAR_SPACER.bits() | Flags::WIDE_CHAR_SPACER.bits())
         .unwrap();
@@ -520,8 +520,8 @@ mod tests {
         );
         re_test(
             URL_REGEX,
-            "open zed://channel/the-channel and zed://settings/theme now",
-            vec!["zed://channel/the-channel", "zed://settings/theme"],
+            "open tau://channel/the-channel and tau://settings/theme now",
+            vec!["tau://channel/the-channel", "tau://settings/theme"],
         );
     }
 
@@ -571,8 +571,8 @@ mod tests {
         let test_cases = vec![
             ("https://example.com.", "https://example.com"),
             (
-                "https://github.com/zed-industries/zed.",
-                "https://github.com/zed-industries/zed",
+                "https://github.com/tau-industries/tau.",
+                "https://github.com/tau-industries/tau",
             ),
             (
                 "https://example.com/path/file.html.",
@@ -935,7 +935,7 @@ mod tests {
             }
 
             #[test]
-            // <https://github.com/zed-industries/zed/issues/12338>
+            // <https://github.com/tau-industries/tau/issues/12338>
             fn issue_12338_regex() {
                 // Issue #12338
                 test_path!(".rw-r--r--     0     staff 05-27 14:03 ‹«'test file 👉1.txt'»›");
@@ -943,7 +943,7 @@ mod tests {
             }
 
             #[test]
-            // <https://github.com/zed-industries/zed/issues/12338>
+            // <https://github.com/tau-industries/tau/issues/12338>
             fn issue_12338() {
                 // Issue #12338
                 test_path!(".rw-r--r--     0     staff 05-27 14:03 ‹«test👉、2.txt»›");
@@ -977,7 +977,7 @@ mod tests {
             }
 
             #[test]
-            // <https://github.com/zed-industries/zed/issues/40202>
+            // <https://github.com/tau-industries/tau/issues/40202>
             fn issue_40202() {
                 // Elixir
                 test_path!("[‹«lib/blitz_apex_👉server/stats/aggregate_rank_stats.ex»:«35»›: BlitzApexServer.Stats.AggregateRankStats.update/2]
@@ -985,7 +985,7 @@ mod tests {
             }
 
             #[test]
-            // <https://github.com/zed-industries/zed/issues/28194>
+            // <https://github.com/tau-industries/tau/issues/28194>
             fn issue_28194() {
                 test_path!(
                     "‹«test/c👉ontrollers/template_items_controller_test.rb»:«20»›:in 'block (2 levels) in <class:TemplateItemsControllerTest>'"
@@ -993,7 +993,7 @@ mod tests {
             }
 
             #[test]
-            // <https://github.com/zed-industries/zed/issues/50531>
+            // <https://github.com/tau-industries/tau/issues/50531>
             fn issue_50531() {
                 // Paths preceded by "N:" prefix (e.g. grep output line numbers)
                 // should still be clickable
@@ -1005,7 +1005,7 @@ mod tests {
             }
 
             #[test]
-            // <https://github.com/zed-industries/zed/issues/46795>
+            // <https://github.com/tau-industries/tau/issues/46795>
             fn issue_46795() {
                 // Box drawing characters are commonly used as UI elements and
                 // should not interfere with path detection; they appear rarely
@@ -1169,7 +1169,7 @@ mod tests {
 
             #[perf]
             pub fn cargo_hyperlink_benchmark() {
-                const LINE: &str = "    Compiling terminal v0.1.0 (/Hyperlinks/Bench/Source/zed-hyperlinks/crates/terminal)\r\n";
+                const LINE: &str = "    Compiling terminal v0.1.0 (/Hyperlinks/Bench/Source/tau-hyperlinks/crates/terminal)\r\n";
                 thread_local! {
                     static TEST_TERM_AND_POINT: (Term<VoidListener>, AlacPoint) =
                         build_test_term(LINE, 500, 50);
@@ -1179,7 +1179,7 @@ mod tests {
                         find_from_grid_point_bench(term, *point)
                             .map(|hyperlink| hyperlink.text)
                             .unwrap_or_default(),
-                        "/Hyperlinks/Bench/Source/zed-hyperlinks/crates/terminal",
+                        "/Hyperlinks/Bench/Source/tau-hyperlinks/crates/terminal",
                         "Hyperlink should have been found"
                     );
                 });
@@ -1187,7 +1187,7 @@ mod tests {
 
             #[perf]
             pub fn rust_hyperlink_benchmark() {
-                const LINE: &str = "    --> /Hyperlinks/Bench/Source/zed-hyperlinks/crates/terminal/terminal.rs:1000:42\r\n";
+                const LINE: &str = "    --> /Hyperlinks/Bench/Source/tau-hyperlinks/crates/terminal/terminal.rs:1000:42\r\n";
                 thread_local! {
                     static TEST_TERM_AND_POINT: (Term<VoidListener>, AlacPoint) =
                         build_test_term(LINE, 500, 50);
@@ -1197,7 +1197,7 @@ mod tests {
                         find_from_grid_point_bench(term, *point)
                             .map(|hyperlink| hyperlink.text)
                             .unwrap_or_default(),
-                        "/Hyperlinks/Bench/Source/zed-hyperlinks/crates/terminal/terminal.rs:1000:42",
+                        "/Hyperlinks/Bench/Source/tau-hyperlinks/crates/terminal/terminal.rs:1000:42",
                         "Hyperlink should have been found"
                     );
                 });
@@ -1222,7 +1222,7 @@ mod tests {
             }
 
             #[perf]
-            // https://github.com/zed-industries/zed/pull/44407
+            // https://github.com/tau-industries/tau/pull/44407
             pub fn pr_44407_hyperlink_benchmark() {
                 const LINE: &str = "-748, 706, 163, 222, -980, 949, 381, -568, 199, 501, 760, -821, 90, -451, 183, 867, -351, -810, -762, -109, 423, 84, 14, -77, -820, -345, 74, -791, 930, -618, -900, 862, -959, 289, -19, 471, -757, 793, 155, -554, 249, 830, 402, 732, -731, -866, -720, -703, -257, -439, 731, 872, -489, 676, -167, 613, -698, 415, -80, -453, -896, 333, -511, 621, -450, 624, -309, -575, 177, 141, 891, -104, -97, -367, -599, -675, 607, -225, -760, 552, -465, 804, 55, 282, 104, -929, -252,\
 -311, 900, 550, 599, -80, 774, 553, 837, -395, 541, 953, 154, -396, -596, -111, -802, -221, -337, -633, -73, -527, -82, -658, -264, 222, 375, 434, 204, -756, -703, 303, 239, -257, -365, -351, 904, 364, -743, -484, 655, -542, 446, 888, 632, -167, -260, 716, 150, 806, 723, 513, -118, -323, -683, 983, -564, 358, -16, -287, 277, -607, 87, 365, -1, 164, 401, 257, 369, -893, 145, -969, 375, -53, 541, -408, -865, 753, 258, 337, -886, 593, -378, -528, 191, 204, 566, -61, -621, 769, 524, -628, 6,\
@@ -1285,7 +1285,7 @@ mod tests {
             }
 
             #[perf]
-            // https://github.com/zed-industries/zed/issues/44510
+            // https://github.com/tau-industries/tau/issues/44510
             pub fn issue_44510_hyperlink_benchmark() {
                 const LINE: &str = "..............................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................\
 ..............................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................\
@@ -1401,7 +1401,7 @@ mod tests {
                 }
 
                 // See https://en.wikipedia.org/wiki/File_URI_scheme
-                // https://github.com/zed-industries/zed/issues/39189
+                // https://github.com/tau-industries/tau/issues/39189
                 #[test]
                 fn issue_39189() {
                     test_file_iri!("file:///C:/test/cool/index.rs");

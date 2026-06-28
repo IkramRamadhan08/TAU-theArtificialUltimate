@@ -45,11 +45,11 @@ wasmtime::component::bindgen!({
          "worktree": ExtensionWorktree,
          "project": ExtensionProject,
          "key-value-store": ExtensionKeyValueStore,
-         "zed:extension/http-client/http-response-stream": ExtensionHttpResponseStream
+         "tau:extension/http-client/http-response-stream": ExtensionHttpResponseStream
     },
 });
 
-pub use self::zed::extension::*;
+pub use self::tau::extension::*;
 
 mod settings {
     #![allow(dead_code)]

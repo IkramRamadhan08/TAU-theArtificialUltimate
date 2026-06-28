@@ -1,5 +1,5 @@
 fn main() {
-    if let Ok(bundled) = std::env::var("ZED_BUNDLE") {
-        println!("cargo:rustc-env=ZED_BUNDLE={}", bundled);
+    if let Ok(bundled) = std::env::var("TAU_BUNDLE") {
+        println!("cargo:rustc-env=TAU_BUNDLE={}", bundled);
     }
 }

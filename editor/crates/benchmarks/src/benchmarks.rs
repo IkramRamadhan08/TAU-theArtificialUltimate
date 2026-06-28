@@ -1,4 +1,4 @@
-//! Benchmark targets for Zed crates.
+//! Benchmark targets for Tau crates.
 //!
 //! Benchmarks live in their own crate so benchmark-only dependencies
 //! (Criterion, `gpui_platform`, gpui's `bench` feature, ...) don't weigh down

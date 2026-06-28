@@ -88,8 +88,8 @@ pub use thread_import::{
     AcpThreadImportOnboarding, CrossChannelImportOnboarding, ThreadImportModal,
     channels_with_threads, import_threads_from_other_channels,
 };
-use zed_actions;
-pub use zed_actions::{CreateWorktree, NewWorktreeBranchTarget, SwitchWorktree};
+use tau_actions;
+pub use tau_actions::{CreateWorktree, NewWorktreeBranchTarget, SwitchWorktree};
 
 pub(crate) fn resolve_agent_image(
     dest_url: &str,
@@ -290,7 +290,7 @@ actions!(
         ScrollOutputToPreviousMessage,
         /// Scroll the output to the next user message.
         ScrollOutputToNextMessage,
-        /// Import agent threads from other Zed release channels (e.g. Preview, Nightly).
+        /// Import agent threads from other Tau release channels (e.g. Preview, Nightly).
         ImportThreadsFromOtherChannels,
         /// Starts a new terminal thread.
         NewTerminalThread,
@@ -405,7 +405,7 @@ pub enum Agent {
 
 impl From<AgentId> for Agent {
     fn from(id: AgentId) -> Self {
-        if id.as_ref() == agent::ZED_AGENT_ID.as_ref() {
+        if id.as_ref() == agent::TAU_AGENT_ID.as_ref() {
             return Self::NativeAgent;
         }
         #[cfg(any(test, feature = "test-support"))]
@@ -419,7 +419,7 @@ impl From<AgentId> for Agent {
 impl Agent {
     pub fn id(&self) -> AgentId {
         match self {
-            Self::NativeAgent => agent::ZED_AGENT_ID.clone(),
+            Self::NativeAgent => agent::TAU_AGENT_ID.clone(),
             Self::Custom { id } => id.clone(),
             #[cfg(any(test, feature = "test-support"))]
             Self::Stub => "stub".into(),
@@ -595,7 +595,7 @@ pub fn init(
     cx.observe_new(|workspace: &mut Workspace, _window, _cx| {
         workspace.register_action(
             move |workspace: &mut Workspace,
-                  _: &zed_actions::AcpRegistry,
+                  _: &tau_actions::AcpRegistry,
                   window: &mut Window,
                   cx: &mut Context<Workspace>| {
                 let existing = workspace
@@ -782,10 +782,10 @@ fn update_command_palette_filter(cx: &mut App) {
             TypeId::of::<ToggleEditPrediction>(),
         ];
 
-        let manage_skills_action = [TypeId::of::<zed_actions::assistant::ManageSkills>()];
+        let manage_skills_action = [TypeId::of::<tau_actions::assistant::ManageSkills>()];
         let skill_creator_actions = [
-            TypeId::of::<zed_actions::assistant::OpenSkillCreator>(),
-            TypeId::of::<zed_actions::assistant::CreateSkillFromUrl>(),
+            TypeId::of::<tau_actions::assistant::OpenSkillCreator>(),
+            TypeId::of::<tau_actions::assistant::CreateSkillFromUrl>(),
         ];
 
         if disable_ai {
@@ -797,7 +797,7 @@ fn update_command_palette_filter(cx: &mut App) {
             filter.hide_namespace("edit_prediction");
 
             filter.hide_action_types(&edit_prediction_actions);
-            filter.hide_action_types(&[TypeId::of::<zed_actions::OpenTauPredictOnboarding>()]);
+            filter.hide_action_types(&[TypeId::of::<tau_actions::OpenTauPredictOnboarding>()]);
         } else {
             if agent_enabled {
                 filter.show_namespace("agent");
@@ -820,7 +820,7 @@ fn update_command_palette_filter(cx: &mut App) {
                     filter.show_namespace("copilot");
                     filter.show_action_types(edit_prediction_actions.iter());
                 }
-                EditPredictionProvider::Zed
+                EditPredictionProvider::Tau
                 | EditPredictionProvider::Codestral
                 | EditPredictionProvider::Ollama
                 | EditPredictionProvider::OpenAiCompatibleApi
@@ -832,7 +832,7 @@ fn update_command_palette_filter(cx: &mut App) {
             }
 
             filter.show_namespace("zed_predict_onboarding");
-            filter.show_action_types(&[TypeId::of::<zed_actions::OpenTauPredictOnboarding>()]);
+            filter.show_action_types(&[TypeId::of::<tau_actions::OpenTauPredictOnboarding>()]);
 
             filter.show_namespace("multi_workspace");
         }
@@ -995,19 +995,19 @@ mod tests {
                 "NewTerminalThread should be visible by default"
             );
             assert!(
-                !filter.is_hidden(&zed_actions::assistant::OpenSkillCreator),
+                !filter.is_hidden(&tau_actions::assistant::OpenSkillCreator),
                 "OpenSkillCreator should be visible by default"
             );
             assert!(
-                !filter.is_hidden(&zed_actions::assistant::CreateSkillFromUrl),
+                !filter.is_hidden(&tau_actions::assistant::CreateSkillFromUrl),
                 "CreateSkillFromUrl should be visible by default"
             );
             assert!(
-                !filter.is_hidden(&zed_actions::assistant::OpenGlobalAgentsMdRules),
+                !filter.is_hidden(&tau_actions::assistant::OpenGlobalAgentsMdRules),
                 "OpenGlobalAgentsMdRules should be visible by default"
             );
             assert!(
-                !filter.is_hidden(&zed_actions::assistant::OpenProjectAgentsMdRules),
+                !filter.is_hidden(&tau_actions::assistant::OpenProjectAgentsMdRules),
                 "OpenProjectAgentsMdRules should be visible by default"
             );
         });
@@ -1034,11 +1034,11 @@ mod tests {
                 "NewTerminalThread should be hidden when agent is disabled"
             );
             assert!(
-                filter.is_hidden(&zed_actions::assistant::OpenGlobalAgentsMdRules),
+                filter.is_hidden(&tau_actions::assistant::OpenGlobalAgentsMdRules),
                 "OpenGlobalAgentsMdRules should be hidden when agent is disabled"
             );
             assert!(
-                filter.is_hidden(&zed_actions::assistant::OpenProjectAgentsMdRules),
+                filter.is_hidden(&tau_actions::assistant::OpenProjectAgentsMdRules),
                 "OpenProjectAgentsMdRules should be hidden when agent is disabled"
             );
         });

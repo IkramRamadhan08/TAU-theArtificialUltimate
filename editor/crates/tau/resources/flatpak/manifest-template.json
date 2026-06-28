@@ -38,8 +38,8 @@
       },
       "build-commands": [
         "install -Dm644 $ICON_FILE.png /app/share/icons/hicolor/512x512/apps/$APP_ID.png",
-        "envsubst < zed.desktop.in > zed.desktop && install -Dm755 zed.desktop /app/share/applications/$APP_ID.desktop",
-        "envsubst < flatpak/zed.metainfo.xml.in > zed.metainfo.xml && install -Dm644 zed.metainfo.xml /app/share/metainfo/$APP_ID.metainfo.xml",
+        "envsubst < tau.desktop.in > tau.desktop && install -Dm755 tau.desktop /app/share/applications/$APP_ID.desktop",
+        "envsubst < flatpak/tau.metainfo.xml.in > tau.metainfo.xml && install -Dm644 tau.metainfo.xml /app/share/metainfo/$APP_ID.metainfo.xml",
         "sed -i -e '/@release_info@/{r flatpak/release-info/$CHANNEL' -e 'd}' /app/share/metainfo/$APP_ID.metainfo.xml",
         "install -Dm755 bin/tau /app/bin/tau",
         "install -Dm755 libexec/tau-editor /app/libexec/tau-editor",
@@ -52,7 +52,7 @@
         },
         {
           "type": "dir",
-          "path": "./crates/zed/resources"
+          "path": "./crates/tau/resources"
         }
       ]
     }

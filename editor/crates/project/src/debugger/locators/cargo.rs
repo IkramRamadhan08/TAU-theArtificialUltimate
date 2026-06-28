@@ -250,7 +250,7 @@ mod tests {
 
     #[test]
     fn bare_test_name_does_not_get_exact() {
-        // Zed's tree-sitter runnable template for Rust tests captures only the function
+        // Tau's tree-sitter runnable template for Rust tests captures only the function
         // identifier and always passes `--include-ignored`, so `is_ignored` is true here
         // for a regular (non-ignored) test.
         assert_eq!(

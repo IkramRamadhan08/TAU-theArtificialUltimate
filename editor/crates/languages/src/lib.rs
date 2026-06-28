@@ -221,7 +221,7 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, node: NodeRuntime
             ..Default::default()
         },
         LanguageInfo {
-            name: "zed-keybind-context",
+            name: "tau-keybind-context",
             ..Default::default()
         },
     ];

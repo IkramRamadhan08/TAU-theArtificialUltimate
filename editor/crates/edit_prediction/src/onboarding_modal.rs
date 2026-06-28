@@ -24,7 +24,7 @@ macro_rules! onboarding_event {
     };
 }
 
-/// Introduces user to Zed's Edit Prediction feature
+/// Introduces user to Tau's Edit Prediction feature
 pub struct TauPredictModal {
     onboarding: Entity<EditPredictionOnboarding>,
     focus_handle: FocusHandle,
@@ -67,7 +67,7 @@ impl TauPredictModal {
                             let this = weak_entity.clone();
                             move |_window, cx| {
                                 TauPredictUpsell::set_dismissed(true, cx);
-                                set_edit_prediction_provider(EditPredictionProvider::Zed, cx);
+                                set_edit_prediction_provider(EditPredictionProvider::Tau, cx);
                                 this.update(cx, |_, cx| cx.emit(DismissEvent)).ok();
                             }
                         }),

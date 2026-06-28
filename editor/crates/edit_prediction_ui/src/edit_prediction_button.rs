@@ -1,5 +1,5 @@
 use anyhow::Result;
-use client::{Client, UserStore, zed_urls};
+use client::{Client, UserStore, tau_urls};
 use cloud_llm_client::UsageLimit;
 use codestral::{self, CodestralEditPredictionDelegate};
 use copilot::Status;
@@ -40,7 +40,7 @@ use workspace::{
     HideStatusItem, StatusItemView, Toast, Workspace, create_and_open_local_file, item::ItemHandle,
     notifications::NotificationId,
 };
-use zed_actions::{OpenBrowser, OpenSettingsAt};
+use tau_actions::{OpenBrowser, OpenSettingsAt};
 
 use crate::{RatePredictions, rate_prediction_modal::PredictEditsRatePredictionsFeatureFlag};
 
@@ -321,13 +321,13 @@ impl Render for EditPredictionButton {
                         .with_handle(self.popover_menu_handle.clone()),
                 )
             }
-            provider @ (EditPredictionProvider::Zed | EditPredictionProvider::Mercury) => {
+            provider @ (EditPredictionProvider::Tau | EditPredictionProvider::Mercury) => {
                 let enabled = self.editor_enabled.unwrap_or(true);
                 let file = self.file.clone();
                 let language = self.language.clone();
                 let project = self.project.clone();
                 let provider_name: &'static str = match provider {
-                    EditPredictionProvider::Zed => "zed",
+                    EditPredictionProvider::Tau => "tau",
                     _ => "unknown",
                 };
                 let icons = self
@@ -373,7 +373,7 @@ impl Render for EditPredictionButton {
                     };
 
                     return div().child(
-                        IconButton::new("zed-predict-pending-button", ep_icon)
+                        IconButton::new("tau-predict-pending-button", ep_icon)
                             .shape(IconButtonShape::Square)
                             .indicator(Indicator::dot().color(Color::Muted))
                             .indicator_border_color(Some(cx.theme().colors().status_bar_background))
@@ -386,7 +386,7 @@ impl Render for EditPredictionButton {
                                     source = "Edit Prediction Status Button"
                                 );
                                 window.dispatch_action(
-                                    zed_actions::OpenTauPredictOnboarding.boxed_clone(),
+                                    tau_actions::OpenTauPredictOnboarding.boxed_clone(),
                                     cx,
                                 );
                             })),
@@ -424,11 +424,11 @@ impl Render for EditPredictionButton {
                 };
 
                 let zed_cloud_needs_sign_in =
-                    matches!(provider, EditPredictionProvider::Zed) && user.is_none();
+                    matches!(provider, EditPredictionProvider::Tau) && user.is_none();
                 let provider_unavailable =
                     missing_token || mercury_has_error || zed_cloud_needs_sign_in;
 
-                let icon_button = IconButton::new("zed-predict-pending-button", ep_icon)
+                let icon_button = IconButton::new("tau-predict-pending-button", ep_icon)
                     .shape(IconButtonShape::Square)
                     .when_some(indicator_color, |this, color| {
                         this.indicator(Indicator::dot().color(color))
@@ -593,7 +593,7 @@ impl EditPredictionButton {
                 };
                 let is_current = provider == current_provider;
                 let is_disabled_zed_provider =
-                    provider == EditPredictionProvider::Zed && is_zed_provider_disabled;
+                    provider == EditPredictionProvider::Tau && is_zed_provider_disabled;
                 let fs = self.fs.clone();
 
                 menu = menu.item(
@@ -807,7 +807,7 @@ impl EditPredictionButton {
 
         menu = menu.separator().header("Privacy");
 
-        if matches!(provider, EditPredictionProvider::Zed) {
+        if matches!(provider, EditPredictionProvider::Tau) {
             if let Some(provider) = &self.edit_prediction_provider {
                 let data_collection = provider.data_collection_state(cx);
 
@@ -860,7 +860,7 @@ impl EditPredictionButton {
                                     .child(
                                         Label::new(indoc!{
                                             "Help us improve our open dataset model by sharing data from open source repositories. \
-                                            Zed must detect a license file in your repo for this setting to take effect. \
+                                            Tau must detect a license file in your repo for this setting to take effect. \
                                             Files with sensitive data and secrets are excluded by default."
                                         })
                                     )
@@ -914,7 +914,7 @@ impl EditPredictionButton {
                 .icon_color(Color::Muted)
                 .documentation_aside(DocumentationSide::Left, |_| {
                     Label::new(indoc!{"
-                        Open your settings to add sensitive paths for which Zed will never predict edits."}).into_any_element()
+                        Open your settings to add sensitive paths for which Tau will never predict edits."}).into_any_element()
                 })
                 .handler(move |window, cx| {
                     telemetry::event!(
@@ -1075,7 +1075,7 @@ impl EditPredictionButton {
             let needs_sign_in = user.is_none()
                 && matches!(
                     provider,
-                    EditPredictionProvider::None | EditPredictionProvider::Zed
+                    EditPredictionProvider::None | EditPredictionProvider::Tau
                 );
 
             if needs_sign_in {
@@ -1103,7 +1103,7 @@ impl EditPredictionButton {
                         telemetry::event!(
                             "Edit Prediction Menu Action",
                             action = "sign_in",
-                            provider = "zed",
+                            provider = "tau",
                         );
                         let client = Client::global(cx);
                         window
@@ -1118,7 +1118,7 @@ impl EditPredictionButton {
                     .link_with_handler(
                         "Learn More",
                         OpenBrowser {
-                            url: zed_urls::edit_prediction_docs(cx).into(),
+                            url: tau_urls::edit_prediction_docs(cx).into(),
                         }
                         .boxed_clone(),
                         |_window, _cx| {
@@ -1185,7 +1185,7 @@ impl EditPredictionButton {
                                     )
                                     .into_any_element()
                             },
-                            move |_, cx| cx.open_url(&zed_urls::account_url(cx)),
+                            move |_, cx| cx.open_url(&tau_urls::account_url(cx)),
                         )
                         .when(usage.over_limit(), |menu| -> ContextMenu {
                             menu.entry("Subscribe to increase your limit", None, |_window, cx| {
@@ -1194,7 +1194,7 @@ impl EditPredictionButton {
                                     action = "upsell_clicked",
                                     reason = "usage_limit",
                                 );
-                                cx.open_url(&zed_urls::account_url(cx))
+                                cx.open_url(&tau_urls::account_url(cx))
                             })
                         })
                         .separator();
@@ -1207,15 +1207,15 @@ impl EditPredictionButton {
                                     .color(Color::Warning)
                                     .into_any_element()
                             },
-                            |_window, cx| cx.open_url(&zed_urls::account_url(cx)),
+                            |_window, cx| cx.open_url(&tau_urls::account_url(cx)),
                         )
-                        .entry("Upgrade to Zed Pro or contact us.", None, |_window, cx| {
+                        .entry("Upgrade to Tau Pro or contact us.", None, |_window, cx| {
                             telemetry::event!(
                                 "Edit Prediction Menu Action",
                                 action = "upsell_clicked",
                                 reason = "account_age",
                             );
-                            cx.open_url(&zed_urls::account_url(cx))
+                            cx.open_url(&tau_urls::account_url(cx))
                         })
                         .separator();
                 } else if self.user_store.read(cx).has_overdue_invoices() {
@@ -1228,14 +1228,14 @@ impl EditPredictionButton {
                                     .into_any_element()
                             },
                             |_window, cx| {
-                                cx.open_url(&zed_urls::account_url(cx))
+                                cx.open_url(&tau_urls::account_url(cx))
                             },
                         )
                         .entry(
-                            "Check your payment status or contact us at billing-support@zed.dev to continue using this feature.",
+                            "Check your payment status or contact us at billing-support@tau.dev to continue using this feature.",
                             None,
                             |_window, cx| {
-                                cx.open_url(&zed_urls::account_url(cx))
+                                cx.open_url(&tau_urls::account_url(cx))
                             },
                         )
                         .separator();
@@ -1447,7 +1447,7 @@ pub fn set_completion_provider(fs: Arc<dyn Fs>, cx: &mut App, provider: EditPred
 pub fn get_available_providers(cx: &mut App) -> Vec<EditPredictionProvider> {
     let mut providers = Vec::new();
 
-    providers.push(EditPredictionProvider::Zed);
+    providers.push(EditPredictionProvider::Tau);
 
     let app_state = workspace::AppState::global(cx);
     if copilot::GlobalCopilotAuth::try_get_or_init(app_state, cx)

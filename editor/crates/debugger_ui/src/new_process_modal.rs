@@ -828,14 +828,14 @@ pub(super) struct ConfigureMode {
 impl ConfigureMode {
     pub(super) fn new(window: &mut Window, cx: &mut App) -> Entity<Self> {
         let program = cx.new(|cx| {
-            InputField::new(window, cx, "ENV=Zed ~/bin/program --option")
+            InputField::new(window, cx, "ENV=Tau ~/bin/program --option")
                 .label("Program")
                 .tab_stop(true)
                 .tab_index(1)
         });
 
         let cwd = cx.new(|cx| {
-            InputField::new(window, cx, "Ex: $ZED_WORKTREE_ROOT")
+            InputField::new(window, cx, "Ex: $TAU_WORKTREE_ROOT")
                 .label("Working Directory")
                 .tab_stop(true)
                 .tab_index(2)
@@ -1068,7 +1068,7 @@ impl DebugDelegate {
                     };
 
                     match path.components().next_back() {
-                        Some(".zed") => {
+                        Some(".tau") => {
                             path.push(RelPath::unix("debug.json").unwrap());
                         }
                         Some(".vscode") => {
@@ -1165,7 +1165,7 @@ impl DebugDelegate {
                         id: _,
                         directory_in_worktree: dir,
                         id_base: _,
-                    } => dir.ends_with(RelPath::unix(".zed").unwrap()),
+                    } => dir.ends_with(RelPath::unix(".tau").unwrap()),
                     _ => false,
                 });
 
@@ -1488,7 +1488,7 @@ impl PickerDelegate for DebugDelegate {
                     Button::new("edit-debug-json", "Edit debug.json").on_click(cx.listener(
                         |_picker, _, window, cx| {
                             window.dispatch_action(
-                                zed_actions::OpenProjectDebugTasks.boxed_clone(),
+                                tau_actions::OpenProjectDebugTasks.boxed_clone(),
                                 cx,
                             );
                             cx.emit(DismissEvent);
@@ -1611,7 +1611,7 @@ pub(crate) fn resolve_path(path: &mut String) {
         *path = trimmed_path.replacen('~', &home, 1);
     } else if let Some(strip_path) = path.strip_prefix(&format!(".{}", std::path::MAIN_SEPARATOR)) {
         *path = format!(
-            "$ZED_WORKTREE_ROOT{}{}",
+            "$TAU_WORKTREE_ROOT{}{}",
             std::path::MAIN_SEPARATOR,
             &strip_path
         );

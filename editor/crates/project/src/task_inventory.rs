@@ -90,7 +90,7 @@ impl<T: InventoryContents> InventoryFor<T> {
         let has_zed_dir = worktree_dirs
             .map(|dirs| {
                 dirs.keys()
-                    .any(|dir| dir.file_name().is_some_and(|name| name == ".zed"))
+                    .any(|dir| dir.file_name().is_some_and(|name| name == ".tau"))
             })
             .unwrap_or(false);
 
@@ -147,13 +147,13 @@ impl<T> Default for InventoryFor<T> {
 pub enum TaskSourceKind {
     /// bash-like commands spawned by users, not associated with any path
     UserInput,
-    /// Tasks from the worktree's .zed/task.json
+    /// Tasks from the worktree's .tau/task.json
     Worktree {
         id: WorktreeId,
         directory_in_worktree: Arc<RelPath>,
         id_base: Cow<'static, str>,
     },
-    /// ~/.config/zed/task.json - like global files with task definitions, applicable to any path
+    /// ~/.config/tau/task.json - like global files with task definitions, applicable to any path
     AbsPath {
         id_base: Cow<'static, str>,
         abs_path: PathBuf,
@@ -500,7 +500,7 @@ impl Inventory {
             .iter()
             .filter(|(_, dirs)| {
                 dirs.keys()
-                    .any(|dir| dir.file_name().is_some_and(|name| name == ".zed"))
+                    .any(|dir| dir.file_name().is_some_and(|name| name == ".tau"))
             })
             .map(|(id, _)| *id)
             .collect();
@@ -1164,9 +1164,9 @@ mod tests {
 
     fn greeting_template() -> TaskTemplate {
         TaskTemplate {
-            label: "echo $ZED_CUSTOM_GREETING".to_string(),
+            label: "echo $TAU_CUSTOM_GREETING".to_string(),
             command: "echo".to_string(),
-            args: vec!["$ZED_CUSTOM_GREETING".to_string()],
+            args: vec!["$TAU_CUSTOM_GREETING".to_string()],
             ..TaskTemplate::default()
         }
     }

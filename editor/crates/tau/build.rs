@@ -14,7 +14,7 @@ fn main() {
             if let Some(libdir) = pkg_config::get_variable(lib, "libdir").ok() {
                 rpath_dirs.insert(libdir);
             } else {
-                eprintln!("zed build.rs: {lib} not found in pkg-config's path");
+                eprintln!("tau build.rs: {lib} not found in pkg-config's path");
             }
         }
 
@@ -26,7 +26,7 @@ fn main() {
     if cfg!(target_os = "macos") {
         println!("cargo:rustc-env=MACOSX_DEPLOYMENT_TARGET=10.15.7");
 
-        // Weakly link ReplayKit to ensure Zed can be used on macOS 10.15+.
+        // Weakly link ReplayKit to ensure Tau can be used on macOS 10.15+.
         println!("cargo:rustc-link-arg=-Wl,-weak_framework,ReplayKit");
 
         // Seems to be required to enable Swift concurrency
@@ -46,7 +46,7 @@ fn main() {
         std::env::var("TARGET").unwrap()
     );
 
-    let git_sha = match std::env::var("ZED_COMMIT_SHA").ok() {
+    let git_sha = match std::env::var("TAU_COMMIT_SHA").ok() {
         Some(git_sha) => {
             // In deterministic build environments such as Nix, we inject the commit sha into the build script.
             Some(git_sha)
@@ -67,10 +67,10 @@ fn main() {
     };
 
     if let Some(git_sha) = git_sha {
-        println!("cargo:rustc-env=ZED_COMMIT_SHA={git_sha}");
+        println!("cargo:rustc-env=TAU_COMMIT_SHA={git_sha}");
 
         if let Some(build_identifier) = option_env!("GITHUB_RUN_NUMBER") {
-            println!("cargo:rustc-env=ZED_BUILD_ID={build_identifier}");
+            println!("cargo:rustc-env=TAU_BUILD_ID={build_identifier}");
         }
 
         if let Ok(build_profile) = std::env::var("PROFILE")
@@ -78,7 +78,7 @@ fn main() {
         {
             // This is currently the best way to make `cargo build ...`'s build script
             // to print something to stdout without extra verbosity.
-            println!("cargo::warning=Info: using '{git_sha}' hash for ZED_COMMIT_SHA env var");
+            println!("cargo::warning=Info: using '{git_sha}' hash for TAU_COMMIT_SHA env var");
         }
     }
 
@@ -250,7 +250,7 @@ fn prepare_app_icon_x11() {
         .unwrap()
         .resize(256, 256, imageops::FilterType::Lanczos3);
 
-    // name should match include_bytes! call in src/zed.rs
+    // name should match include_bytes! call in src/tau.rs
     let icon_out_path = Path::new(&out_dir).join("app_icon.png");
     resized_image.save(&icon_out_path).expect("saving app icon");
 

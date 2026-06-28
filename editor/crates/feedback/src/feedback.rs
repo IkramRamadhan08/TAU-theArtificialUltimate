@@ -4,10 +4,10 @@ use gpui::{App, ClipboardItem, PromptLevel, actions};
 use system_specs::{CopySystemSpecsIntoClipboard, SystemSpecs};
 use util::ResultExt;
 use workspace::Workspace;
-use zed_actions::feedback::{FileBugReport, RequestFeature};
+use tau_actions::feedback::{FileBugReport, RequestFeature};
 
 actions!(
-    zed,
+    tau,
     [
         /// Opens the TAU repository on GitHub.
         OpenZedRepo,
@@ -16,7 +16,7 @@ actions!(
     ]
 );
 
-const ZED_REPO_URL: &str = "https://github.com/anomalyco/tau";
+const TAU_REPO_URL: &str = "https://github.com/anomalyco/tau";
 
 const REQUEST_FEATURE_URL: &str = "https://github.com/anomalyco/tau/discussions/new/choose";
 
@@ -85,7 +85,7 @@ pub fn init(cx: &mut App) {
                 .detach();
             })
             .register_action(move |_, _: &OpenZedRepo, _, cx| {
-                cx.open_url(ZED_REPO_URL);
+                cx.open_url(TAU_REPO_URL);
             });
     })
     .detach();

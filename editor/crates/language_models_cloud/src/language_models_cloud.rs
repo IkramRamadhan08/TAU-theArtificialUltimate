@@ -24,7 +24,7 @@ use language_model::{
     LanguageModelEffortLevel, LanguageModelId, LanguageModelName, LanguageModelProviderId,
     LanguageModelProviderName, LanguageModelRequest, LanguageModelToolChoice,
     LanguageModelToolSchemaFormat, OPEN_AI_PROVIDER_ID, OPEN_AI_PROVIDER_NAME, RateLimiter,
-    X_AI_PROVIDER_ID, X_AI_PROVIDER_NAME, ZED_CLOUD_PROVIDER_ID, ZED_CLOUD_PROVIDER_NAME,
+    X_AI_PROVIDER_ID, X_AI_PROVIDER_NAME, TAU_CLOUD_PROVIDER_ID, TAU_CLOUD_PROVIDER_NAME,
 };
 
 use schemars::JsonSchema;
@@ -44,8 +44,8 @@ use open_ai::completion::{
     OpenAiEventMapper, OpenAiResponseEventMapper, into_open_ai, into_open_ai_response,
 };
 
-const PROVIDER_ID: LanguageModelProviderId = ZED_CLOUD_PROVIDER_ID;
-const PROVIDER_NAME: LanguageModelProviderName = ZED_CLOUD_PROVIDER_NAME;
+const PROVIDER_ID: LanguageModelProviderId = TAU_CLOUD_PROVIDER_ID;
+const PROVIDER_NAME: LanguageModelProviderName = TAU_CLOUD_PROVIDER_NAME;
 
 /// Trait for acquiring and refreshing LLM authentication tokens.
 pub trait CloudLlmTokenProvider: Send + Sync {
@@ -61,7 +61,7 @@ pub trait CloudLlmTokenProvider: Send + Sync {
     fn has_data_retention_consent(&self, cx: &impl AppContext) -> bool;
 }
 
-/// Sends an authenticated request to the Zed LLM service, retrying once with
+/// Sends an authenticated request to the Tau LLM service, retrying once with
 /// a refreshed token if the server signals that the cached LLM token is
 /// expired or otherwise rejected. Returns the raw response so callers can
 /// inspect headers and stream the body.
@@ -207,7 +207,7 @@ struct ApiError {
     headers: HeaderMap<HeaderValue>,
 }
 
-/// Represents error responses from Zed's cloud API.
+/// Represents error responses from Tau's cloud API.
 ///
 /// Example JSON for an upstream HTTP error:
 /// ```json
@@ -1021,7 +1021,7 @@ mod tests {
             ),
         }
 
-        // Regular 500 error without upstream_http_error should remain ApiInternalServerError for Zed
+        // Regular 500 error without upstream_http_error should remain ApiInternalServerError for Tau
         let error_body = "Regular internal server error";
 
         let api_error = ApiError {

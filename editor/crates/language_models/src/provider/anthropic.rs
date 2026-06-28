@@ -30,7 +30,7 @@ const PROVIDER_NAME: LanguageModelProviderName = ANTHROPIC_PROVIDER_NAME;
 #[derive(Default, Clone, Debug, PartialEq)]
 pub struct AnthropicSettings {
     pub api_url: String,
-    /// Extend Zed's list of Anthropic models.
+    /// Extend Tau's list of Anthropic models.
     pub available_models: Vec<AvailableModel>,
     /// User-configured headers added to every Anthropic request.
     pub custom_headers: CustomHeaders,
@@ -665,7 +665,7 @@ impl Render for ConfigurationView {
                 .child(self.api_key_editor.clone())
                 .child(
                     Label::new(
-                        format!("You can also set the {API_KEY_ENV_VAR_NAME} environment variable and restart Zed."),
+                        format!("You can also set the {API_KEY_ENV_VAR_NAME} environment variable and restart Tau."),
                     )
                     .size(LabelSize::Small)
                     .color(Color::Muted)

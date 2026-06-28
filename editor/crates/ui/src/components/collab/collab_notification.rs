@@ -109,7 +109,7 @@ impl Component for CollabNotification {
                             Button::new("decline", "Dismiss"),
                         )
                         .child(Label::new("the user is sharing a project"))
-                        .child(Label::new("zed").color(Color::Muted)),
+                        .child(Label::new("tau").color(Color::Muted)),
                     )
                     .into_any_element(),
             ),
@@ -126,7 +126,7 @@ impl Component for CollabNotification {
                             "a_very_long_username_that_might_overflow is sharing a project in TAU:",
                         ))
                         .child(
-                            Label::new("zed-cloud, zed, edit-prediction-bench, zed.dev")
+                            Label::new("tau-cloud, tau, edit-prediction-bench, tau.dev")
                                 .color(Color::Muted),
                         ),
                     )
@@ -171,7 +171,7 @@ impl Component for CollabNotification {
                             Button::new("decline", "Decline"),
                         )
                         .child(Label::new(
-                            "maxbrunsfeld invited you to join the #zed channel",
+                            "maxbrunsfeld invited you to join the #tau channel",
                         )),
                     )
                     .into_any_element(),

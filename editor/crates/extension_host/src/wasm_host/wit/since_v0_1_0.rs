@@ -36,15 +36,15 @@ wasmtime::component::bindgen!({
     with: {
         "worktree": ExtensionWorktree,
         "key-value-store": ExtensionKeyValueStore,
-        "zed:extension/http-client/http-response-stream": ExtensionHttpResponseStream,
-        "zed:extension/github": since_v0_6_0::zed::extension::github,
-        "zed:extension/nodejs": latest::zed::extension::nodejs,
-        "zed:extension/platform": since_v0_6_0::zed::extension::platform,
-        "zed:extension/slash-command": latest::zed::extension::slash_command,
+        "tau:extension/http-client/http-response-stream": ExtensionHttpResponseStream,
+        "tau:extension/github": since_v0_6_0::tau::extension::github,
+        "tau:extension/nodejs": latest::tau::extension::nodejs,
+        "tau:extension/platform": since_v0_6_0::tau::extension::platform,
+        "tau:extension/slash-command": latest::tau::extension::slash_command,
     },
 });
 
-pub use self::zed::extension::*;
+pub use self::tau::extension::*;
 
 mod settings {
     include!(concat!(env!("OUT_DIR"), "/since_v0.1.0/settings.rs"));

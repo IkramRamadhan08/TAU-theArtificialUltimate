@@ -57,7 +57,7 @@ use workspace::{
     item::{FollowEvent, ProjectItemKind},
     searchable::SearchOptions,
 };
-use zed_actions::preview::{
+use tau_actions::preview::{
     markdown::OpenPreview as OpenMarkdownPreview, svg::OpenPreview as OpenSvgPreview,
 };
 
@@ -2747,7 +2747,7 @@ mod tests {
         });
     }
 
-    // Regression test for https://github.com/zed-industries/zed/issues/35947
+    // Regression test for https://github.com/tau-industries/tau/issues/35947
     // Verifies that deserializing a non-worktree editor does not add the item
     // to any pane as a side effect.
     #[gpui::test]

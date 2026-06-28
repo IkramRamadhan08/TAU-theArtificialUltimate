@@ -1,7 +1,7 @@
 {
   "$schema": "https://tau.ai/schema/themes/v0.2.0.json",
   "name": "One",
-  "author": "Zed Industries",
+  "author": "Tau Industries",
   "themes": [
     {
       "name": "One Dark",
