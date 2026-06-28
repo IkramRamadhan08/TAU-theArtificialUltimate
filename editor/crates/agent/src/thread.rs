@@ -1194,6 +1194,9 @@ pub struct Thread {
     /// already-granted permissions skip the approval prompt.
     /// Never persisted — lives and dies with this thread.
     sandbox_grants: Rc<RefCell<ThreadSandboxGrants>>,
+    /// When true, agent asks user for verbal confirmation ("shall I run?")
+    /// before executing tools, instead of just doing it.
+    pub(crate) require_verification: bool,
 }
 
 impl Thread {
@@ -1324,6 +1327,7 @@ impl Thread {
             inherits_parent_model_settings: true,
             sandboxed_terminal_temp_dir: None,
             sandbox_grants: Rc::new(RefCell::new(ThreadSandboxGrants::default())),
+            require_verification: false,
         }
     }
 
@@ -1338,6 +1342,7 @@ impl Thread {
         self.thinking_effort = parent.thinking_effort.clone();
         self.summarization_model = parent.summarization_model.clone();
         self.profile_id = parent.profile_id.clone();
+        self.require_verification = parent.require_verification;
     }
 
     fn apply_model_selection(
@@ -1702,6 +1707,7 @@ impl Thread {
             inherits_parent_model_settings: true,
             sandboxed_terminal_temp_dir: db_thread.sandboxed_terminal_temp_dir,
             sandbox_grants: Rc::new(RefCell::new(ThreadSandboxGrants::default())),
+            require_verification: false,
         }
     }
 
@@ -3909,6 +3915,7 @@ impl Thread {
             date: Local::now().format("%Y-%m-%d").to_string(),
             user_agents_md,
             sandboxing: crate::sandboxing::sandboxing_enabled(cx),
+            require_verification: self.require_verification,
         }
         .render(&self.templates)
         .context("failed to build system prompt")

@@ -49,6 +49,9 @@ pub struct SystemPromptTemplate<'a> {
     /// per-command flags the model can request to relax them. When
     /// `false`, the prompt omits the sandbox section entirely.
     pub sandboxing: bool,
+    /// When true, the LLM should ask the user for verbal confirmation
+    /// before executing tools, instead of autonomously doing the work.
+    pub require_verification: bool,
 }
 
 impl Template for SystemPromptTemplate<'_> {

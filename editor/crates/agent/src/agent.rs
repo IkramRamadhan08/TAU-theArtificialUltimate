@@ -164,6 +164,7 @@ impl From<&Skill> for NativeAvailableSkill {
 }
 
 pub const COMPACT_COMMAND_NAME: &str = "compact";
+pub const PERMISSION_COMMAND_NAME: &str = "permission";
 
 /// Returns the set of MCP prompt names that must be server-qualified
 /// (`/<server>.<name>`) to stay unambiguous in the slash-command popup: names
@@ -1505,6 +1506,16 @@ impl NativeAgent {
         .meta(acp_thread::meta_with_command_category(
             acp_thread::CommandCategory::Native,
         ));
+        let permission_command = acp::AvailableCommand::new(
+            PERMISSION_COMMAND_NAME,
+            "Set agent permission mode: full access (auto-execute) or verify (ask before each action)",
+        )
+        .input(acp::AvailableCommandInput::Unstructured(
+            acp::UnstructuredCommandInput::new("<full access|verify>"),
+        ))
+        .meta(acp_thread::meta_with_command_category(
+            acp_thread::CommandCategory::Native,
+        ));
 
         let registry = state.context_server_registry.read(cx);
 
@@ -1512,7 +1523,7 @@ impl NativeAgent {
         // force-prefixed (`/<server>.compact`) and stays reachable: an
         // unqualified `/compact` always routes to the native command.
         let ambiguous_prompt_names = ambiguous_mcp_prompt_names(
-            [COMPACT_COMMAND_NAME],
+            [COMPACT_COMMAND_NAME, PERMISSION_COMMAND_NAME],
             registry.prompts().map(|p| p.prompt.name.as_str()),
         );
 
@@ -1552,6 +1563,7 @@ impl NativeAgent {
         });
 
         std::iter::once(compact_command)
+            .chain(std::iter::once(permission_command))
             .chain(mcp_commands)
             .collect()
     }
@@ -1949,6 +1961,36 @@ impl NativeAgent {
                 )
             })
             .await
+        })
+    }
+
+    fn send_permission_command(
+        &self,
+        message_id: UserMessageId,
+        session_id: acp::SessionId,
+        arg: &str,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<acp::PromptResponse>> {
+        let verify = match arg.trim() {
+            "verify" | "ask" => true,
+            "full access" | "allow" | "auto" => false,
+            _ => return Task::ready(Ok(acp::PromptResponse::new(acp::StopReason::EndTurn))),
+        };
+
+        cx.spawn(async move |this, cx| {
+            let thread = this.update(cx, |this, _cx| {
+                let session = this
+                    .sessions
+                    .get(&session_id)
+                    .context("Failed to get session")?;
+                Ok::<_, anyhow::Error>(session.thread.clone())
+            })??;
+
+            thread.update(cx, |thread, _cx| {
+                thread.require_verification = verify;
+            });
+
+            Ok(acp::PromptResponse::new(acp::StopReason::EndTurn))
         })
     }
 
@@ -2639,6 +2681,12 @@ impl acp_thread::AgentConnection for NativeAgentConnection {
             if parsed_command.is_unqualified(COMPACT_COMMAND_NAME) {
                 return self.0.update(cx, |agent, cx| {
                     agent.send_compact_command(id, session_id, cx)
+                });
+            }
+
+            if parsed_command.is_unqualified(PERMISSION_COMMAND_NAME) {
+                return self.0.update(cx, |agent, cx| {
+                    agent.send_permission_command(id, session_id, parsed_command.arg_value, cx)
                 });
             }
 
