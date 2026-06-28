@@ -11,7 +11,7 @@
 [![Build](https://img.shields.io/badge/build-passing-brightgreen)]()
 [![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-lightgrey)]()
 
-![TAU Editor screenshot](https://via.placeholder.com/800x500/1a1a2e/ffffff?text=Screenshot+coming+soon)
+![TAU Editor screenshot](editor_screenshot.png)
 
 </div>
 
