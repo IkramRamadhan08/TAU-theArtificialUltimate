@@ -1,105 +1,171 @@
-# Laundryku
+# TAU — The Artificial Ultimate
 
-Laundryku adalah aplikasi web manajemen laundry berbasis Laravel dan Filament.
+<div align="center">
 
-## Login Demo
+**A local-first, agentic coding IDE for Linux, macOS, and Windows.**
 
-Setelah instalasi selesai, buka halaman admin:
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE-GPL)
+[![Rust](https://img.shields.io/badge/rust-1.95.0-orange)](rust-toolchain.toml)
+[![Build](https://img.shields.io/badge/build-passing-brightgreen)]()
+[![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-lightgrey)]()
 
-```text
-http://127.0.0.1:8000/admin
-```
+</div>
 
-Gunakan akun berikut:
+TAU is a high-performance, GPU-accelerated code editor with built-in AI agent capabilities. Forked from [Zed](https://zed.dev).
 
-```text
-Email: test@example.com
-Password: password
-```
+> 📖 **Full documentation:** [`editor/docs/`](editor/docs/) — User guide, configuration, keybindings, and more.
 
-## Instalasi Windows
+![TAU Editor](https://via.placeholder.com/800x500/1a1a2e/ffffff?text=TAU+Editor+Screenshot)
 
-Installer Windows menggunakan XAMPP untuk MySQL. Script akan membantu setup database, dependency, migration, seed user login, build asset, lalu menjalankan server Laravel.
+## Features
 
-1. Install XAMPP jika belum ada. Jika belum terdeteksi, script akan menawarkan instalasi via winget.
-2. Buka PowerShell di folder project.
-3. Jalankan:
+- **Agentic AI** — Built-in LLM integration for code generation, editing, analysis, and automated tasks
+- **Multi-language** — First-class support for Rust, Python, TypeScript, JavaScript, Go, HTML, CSS, JSON, and more via LSP
+- **Vim mode** — Full vim emulation with custom keymaps
+- **Real-time collaboration** — Multi-user editing with shared workspaces (self-hosted)
+- **GPU-accelerated rendering** — Built on GPUI framework using Vulkan, Metal, or DirectX
+- **Terminal** — Integrated terminal with multiplexing
+- **Git integration** — Inline blame, diff viewer, branch management, and commit UI
+- **Debugger** — Built-in debug adapter protocol (DAP) support
+- **Extensible** — WebAssembly-based extensions with custom language grammars
+- **Theme support** — Customizable UI themes (Ayu, One, Gruvbox, and more)
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\install-windows.ps1
-```
+## Quick Start
 
-Script akan menanyakan:
+### Prerequisites
 
-```text
-XAMPP folder path
-Laravel app port
-Konfirmasi instalasi dependency yang belum ada
-```
+- **Rust toolchain 1.95.0**
+  ```bash
+  rustup toolchain install 1.95.0
+  ```
+- **System dependencies**
 
-Default yang aman:
+  | Distro | Command |
+  |--------|---------|
+  | Arch | `pacman -S --noconfirm pkgconf libxkbcommon libxcb wayland fontconfig libva mesa alsa-lib` |
+  | Debian/Ubuntu | `apt install -y pkg-config libxkbcommon-dev libxcb-shape0-dev libxcb-xfixes0-dev libwayland-dev libfontconfig-dev libva-dev mesa-common-dev libasound2-dev` |
+  | Fedora | `dnf install -y pkg-config libxkbcommon-devel libxcb-devel wayland-devel fontconfig-devel libva-devel mesa-libGL-devel alsa-lib-devel` |
+  | macOS | Xcode Command Line Tools: `xcode-select --install` |
+  | Windows | Visual Studio Build Tools with C++ workload |
 
-```text
-XAMPP folder path: C:\xampp
-Laravel app port: 8000
-```
-
-Catatan: project ini membutuhkan PHP 8.3 atau lebih baru. Jika PHP bawaan XAMPP masih di bawah 8.3, script tetap memakai MySQL dari XAMPP, tetapi akan menawarkan instalasi PHP 8.4 via winget untuk menjalankan Laravel.
-
-## Instalasi Linux
-
-Installer Linux akan mengecek dan memasang dependency yang belum tersedia, menyiapkan database lokal, menjalankan migration dan seeder, build asset, lalu menjalankan server Laravel.
-
-Jalankan dari folder project:
+### Build & Run
 
 ```bash
-chmod +x install-linux.sh
-./install-linux.sh
+git clone https://github.com/IkramRamadhan08/TAU-theArtificialUltimate.git
+cd TAU_Project/editor
+cargo run --bin tau
 ```
 
-Script mendukung package manager umum:
+> First build compiles ~236 crates and may take 15–30 minutes depending on your machine.
 
-```text
-apt
-pacman
-dnf
-zypper
-```
-
-Database yang dipakai:
-
-```text
-SQLite jika ekstensi pdo_sqlite aktif
-MariaDB lokal sebagai fallback jika SQLite tidak tersedia
-```
-
-## Setelah Server Jalan
-
-Jika script selesai, terminal akan menampilkan:
-
-```text
-Laundryku is ready.
-URL: http://127.0.0.1:8000/admin
-Email: test@example.com
-Password: password
-```
-
-Biarkan terminal tetap terbuka selama menggunakan aplikasi. Tekan `Ctrl+C` untuk menghentikan server.
-
-## Menjalankan Ulang
-
-Jika dependency sudah terpasang, cukup jalankan script yang sama:
-
-Windows:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\install-windows.ps1
-```
-
-Linux:
+### Install
 
 ```bash
-./install-linux.sh
+cargo build --release --bin tau
+cp target/release/tau ~/.local/bin/
 ```
 
-Migration dan seeder aman dijalankan ulang. Akun login demo akan tetap tersedia.
+Or use the install script:
+```bash
+./install.sh
+```
+
+## Configuration
+
+TAU is configured via JSON files:
+
+| File | Purpose |
+|------|---------|
+| `~/.config/tau/settings.json` | User settings |
+| `~/.config/tau/keymap.json` | Custom keybindings |
+| `~/.config/tau/themes/` | Custom themes |
+
+Example `settings.json`:
+```json
+{
+  "theme": "Ayu Dark",
+  "font_family": "JetBrains Mono",
+  "font_size": 14,
+  "tab_size": 4,
+  "vim_mode": true,
+  "telemetry": false
+}
+```
+
+## Platform Support
+
+| OS | Status | GPU Backend | Windowing |
+|----|--------|-------------|-----------|
+| Linux | ✅ Stable | Vulkan / OpenGL | X11 / Wayland |
+| macOS | ✅ Stable | Metal | Cocoa |
+| Windows | ✅ Stable | Vulkan (via DX12/WGPU) | Win32 |
+
+## Keybindings
+
+| Action | Linux/Win | macOS |
+|--------|-----------|-------|
+| Command palette | `Ctrl+Shift+P` | `Cmd+Shift+P` |
+| File finder | `Ctrl+P` | `Cmd+P` |
+| Toggle terminal | `Ctrl+\`` | `Cmd+\`` |
+| Save | `Ctrl+S` | `Cmd+S` |
+| Search in file | `Ctrl+F` | `Cmd+F` |
+| Search in project | `Ctrl+Shift+F` | `Cmd+Shift+F` |
+
+Full keymaps: `editor/assets/keymaps/`
+
+## Project Structure
+
+```
+editor/
+├── crates/            # 236 Rust crates
+│   ├── gpui/          # GPU-accelerated UI framework
+│   ├── editor/        # Core editor engine
+│   ├── agent/         # AI agent runtime & tool execution
+│   ├── language/      # Language server protocol & parsing
+│   ├── project/       # Project management & LSP store
+│   ├── vim/           # Vim emulation
+│   └── ...
+├── assets/            # Themes, keymaps, icons, settings
+│   ├── themes/        # Ayu, Gruvbox, One themes
+│   ├── keymaps/       # Platform-specific keybindings
+│   └── settings/      # Default configuration
+├── extensions/        # WASM extension examples
+├── script/            # Build, CI, and release scripts
+└── Cargo.toml         # Workspace definition
+```
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| Build fails on WebRTC | Set `TAU_NO_WEBRTC=true` to skip WebRTC download |
+| GPU not detected | Ensure Vulkan drivers are installed (`mesa-vulkan-drivers` on Arch, `mesa-vulkan-drivers` on Debian) |
+| Missing X11 libs | Install `libxcb`, `libxkbcommon` development packages for your distro |
+| Fonts not rendering | Install `fontconfig` and ensure system fonts are available |
+
+## Contributing
+
+TAU is open-source and **we welcome contributions from everyone!**
+
+| Area | How to Contribute |
+|------|-------------------|
+| 🐛 Bugs | [Open an issue](https://github.com/IkramRamadhan08/TAU_Project/issues) with steps to reproduce |
+| 💡 Features | Suggest via issues or submit a PR |
+| 📖 Docs | Improve guides, fix typos, add examples |
+| 🔌 Extensions | Build WASM extensions for languages/tools |
+| 🌍 Translations | Help translate the editor and docs |
+
+```bash
+# Get started
+git clone https://github.com/IkramRamadhan08/TAU-theArtificialUltimate.git
+cd TAU_Project/editor
+cargo check
+```
+
+Read the [documentation](editor/docs/) to understand the codebase.
+
+## License
+
+Original [Zed](https://zed.dev) source code is licensed under GPL-3.0-or-later with Apache-2.0 components. TAU modifications to GPL-covered files are distributed under GPL-3.0-or-later.
+
+See [LICENSE-GPL](LICENSE-GPL) and [LICENSE-APACHE](LICENSE-APACHE) for details.
