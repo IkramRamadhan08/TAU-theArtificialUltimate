@@ -2612,7 +2612,7 @@ impl Thread {
                         }),
                     )
                 } else {
-                    let request_timeout_secs = AgentSettings::get_global(cx).request_timeout_secs;
+                    let request_timeout_secs = cx.update(|cx| AgentSettings::get_global(cx).request_timeout_secs);
                     let completion_timeout = cx.background_executor().timer(Duration::from_secs(request_timeout_secs));
                     match futures::select! {
                         result = model.stream_completion(request, cx).fuse() => result,
@@ -2952,7 +2952,7 @@ impl Thread {
             compaction_id.clone(),
             acp_thread::ContextCompactionStatus::InProgress,
         );
-        let request_timeout_secs = AgentSettings::get_global(cx).request_timeout_secs;
+        let request_timeout_secs = cx.update(|cx| AgentSettings::get_global(cx).request_timeout_secs);
         let compaction_timeout = cx.background_executor().timer(Duration::from_secs(request_timeout_secs));
         let stream = futures::select! {
             result = model.stream_completion(request, cx).fuse() => result,
