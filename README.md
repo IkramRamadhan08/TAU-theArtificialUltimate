@@ -41,7 +41,7 @@ curl -fsSL https://raw.githubusercontent.com/IkramRamadhan08/TAU-theArtificialUl
 ```
 
 The script will:
-- **Linux x86-64** — Download the pre-built binary (~130 MB)
+- **Linux x86-64** — Download the pre-built binary (~127 MB)
 - **macOS / ARM Linux** — Build from source (requires Rust; install from [rustup.rs](https://rustup.rs))
 - Ask if you want a **desktop shortcut** (language matches your system locale)
 - Add `~/.local/bin` to your `PATH`
