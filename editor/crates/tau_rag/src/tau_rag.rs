@@ -63,13 +63,15 @@ pub fn open_or_create_db() -> anyhow::Result<Connection> {
     Ok(connection)
 }
 
-pub fn search(
+pub async fn search(
     query: &str,
     limit: usize,
     file_filter: Option<&str>,
+    embedder: Option<&embedding::Embedder>,
+    http_client: Option<&dyn http_client::HttpClient>,
 ) -> anyhow::Result<Vec<search::SearchResult>> {
     let db = open_or_create_db()?;
-    search::search(&db, query, limit, file_filter)
+    search::search(&db, query, limit, file_filter, embedder, http_client)
 }
 
 pub async fn ensure_indexed(

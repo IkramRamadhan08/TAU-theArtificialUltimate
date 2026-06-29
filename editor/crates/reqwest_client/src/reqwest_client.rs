@@ -26,10 +26,13 @@ pub struct ReqwestClient {
 }
 
 impl ReqwestClient {
+    const TOTAL_TIMEOUT: Duration = Duration::from_secs(180);
+
     fn builder() -> reqwest::ClientBuilder {
         reqwest::Client::builder()
             .use_rustls_tls()
             .connect_timeout(Duration::from_secs(10))
+            .timeout(Self::TOTAL_TIMEOUT)
     }
 
     pub fn new() -> Self {

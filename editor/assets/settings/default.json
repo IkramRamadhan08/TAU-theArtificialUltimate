@@ -1244,6 +1244,10 @@
     //
     // Default: true
     "show_merge_conflict_indicator": true,
+    // Maximum seconds to wait for a model response before timing out.
+    //
+    // Default: 120
+    "request_timeout_secs": 120
   },
   // Whether the screen sharing icon is shown in the os status bar.
   "show_call_status_icon": true,

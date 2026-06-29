@@ -435,6 +435,7 @@ pub async fn stream_completion(
         .method(Method::POST)
         .uri(uri)
         .header("Content-Type", "application/json")
+        .header("Accept", "text/event-stream")
         .header("Authorization", format!("Bearer {}", api_key.trim()))
         .when_some(affinity, |this, affinity| {
             this.header("x-affinity", affinity)

@@ -112,16 +112,6 @@ pub enum VersionCheckType {
     Semantic(Version),
 }
 
-#[derive(Serialize, Debug)]
-pub struct AssetQuery<'a> {
-    asset: &'a str,
-    os: &'a str,
-    arch: &'a str,
-    metrics_id: Option<&'a str>,
-    system_id: Option<&'a str>,
-    is_staff: Option<bool>,
-}
-
 #[derive(Clone, Debug)]
 pub enum AutoUpdateStatus {
     Idle,
@@ -308,24 +298,11 @@ pub fn check(_: &Check, window: &mut Window, cx: &mut App) {
 }
 
 pub fn release_notes_url(cx: &mut App) -> Option<String> {
-    let release_channel = ReleaseChannel::try_global(cx)?;
-    let url = match release_channel {
-        ReleaseChannel::Stable | ReleaseChannel::Preview => {
-            let auto_updater = AutoUpdater::get(cx)?;
-            let auto_updater = auto_updater.read(cx);
-            let mut current_version = auto_updater.current_version.clone();
-            current_version.pre = semver::Prerelease::EMPTY;
-            current_version.build = semver::BuildMetadata::EMPTY;
-            let release_channel = release_channel.dev_name();
-            let path = format!("/releases/{release_channel}/{current_version}");
-            auto_updater.client.http_client().build_url(&path)
-        }
-        ReleaseChannel::Nightly => {
-            "https://tau.ai/releases/nightly/".to_string()
-        }
-        ReleaseChannel::Dev => "https://tau.ai/releases/dev/".to_string(),
-    };
-    Some(url)
+    let _release_channel = ReleaseChannel::try_global(cx)?;
+    Some(
+        "https://github.com/IkramRamadhan08/TAU-theArtificialUltimate/releases/latest"
+            .to_string(),
+    )
 }
 
 pub fn view_release_notes(_: &ViewReleaseNotes, cx: &mut App) -> Option<()> {
@@ -593,64 +570,94 @@ impl AutoUpdater {
 
     async fn get_release_asset(
         this: &Entity<Self>,
-        release_channel: ReleaseChannel,
+        _release_channel: ReleaseChannel,
         version: Option<Version>,
         asset: &str,
         os: &str,
         arch: &str,
         cx: &mut AsyncApp,
     ) -> Result<ReleaseAsset> {
-        let client = this.read_with(cx, |this, _| this.client.clone());
+        let http_client = this.read_with(cx, |this, _| this.client.http_client());
 
-        let (system_id, metrics_id, is_staff) = if client.telemetry().metrics_enabled() {
-            (
-                client.telemetry().system_id(),
-                client.telemetry().metrics_id(),
-                client.telemetry().is_staff(),
-            )
-        } else {
-            (None, None, None)
-        };
-
-        let version = if let Some(mut version) = version {
-            version.pre = semver::Prerelease::EMPTY;
-            version.build = semver::BuildMetadata::EMPTY;
-            version.to_string()
+        const REPO: &str = "IkramRamadhan08/TAU-theArtificialUltimate";
+        let version_str = if let Some(mut v) = version {
+            v.pre = semver::Prerelease::EMPTY;
+            v.build = semver::BuildMetadata::EMPTY;
+            format!("v{}", v)
         } else {
             "latest".to_string()
         };
-        let http_client = client.http_client();
-
-        let path = format!("/releases/{}/{}/asset", release_channel.dev_name(), version,);
-        let url = http_client.build_zed_cloud_url_with_query(
-            &path,
-            AssetQuery {
-                os,
-                arch,
-                asset,
-                metrics_id: metrics_id.as_deref(),
-                system_id: system_id.as_deref(),
-                is_staff,
-            },
-        )?;
+        let url = if version_str == "latest" {
+            format!("https://api.github.com/repos/{}/releases/latest", REPO)
+        } else {
+            format!(
+                "https://api.github.com/repos/{}/releases/tags/{}",
+                REPO, version_str
+            )
+        };
 
         let mut response = http_client
-            .get(url.as_str(), Default::default(), true)
-            .await?;
+            .get(&url, Default::default(), true)
+            .await
+            .with_context(|| format!("failed to fetch release from GitHub: {}", url))?;
         let mut body = Vec::new();
         response.body_mut().read_to_end(&mut body).await?;
 
         anyhow::ensure!(
             response.status().is_success(),
-            "failed to fetch release: {:?}",
+            "failed to fetch release from GitHub: {}",
             String::from_utf8_lossy(&body),
         );
 
-        serde_json::from_slice(body.as_slice()).with_context(|| {
+        #[derive(serde::Deserialize)]
+        struct GithubRelease {
+            tag_name: String,
+            assets: Vec<GithubAsset>,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct GithubAsset {
+            name: String,
+            browser_download_url: String,
+        }
+
+        let release: GithubRelease = serde_json::from_slice(&body).with_context(|| {
             format!(
-                "error deserializing release {:?}",
+                "error deserializing GitHub release: {:?}",
                 String::from_utf8_lossy(&body),
             )
+        })?;
+
+        let ext = match os {
+            "linux" => "tar.gz",
+            "macos" => "dmg",
+            "windows" => "exe",
+            other => anyhow::bail!("unsupported OS for auto-update: {}", other),
+        };
+        let asset_name = format!("{}-{}-{}.{}", asset, arch, os, ext);
+
+        let github_asset = release
+            .assets
+            .iter()
+            .find(|a| a.name == asset_name)
+            .with_context(|| {
+                format!(
+                    "no asset found matching '{}' in release {} (available: {:?})",
+                    asset_name,
+                    release.tag_name,
+                    release.assets.iter().map(|a| &a.name).collect::<Vec<_>>(),
+                )
+            })?;
+
+        let version = release
+            .tag_name
+            .strip_prefix('v')
+            .unwrap_or(&release.tag_name)
+            .to_string();
+
+        Ok(ReleaseAsset {
+            version,
+            url: github_asset.browser_download_url.clone(),
         })
     }
 

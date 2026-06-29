@@ -324,6 +324,11 @@ pub struct AgentSettingsContent {
     ///
     /// Default: true
     pub show_merge_conflict_indicator: Option<bool>,
+    /// Maximum time in seconds to wait for a model response before timing out.
+    ///
+    /// Default: 120
+    pub request_timeout_secs: Option<u64>,
+
     /// Per-tool permission rules for granular control over which tool actions
     /// require confirmation.
     ///

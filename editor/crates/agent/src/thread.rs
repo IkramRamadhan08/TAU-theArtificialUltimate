@@ -1198,6 +1198,10 @@ pub struct Thread {
     /// When true, agent asks user for verbal confirmation ("shall I run?")
     /// before executing tools, instead of just doing it.
     pub(crate) require_verification: bool,
+    /// Per-provider circuit breakers that trip after 5 consecutive failures
+    /// and cool down for 60 seconds, preventing wasted API calls when a
+    /// provider is unresponsive.
+    circuit_breakers: HashMap<LanguageModelProviderId, crate::circuit_breaker::CircuitBreaker>,
 }
 
 impl Thread {
@@ -1329,6 +1333,7 @@ impl Thread {
             sandboxed_terminal_temp_dir: None,
             sandbox_grants: Rc::new(RefCell::new(ThreadSandboxGrants::default())),
             require_verification: false,
+            circuit_breakers: HashMap::default(),
         }
     }
 
@@ -1634,16 +1639,28 @@ impl Thread {
             .unwrap_or_else(|| settings.default_profile.clone());
 
         let mut model = LanguageModelRegistry::global(cx).update(cx, |registry, cx| {
-            db_thread
-                .model
-                .and_then(|model| {
-                    let model = SelectedModel {
-                        provider: model.provider.clone().into(),
-                        model: model.model.into(),
-                    };
-                    registry.select_model(&model, cx)
-                })
-                .or_else(|| registry.default_model())
+            let default_model = registry.default_model();
+
+            // Prefer the current global default model. Only fall back to the
+            // persisted thread model when the default can't be resolved (e.g.
+            // the model configured in settings was removed or renamed). This
+            // ensures that changing the default model in settings takes effect
+            // on existing threads without needing to create a new thread.
+            default_model
+                .into_iter()
+                .chain(
+                    db_thread
+                        .model
+                        .and_then(|model| {
+                            let model = SelectedModel {
+                                provider: model.provider.clone().into(),
+                                model: model.model.into(),
+                            };
+                            registry.select_model(&model, cx)
+                        })
+                        .into_iter(),
+                )
+                .next()
                 .map(|model| model.model)
         });
 
@@ -1710,6 +1727,7 @@ impl Thread {
             sandboxed_terminal_temp_dir: db_thread.sandboxed_terminal_temp_dir,
             sandbox_grants: Rc::new(RefCell::new(ThreadSandboxGrants::default())),
             require_verification: false,
+            circuit_breakers: HashMap::default(),
         }
     }
 
@@ -2571,9 +2589,59 @@ impl Thread {
 
             log::debug!("Calling model.stream_completion, attempt {}", attempt);
 
-            let (mut events, mut error) = match model.stream_completion(request, cx).await {
-                Ok(events) => (events.fuse(), None),
-                Err(err) => (stream::empty().boxed().fuse(), Some(err)),
+            // Circuit breaker: check before making the API call
+            let provider_id = model.provider_id();
+            let (mut events, mut error) = {
+                let circuit_open = this.read_with(cx, |this, _| {
+                    this.circuit_breakers
+                        .get(&provider_id)
+                        .map_or(false, |cb| cb.is_open())
+                })?;
+                if circuit_open {
+                    let retry_after = this.read_with(cx, |this, _| {
+                        this.circuit_breakers
+                            .get(&provider_id)
+                            .map(|cb| cb.retry_after())
+                            .unwrap_or(Duration::from_secs(60))
+                    })?;
+                    (
+                        stream::empty().boxed().fuse(),
+                        Some(LanguageModelCompletionError::ServerOverloaded {
+                            provider: model.provider_name(),
+                            retry_after: Some(retry_after),
+                        }),
+                    )
+                } else {
+                    let request_timeout_secs = AgentSettings::get_global(cx).request_timeout_secs;
+                    let completion_timeout = cx.background_executor().timer(Duration::from_secs(request_timeout_secs));
+                    match futures::select! {
+                        result = model.stream_completion(request, cx).fuse() => result,
+                        _ = completion_timeout.fuse() => {
+                            Err(LanguageModelCompletionError::Other(
+                                anyhow!("Request timed out after {} seconds", request_timeout_secs)
+                            ))
+                        }
+                    } {
+                        Ok(stream) => {
+                            this.update(cx, |this, _| {
+                                this.circuit_breakers
+                                    .entry(provider_id)
+                                    .or_insert_with(crate::circuit_breaker::CircuitBreaker::new)
+                                    .record_success();
+                            })?;
+                            (stream.fuse(), None)
+                        }
+                        Err(err) => {
+                            this.update(cx, |this, _| {
+                                this.circuit_breakers
+                                    .entry(provider_id)
+                                    .or_insert_with(crate::circuit_breaker::CircuitBreaker::new)
+                                    .record_failure();
+                            })?;
+                            (stream::empty().boxed().fuse(), Some(err))
+                        }
+                    }
+                }
             };
             let mut tool_results: FuturesUnordered<Task<LanguageModelToolResult>> =
                 FuturesUnordered::new();
@@ -2884,8 +2952,13 @@ impl Thread {
             compaction_id.clone(),
             acp_thread::ContextCompactionStatus::InProgress,
         );
+        let request_timeout_secs = AgentSettings::get_global(cx).request_timeout_secs;
+        let compaction_timeout = cx.background_executor().timer(Duration::from_secs(request_timeout_secs));
         let stream = futures::select! {
             result = model.stream_completion(request, cx).fuse() => result,
+            _ = compaction_timeout.fuse() => {
+                Err(LanguageModelCompletionError::Other(anyhow!("Compaction request timed out after {} seconds", request_timeout_secs)))
+            }
             _ = cancellation_rx.changed().fuse() => {
                 if *cancellation_rx.borrow() {
                     log::debug!("Compaction cancelled before request started");

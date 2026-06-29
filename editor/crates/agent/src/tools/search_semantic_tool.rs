@@ -163,11 +163,21 @@ impl AgentTool for SearchSemanticTool {
                 );
             }
 
-            // Search
-            let search_result = tau_rag::search(&input.query, input.limit, input.file_filter.as_deref())
-                .map_err(|e| SearchSemanticToolOutput::Error {
-                    error: format!("Search failed: {}", e),
-                })?;
+            // Search with true semantic embedding
+            let embedder = tau_rag::embedding::Embedder::new(
+                tau_rag::embedding::EmbeddingProvider::default(),
+            );
+            let search_result = tau_rag::search(
+                &input.query,
+                input.limit,
+                input.file_filter.as_deref(),
+                Some(&embedder),
+                Some(&**http_client),
+            )
+            .await
+            .map_err(|e| SearchSemanticToolOutput::Error {
+                error: format!("Search failed: {}", e),
+            })?;
 
             if search_result.is_empty() {
                 event_stream.update_fields(

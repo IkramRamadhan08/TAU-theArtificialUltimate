@@ -694,15 +694,53 @@ pub fn read_skill_body_from_content(
     Ok(body.trim().to_string())
 }
 
-/// Content of the built-in `create-skill` SKILL.md, embedded at compile time.
+/// Content of built-in skill SKILL.md files, embedded at compile time.
 const CREATE_SKILL_CONTENT: &str = include_str!("builtin/create-skill/SKILL.md");
+const BRAINSTORMING_CONTENT: &str = include_str!("builtin/brainstorming/SKILL.md");
+const DISPATCHING_PARALLEL_AGENTS_CONTENT: &str =
+    include_str!("builtin/dispatching-parallel-agents/SKILL.md");
+const EXECUTING_PLANS_CONTENT: &str = include_str!("builtin/executing-plans/SKILL.md");
+const FINISHING_A_DEVELOPMENT_BRANCH_CONTENT: &str =
+    include_str!("builtin/finishing-a-development-branch/SKILL.md");
+const RECEIVING_CODE_REVIEW_CONTENT: &str =
+    include_str!("builtin/receiving-code-review/SKILL.md");
+const REQUESTING_CODE_REVIEW_CONTENT: &str =
+    include_str!("builtin/requesting-code-review/SKILL.md");
+const SUBAGENT_DRIVEN_DEVELOPMENT_CONTENT: &str =
+    include_str!("builtin/subagent-driven-development/SKILL.md");
+const SYSTEMATIC_DEBUGGING_CONTENT: &str = include_str!("builtin/systematic-debugging/SKILL.md");
+const TEST_DRIVEN_DEVELOPMENT_CONTENT: &str =
+    include_str!("builtin/test-driven-development/SKILL.md");
+const USING_GIT_WORKTREES_CONTENT: &str = include_str!("builtin/using-git-worktrees/SKILL.md");
+const VERIFICATION_BEFORE_COMPLETION_CONTENT: &str =
+    include_str!("builtin/verification-before-completion/SKILL.md");
+const WRITING_PLANS_CONTENT: &str = include_str!("builtin/writing-plans/SKILL.md");
+const WRITING_SKILLS_CONTENT: &str = include_str!("builtin/writing-skills/SKILL.md");
 
 /// Returns the set of skills that are compiled into the Tau binary.
 pub fn builtin_skills() -> Vec<Skill> {
     let mut skills = Vec::new();
-    if let Ok(skill) = parse_builtin_skill("create-skill", CREATE_SKILL_CONTENT) {
-        skills.push(skill);
+    macro_rules! add_skill {
+        ($name:expr, $content:expr) => {
+            if let Ok(skill) = parse_builtin_skill($name, $content) {
+                skills.push(skill);
+            }
+        };
     }
+    add_skill!("create-skill", CREATE_SKILL_CONTENT);
+    add_skill!("brainstorming", BRAINSTORMING_CONTENT);
+    add_skill!("dispatching-parallel-agents", DISPATCHING_PARALLEL_AGENTS_CONTENT);
+    add_skill!("executing-plans", EXECUTING_PLANS_CONTENT);
+    add_skill!("finishing-a-development-branch", FINISHING_A_DEVELOPMENT_BRANCH_CONTENT);
+    add_skill!("receiving-code-review", RECEIVING_CODE_REVIEW_CONTENT);
+    add_skill!("requesting-code-review", REQUESTING_CODE_REVIEW_CONTENT);
+    add_skill!("subagent-driven-development", SUBAGENT_DRIVEN_DEVELOPMENT_CONTENT);
+    add_skill!("systematic-debugging", SYSTEMATIC_DEBUGGING_CONTENT);
+    add_skill!("test-driven-development", TEST_DRIVEN_DEVELOPMENT_CONTENT);
+    add_skill!("using-git-worktrees", USING_GIT_WORKTREES_CONTENT);
+    add_skill!("verification-before-completion", VERIFICATION_BEFORE_COMPLETION_CONTENT);
+    add_skill!("writing-plans", WRITING_PLANS_CONTENT);
+    add_skill!("writing-skills", WRITING_SKILLS_CONTENT);
     skills
 }
 
@@ -730,7 +768,22 @@ fn parse_builtin_skill(name: &str, content: &'static str) -> Result<Skill> {
 
 /// All built-in skills as `(name, raw_content)` pairs. Used by
 /// `builtin_skill_content` to serve the full SKILL.md without disk I/O.
-const BUILTIN_SKILL_ENTRIES: &[(&str, &str)] = &[("create-skill", CREATE_SKILL_CONTENT)];
+const BUILTIN_SKILL_ENTRIES: &[(&str, &str)] = &[
+    ("brainstorming", BRAINSTORMING_CONTENT),
+    ("create-skill", CREATE_SKILL_CONTENT),
+    ("dispatching-parallel-agents", DISPATCHING_PARALLEL_AGENTS_CONTENT),
+    ("executing-plans", EXECUTING_PLANS_CONTENT),
+    ("finishing-a-development-branch", FINISHING_A_DEVELOPMENT_BRANCH_CONTENT),
+    ("receiving-code-review", RECEIVING_CODE_REVIEW_CONTENT),
+    ("requesting-code-review", REQUESTING_CODE_REVIEW_CONTENT),
+    ("subagent-driven-development", SUBAGENT_DRIVEN_DEVELOPMENT_CONTENT),
+    ("systematic-debugging", SYSTEMATIC_DEBUGGING_CONTENT),
+    ("test-driven-development", TEST_DRIVEN_DEVELOPMENT_CONTENT),
+    ("using-git-worktrees", USING_GIT_WORKTREES_CONTENT),
+    ("verification-before-completion", VERIFICATION_BEFORE_COMPLETION_CONTENT),
+    ("writing-plans", WRITING_PLANS_CONTENT),
+    ("writing-skills", WRITING_SKILLS_CONTENT),
+];
 
 /// Look up the full embedded content of a built-in skill by its
 /// synthetic file path. Returns `None` if the path doesn't match any

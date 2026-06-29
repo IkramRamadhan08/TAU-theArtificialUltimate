@@ -4,57 +4,41 @@
 
 <img src="TAU.png" alt="TAU Logo" width="120">
 
-**A local-first, agentic coding IDE for Linux, macOS, and Windows.**
+**A local-first, agentic coding IDE.** Forked from [Zed](https://zed.dev).
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE-GPL)
 [![Rust](https://img.shields.io/badge/rust-1.95.0-orange)](rust-toolchain.toml)
-[![Build](https://img.shields.io/badge/build-passing-brightgreen)]()
-[![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-lightgrey)]()
+[![Release](https://img.shields.io/badge/release-v0.62--experimental-yellow)]()
 
 ![TAU Editor screenshot](editor_screenshot.png)
 
 </div>
 
-TAU is a high-performance, GPU-accelerated code editor with built-in AI agent capabilities. Forked from [Zed](https://zed.dev).
+## Status
 
-> 📖 **Full documentation:** [`editor/docs/`](editor/docs/) — User guide, configuration, keybindings, and more.
+**Experimental.** TAU is a fork of Zed with an integrated AI agent. It works but is rough around the edges.
 
-## Features
-
-- **Agentic AI** — Built-in LLM integration for code generation, editing, analysis, and automated tasks
-- **Multi-language** — First-class support for Rust, Python, TypeScript, JavaScript, Go, HTML, CSS, JSON, and more via LSP
-- **Vim mode** — Full vim emulation with custom keymaps
-- **Real-time collaboration** — Multi-user editing with shared workspaces (self-hosted)
-- **GPU-accelerated rendering** — Built on GPUI framework using Vulkan, Metal, or DirectX
-- **Terminal** — Integrated terminal with multiplexing
-- **Git integration** — Inline blame, diff viewer, branch management, and commit UI
-- **Debugger** — Built-in debug adapter protocol (DAP) support
-- **Extensible** — WebAssembly-based extensions with custom language grammars
-- **Theme support** — Customizable UI themes (Ayu, One, Gruvbox, and more)
+| What | Status |
+|------|--------|
+| Core editor (forked from Zed) | ✅ Stable |
+| AI agent with tool execution | ✅ Working |
+| Mistral, Ollama, OpenAI providers | ✅ Working |
+| Other LLM providers (Anthropic, Google, DeepSeek, etc.) | ⚠️ Code present, untested |
+| TAU Cloud (collaboration) | ❌ Not implemented |
+| Pre-built binary | ✅ Linux x86-64 only |
+| macOS / Windows | ⚠️ Build from source required |
+| Auto-update | ✅ Via GitHub Releases |
+| Documentation | 🚧 Incomplete |
 
 ## Quick Start
 
-### Install Script (All Platforms)
+### Install (Linux x86-64)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/IkramRamadhan08/TAU-theArtificialUltimate/main/install.sh | bash
 ```
 
-The script will:
-- **Linux x86-64** — Download the pre-built binary (~127 MB)
-- **macOS / ARM Linux** — Build from source (requires Rust; install from [rustup.rs](https://rustup.rs))
-- Ask if you want a **desktop shortcut** (language matches your system locale)
-- Add `~/.local/bin` to your `PATH`
-
-Then just type `tau` in a terminal — the terminal closes automatically and TAU appears.
-
-> Requires `~/.local/bin` to be in your `PATH`. Add `export PATH="$PATH:$HOME/.local/bin"` to your shell config if needed.
-
-### Manual Install (Pre-built Binary)
-
-```bash
-curl -L https://github.com/IkramRamadhan08/TAU-theArtificialUltimate/releases/latest/download/tau-x86_64-linux.tar.gz | tar xz -C ~/.local/bin
-```
+Downloads pre-built binary from the [latest release](https://github.com/IkramRamadhan08/TAU-theArtificialUltimate/releases/latest).
 
 ### Build from Source (any platform)
 
@@ -68,100 +52,73 @@ cargo run --release --bin tau
 
 > **macOS**: Xcode Command Line Tools required (`xcode-select --install`).
 > **Windows**: Visual Studio Build Tools with "Desktop development with C++" workload required.
+> **Build time**: 30+ minutes on a modern machine.
 
-## Configuration
+### Uninstall
 
-TAU is configured via JSON files:
+```bash
+curl -fsSL https://raw.githubusercontent.com/IkramRamadhan08/TAU-theArtificialUltimate/main/uninstall.sh | bash
+```
 
-| File | Purpose |
-|------|---------|
-| `~/.config/tau/settings.json` | User settings |
-| `~/.config/tau/keymap.json` | Custom keybindings |
-| `~/.config/tau/themes/` | Custom themes |
+## LLM Providers
 
-Example `settings.json`:
+TAU supports multiple LLM providers. Configure them in `~/.config/tau/settings.json`:
+
 ```json
 {
-  "theme": "Ayu Dark",
-  "font_family": "JetBrains Mono",
-  "font_size": 14,
-  "tab_size": 4,
-  "vim_mode": true,
-  "telemetry": false
+  "language_models": {
+    "mistral": {
+      "api_key": "your-mistral-api-key",
+      "model": "mistral-small-latest"
+    },
+    "ollama": {
+      "model": "codestral",
+      "base_url": "http://localhost:11434"
+    },
+    "openai": {
+      "api_key": "your-openai-api-key",
+      "model": "gpt-4o"
+    }
+  }
 }
 ```
 
+**Tested and working**: Mistral, Ollama, OpenAI. Other providers (Anthropic, Google, DeepSeek, xAI, OpenRouter, etc.) have code in place but lack real-world testing. Report issues if something doesn't work.
+
+## Agent Features
+
+- Built-in AI agent with tool execution (terminal, file read/write, search, git, web fetch)
+- 14 built-in skills (brainstorming, debugging, TDD, code review, etc.)
+- Slash commands: `/permission`, `/skill`
+- Custom skills in `~/.agents/skills/`
+- Circuit breaker (auto-backoff on API errors)
+- Configurable request timeout (default 120s)
+
+## Configuration
+
+| File | Purpose |
+|------|---------|
+| `~/.config/tau/settings.json` | User settings, LLM config |
+| `~/.config/tau/keymap.json` | Custom keybindings |
+| `~/.config/tau/themes/` | Custom themes |
+| `~/.agents/skills/` | Custom agent skills |
+
 ## Platform Support
 
-| OS | Status | GPU Backend | Windowing |
+| OS | Binary | GPU Backend | Windowing |
 |----|--------|-------------|-----------|
-| Linux | ✅ Stable | Vulkan / OpenGL | X11 / Wayland |
-| macOS | ✅ Stable | Metal | Cocoa |
-| Windows | ✅ Stable | Vulkan (via DX12/WGPU) | Win32 |
+| Linux x86-64 | ✅ Pre-built | Vulkan / OpenGL | X11 / Wayland |
+| Linux ARM | ⚠️ Build from source | Vulkan | X11 / Wayland |
+| macOS | ⚠️ Build from source | Metal | Cocoa |
+| Windows | ⚠️ Build from source | Vulkan (via DX12/WGPU) | Win32 |
 
-## Keybindings
+## Limitations
 
-| Action | Linux/Win | macOS |
-|--------|-----------|-------|
-| Command palette | `Ctrl+Shift+P` | `Cmd+Shift+P` |
-| File finder | `Ctrl+P` | `Cmd+P` |
-| Toggle terminal | `Ctrl+\`` | `Cmd+\`` |
-| Save | `Ctrl+S` | `Cmd+S` |
-| Search in file | `Ctrl+F` | `Cmd+F` |
-| Search in project | `Ctrl+Shift+F` | `Cmd+Shift+F` |
-
-Full keymaps: `editor/assets/keymaps/`
-
-## Project Structure
-
-```
-editor/
-├── crates/            # 236 Rust crates
-│   ├── gpui/          # GPU-accelerated UI framework
-│   ├── editor/        # Core editor engine
-│   ├── agent/         # AI agent runtime & tool execution
-│   ├── language/      # Language server protocol & parsing
-│   ├── project/       # Project management & LSP store
-│   ├── vim/           # Vim emulation
-│   └── ...
-├── assets/            # Themes, keymaps, icons, settings
-│   ├── themes/        # Ayu, Gruvbox, One themes
-│   ├── keymaps/       # Platform-specific keybindings
-│   └── settings/      # Default configuration
-├── extensions/        # WASM extension examples
-├── script/            # Build, CI, and release scripts
-└── Cargo.toml         # Workspace definition
-```
-
-## Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| Build fails on WebRTC | Set `TAU_NO_WEBRTC=true` to skip WebRTC download |
-| GPU not detected | Ensure Vulkan drivers are installed (`mesa-vulkan-drivers` on Arch, `mesa-vulkan-drivers` on Debian) |
-| Missing X11 libs | Install `libxcb`, `libxkbcommon` development packages for your distro |
-| Fonts not rendering | Install `fontconfig` and ensure system fonts are available |
-
-## Contributing
-
-TAU is open-source and **we welcome contributions from everyone!**
-
-| Area | How to Contribute |
-|------|-------------------|
-| 🐛 Bugs | [Open an issue](https://github.com/IkramRamadhan08/TAU_Project/issues) with steps to reproduce |
-| 💡 Features | Suggest via issues or submit a PR |
-| 📖 Docs | Improve guides, fix typos, add examples |
-| 🔌 Extensions | Build WASM extensions for languages/tools |
-| 🌍 Translations | Help translate the editor and docs |
-
-```bash
-# Get started
-git clone https://github.com/IkramRamadhan08/TAU-theArtificialUltimate.git
-cd TAU_Project/editor
-cargo check
-```
-
-Read the [documentation](editor/docs/) to understand the codebase.
+- **macOS/Windows**: No pre-built binaries yet. Must compile from Rust source.
+- **TAU Cloud**: Collaboration features from Zed require a cloud backend which does not exist yet.
+- **Auto-update**: Checks GitHub Releases; only Linux x86-64 binary is published currently.
+- **Web search tool**: Requires external API configuration.
+- **Some Zed features** may be broken or missing due to the fork.
 
 ## License
 

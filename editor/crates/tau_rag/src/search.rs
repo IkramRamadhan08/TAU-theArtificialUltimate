@@ -1,6 +1,7 @@
 use anyhow::Result;
 use sqlez::connection::Connection;
 
+use crate::embedding::{Embedder, cosine_similarity};
 use crate::store::{self, StoredChunk};
 
 /// A single search result.
@@ -16,11 +17,13 @@ pub struct SearchResult {
 const DEFAULT_LIMIT: usize = 10;
 
 /// Perform hybrid search (keyword + vector).
-pub fn search(
+pub async fn search(
     conn: &Connection,
     query: &str,
     limit: usize,
     file_filter: Option<&str>,
+    embedder: Option<&Embedder>,
+    http_client: Option<&dyn http_client::HttpClient>,
 ) -> Result<Vec<SearchResult>> {
     let limit = limit.max(1).min(50).max(DEFAULT_LIMIT);
 
@@ -32,9 +35,22 @@ pub fn search(
     // Phase 1: Keyword search via FTS5
     let keyword_results = keyword_search(conn, query, limit * 2, file_filter)?;
 
-    // Phase 2: Vector search (load all embeddings, compute similarity)
+    // Phase 2: Vector search
     let vector_results = if total_chunks > 0 {
-        vector_search(conn, query, limit * 2, file_filter)?
+        match (embedder, http_client) {
+            (Some(embedder), Some(http_client)) => {
+                match vector_search_embed(conn, query, limit * 2, file_filter, embedder, http_client).await {
+                    Ok(results) => results,
+                    Err(e) => {
+                        log::warn!("Vector embedding search failed, falling back to keyword scoring: {e}");
+                        vector_search_keyword(conn, query, limit * 2, file_filter)?
+                    }
+                }
+            }
+            _ => {
+                vector_search_keyword(conn, query, limit * 2, file_filter)?
+            }
+        }
     } else {
         vec![]
     };
@@ -99,7 +115,7 @@ fn keyword_search(
     Ok(results)
 }
 
-fn vector_search(
+fn vector_search_keyword(
     conn: &Connection,
     query: &str,
     limit: usize,
@@ -107,7 +123,6 @@ fn vector_search(
 ) -> Result<Vec<(String, usize, usize, String, f32)>> {
     let chunks = store::load_all_chunks(conn)?;
 
-    // Filter by file_path if filter provided
     let chunks: Vec<&StoredChunk> = if let Some(filter) = file_filter {
         chunks
             .iter()
@@ -121,9 +136,6 @@ fn vector_search(
         return Ok(vec![]);
     }
 
-    // Use keyword matching on the query to find relevant chunks
-    // Since we can't embed the query client-side without an API call,
-    // we use a simplified approach: score chunks by keyword overlap
     let query_lower = query.to_lowercase();
     let query_terms: Vec<&str> = query_lower.split_whitespace().filter(|w| w.len() > 1).collect();
 
@@ -137,7 +149,6 @@ fn vector_search(
             let chunk_lower = chunk.chunk_text.to_lowercase();
             let mut score = 0.0f32;
 
-            // TF-like scoring: count term occurrences
             let total_terms = query_terms.len() as f32;
             for term in &query_terms {
                 let count = chunk_lower.matches(term).count() as f32;
@@ -146,7 +157,6 @@ fn vector_search(
                 }
             }
 
-            // Bonus for title-like matches (first line)
             if let Some(first_line) = chunk_lower.lines().next() {
                 for term in &query_terms {
                     if first_line.contains(term) {
@@ -155,7 +165,6 @@ fn vector_search(
                 }
             }
 
-            // Normalize
             score /= total_terms.max(1.0);
 
             if score > 0.0 {
@@ -172,7 +181,60 @@ fn vector_search(
         })
         .collect();
 
-    // Sort by score descending, take top limit
+    scored.sort_by(|a, b| b.4.partial_cmp(&a.4).unwrap_or(std::cmp::Ordering::Equal));
+    scored.truncate(limit);
+    Ok(scored)
+}
+
+async fn vector_search_embed(
+    conn: &Connection,
+    query: &str,
+    limit: usize,
+    file_filter: Option<&str>,
+    embedder: &Embedder,
+    http_client: &dyn http_client::HttpClient,
+) -> Result<Vec<(String, usize, usize, String, f32)>> {
+    let chunks = store::load_all_chunks(conn)?;
+
+    let chunks: Vec<&StoredChunk> = if let Some(filter) = file_filter {
+        chunks
+            .iter()
+            .filter(|c| c.file_path.contains(filter))
+            .collect()
+    } else {
+        chunks.iter().collect()
+    };
+
+    if chunks.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // Embed the query using the same embedder used at index time
+    let query_embedding = embedder.embed(&[query], http_client).await?;
+    let query_vec = match query_embedding.into_iter().next() {
+        Some(v) => v,
+        None => return Ok(vec![]),
+    };
+
+    let mut scored: Vec<(String, usize, usize, String, f32)> = chunks
+        .iter()
+        .filter_map(|chunk| {
+            let stored = chunk.embedding.as_ref()?;
+            let sim = cosine_similarity(&query_vec, stored);
+            if sim > 0.0 {
+                Some((
+                    chunk.file_path.clone(),
+                    chunk.start_line,
+                    chunk.end_line,
+                    chunk.chunk_text.clone(),
+                    sim,
+                ))
+            } else {
+                None
+            }
+        })
+        .collect();
+
     scored.sort_by(|a, b| b.4.partial_cmp(&a.4).unwrap_or(std::cmp::Ordering::Equal));
     scored.truncate(limit);
     Ok(scored)
