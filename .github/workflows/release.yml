@@ -8,18 +8,23 @@ on:
 jobs:
   build-linux:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: editor
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - name: Install system deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxkbcommon-x11-0 libxcb-cursor0 libxcb-shape0-dev libxcb-xfixes0-dev \
-            libxkbcommon-dev libfontconfig-dev libwayland-dev wayland-protocols
+          sudo apt-get install -y \
+            libxkbcommon-x11-0 libxcb-cursor0 libxcb-shape0-dev libxcb-xfixes0-dev \
+            libxkbcommon-dev libfontconfig-dev libwayland-dev wayland-protocols \
+            libx11-dev libx11-xcb-dev libasound2-dev
       - name: Build release
         run: cargo build --release --bin tau
-        working-directory: editor
       - name: Package
+        working-directory: .
         run: |
           mkdir -p dist/tau.app/libexec
           cp editor/target/release/tau dist/tau.app/libexec/tau-editor
@@ -31,13 +36,16 @@ jobs:
 
   build-macos-x86-64:
     runs-on: macos-13
+    defaults:
+      run:
+        working-directory: editor
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - name: Build release
         run: cargo build --release --bin tau
-        working-directory: editor
       - name: Package
+        working-directory: .
         run: |
           cp editor/target/release/tau tau-x86_64-macos
           chmod +x tau-x86_64-macos
@@ -47,33 +55,20 @@ jobs:
         with:
           files: tau-x86_64-macos.tar.gz
 
-  build-macos-arm64:
-    runs-on: macos-14
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Build release
-        run: cargo build --release --bin tau
-        working-directory: editor
-      - name: Package
-        run: |
-          cp editor/target/release/tau tau-aarch64-macos
-          chmod +x tau-aarch64-macos
-          tar czf tau-aarch64-macos.tar.gz tau-aarch64-macos
-      - name: Upload
-        uses: softprops/action-gh-release@v2
-        with:
-          files: tau-aarch64-macos.tar.gz
-
   build-windows:
     runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: editor
     steps:
       - uses: actions/checkout@v4
+      - name: Enable long paths
+        run: git config core.longpaths true
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - name: Build release
         run: cargo build --release --bin tau
-        working-directory: editor
       - name: Package
+        working-directory: .
         run: |
           mkdir -p dist
           copy editor\target\release\tau.exe dist\tau-x86_64-windows.exe
