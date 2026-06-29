@@ -1575,8 +1575,63 @@ impl ConversationView {
             AcpThreadEvent::SubagentSpawned(subagent_session_id) => {
                 self.load_subagent_session(subagent_session_id.clone(), session_id, window, cx)
             }
-            AcpThreadEvent::ToolAuthorizationRequested(_) => {
+            AcpThreadEvent::ToolAuthorizationRequested(tool_call_id) => {
                 self.notify_with_sound("Waiting for tool confirmation", IconName::Info, window, cx);
+
+                let (tool_name, raw_input) = thread
+                    .read(cx)
+                    .tool_call(tool_call_id)
+                    .map(|(_, tc)| {
+                        let name = tc
+                            .tool_name
+                            .clone()
+                            .unwrap_or(SharedString::from("unknown tool"));
+                        let input = tc
+                            .raw_input
+                            .as_ref()
+                            .map(|v| v.to_string())
+                            .unwrap_or_default();
+                        (name, input)
+                    })
+                    .unwrap_or_default();
+
+                let message = format!("Allow tool call: {}", tool_name);
+                let detail = if raw_input.len() > 300 {
+                    Some(format!("{}...", &raw_input[..300]))
+                } else if raw_input.is_empty() {
+                    None
+                } else {
+                    Some(raw_input)
+                };
+
+                let answer = window.prompt(
+                    gpui::PromptLevel::Info,
+                    &message,
+                    detail.as_deref(),
+                    &["Allow Once", "Deny"],
+                    cx,
+                );
+
+                let session_id = session_id.clone();
+                cx.spawn_in(window, async move |this, cx| {
+                    let response = answer.await.ok()?;
+                    if response == 0 {
+                        this.update(cx, |this, cx| {
+                            if let Some(connected) = this.as_connected_mut() {
+                                connected.conversation.update(cx, |conv, cx| {
+                                    conv.authorize_pending_tool_call(
+                                        &session_id,
+                                        acp::PermissionOptionKind::AllowOnce,
+                                        cx,
+                                    );
+                                });
+                            }
+                        })
+                        .ok();
+                    }
+                    Some(())
+                })
+                .detach();
             }
             AcpThreadEvent::ToolAuthorizationReceived(_) => {}
             AcpThreadEvent::Retry(retry) => {

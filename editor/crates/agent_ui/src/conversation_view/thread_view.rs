@@ -1542,6 +1542,12 @@ impl ThreadView {
         self.thread_feedback.clear();
         self.editing_message.take();
 
+        let is_native_command = {
+            let text = message_editor.read(cx).text(cx);
+            leading_native_command(&text, self.session_capabilities.read().available_commands())
+                .is_some()
+        };
+
         if self.should_be_following {
             self.workspace
                 .update(cx, |workspace, cx| {
@@ -1566,7 +1572,7 @@ impl ThreadView {
             Ok(Some((contents, tracked_buffers)))
         });
 
-        self.send_content(contents_task, false, window, cx);
+        self.send_content(contents_task, is_native_command, window, cx);
     }
 
     pub fn send_content(
