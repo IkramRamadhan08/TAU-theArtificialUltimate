@@ -29,6 +29,7 @@ case "$LANG_CODE" in
     MSG_SUCCESS="=== TAU v0.62 terpasang! ==="
     MSG_LAUNCH_DESKTOP="Klik dua kali ikon TAU di desktop untuk menjalankan."
     MSG_LAUNCH_TERMINAL="Ketik 'tau' di terminal untuk menjalankan."
+    MSG_LAUNCH_WINDOWS="Jalankan 'tau' dari Command Prompt atau PowerShell."
     MSG_DESKTOP_NOTE="Terminal akan tertutup otomatis dan TAU akan muncul."
     MSG_CHOICE="Pilihan"
     MSG_INVALID="Pilihan tidak valid. Gunakan"
@@ -55,6 +56,7 @@ case "$LANG_CODE" in
     MSG_SUCCESS="=== TAU v0.62 installed! ==="
     MSG_LAUNCH_DESKTOP="Double-click the TAU icon on your desktop to launch."
     MSG_LAUNCH_TERMINAL="Type 'tau' in a terminal to launch."
+    MSG_LAUNCH_WINDOWS="Run 'tau' from Command Prompt or PowerShell."
     MSG_DESKTOP_NOTE="The terminal will close automatically and TAU will appear."
     MSG_CHOICE="Choice"
     MSG_INVALID="Invalid choice. Use"
@@ -115,16 +117,13 @@ if [[ "$OS" == "linux" ]]; then
 fi
 
 # ---------- Download / Build ----------
+TAU_APP_DIR="${INSTALL_DIR}/../tau.app"
+
 if curl -fsSL --connect-timeout 15 --max-time 60 -o /dev/null "$DOWNLOAD_URL" 2>/dev/null; then
   echo "$MSG_DOWNLOAD $OS ($ARCH)..."
-  if [[ "$OS" == "windows" ]]; then
-    curl -fsSL --max-time 600 "$DOWNLOAD_URL" -o /tmp/tau.zip
-    unzip -o /tmp/tau.zip -d "$INSTALL_DIR"
-    rm /tmp/tau.zip
-  else
-    curl -fsSL --max-time 600 "$DOWNLOAD_URL" | tar xz -C "$INSTALL_DIR"
-  fi
-  chmod +x "$INSTALL_DIR/tau" 2>/dev/null || true
+  mkdir -p "$TAU_APP_DIR"
+  curl -fsSL --max-time 600 "$DOWNLOAD_URL" | tar xz -C "$(dirname "$TAU_APP_DIR")"
+  chmod +x "$TAU_APP_DIR/libexec/tau-editor" 2>/dev/null || true
 else
   echo "$MSG_BUILD"
   if ! command -v cargo &>/dev/null; then
@@ -149,9 +148,13 @@ else
   echo "$MSG_BUILD_WAIT"
   cargo build --release --bin tau --jobs "$(nproc 2>/dev/null || echo 4)"
 
-  cp "target/release/tau" "$INSTALL_DIR/tau"
+  mkdir -p "$TAU_APP_DIR/libexec"
+  cp "target/release/tau" "$TAU_APP_DIR/libexec/tau-editor"
   rm -rf "$TMP_DIR"
 fi
+
+# Symlink binary into PATH
+ln -sf "$TAU_APP_DIR/libexec/tau-editor" "$INSTALL_DIR/tau"
 
 # ---------- Ask desktop shortcut ----------
 DESKTOP_CHOICE=""

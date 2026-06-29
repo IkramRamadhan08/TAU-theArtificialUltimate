@@ -21,9 +21,9 @@ jobs:
         working-directory: editor
       - name: Package
         run: |
-          mkdir -p dist
-          cp editor/target/release/tau dist/tau-x86_64-linux
-          tar czf tau-x86_64-linux.tar.gz -C dist tau-x86_64-linux
+          mkdir -p dist/tau.app/libexec
+          cp editor/target/release/tau dist/tau.app/libexec/tau-editor
+          tar czf tau-x86_64-linux.tar.gz -C dist tau.app
       - name: Upload
         uses: softprops/action-gh-release@v2
         with:
