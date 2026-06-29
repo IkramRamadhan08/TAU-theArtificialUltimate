@@ -40,24 +40,23 @@ TAU is a high-performance, GPU-accelerated code editor with built-in AI agent ca
 curl -fsSL https://raw.githubusercontent.com/IkramRamadhan08/TAU-theArtificialUltimate/main/install.sh | bash
 ```
 
-Then run:
-```bash
-tau
-```
+The script will:
+- **Linux x86-64** — Download the pre-built binary (~130 MB)
+- **macOS / ARM Linux** — Build from source (requires Rust; install from [rustup.rs](https://rustup.rs))
+- Ask if you want a **desktop shortcut** (language matches your system locale)
+- Add `~/.local/bin` to your `PATH`
+
+Then just type `tau` in a terminal — the terminal closes automatically and TAU appears.
 
 > Requires `~/.local/bin` to be in your `PATH`. Add `export PATH="$PATH:$HOME/.local/bin"` to your shell config if needed.
 
-The install script will:
-- **Linux x86-64** — Download the pre-built binary automatically
-- **macOS / Windows** — Build from source (requires Rust; install from [rustup.rs](https://rustup.rs))
-
-### Pre-built Binary (Linux x86-64 only)
+### Manual Install (Pre-built Binary)
 
 ```bash
 curl -L https://github.com/IkramRamadhan08/TAU-theArtificialUltimate/releases/latest/download/tau-x86_64-linux.tar.gz | tar xz -C ~/.local/bin
 ```
 
-### Manual Build (any platform)
+### Build from Source (any platform)
 
 Requires **Rust 1.95.0**:
 

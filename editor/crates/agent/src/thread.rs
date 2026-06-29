@@ -1,7 +1,8 @@
 use crate::{
     ApplyCodeActionTool, CodeActionStore, ContextServerRegistry, CopyPathTool, CreateDirectoryTool,
     CreateThreadTool, DbLanguageModel, DbThread, DeletePathTool, DiagnosticsTool, EditFileTool,
-    FetchTool, FindPathTool, FindReferencesTool, GetCodeActionsTool, GoToDefinitionTool, GrepTool,
+    FetchTool, FindPathTool, FindReferencesTool, GitBranchTool, GitCommitTool, GitLogTool,
+    GitPushTool, GitStatusTool, GetCodeActionsTool, GoToDefinitionTool, GrepTool,
     ListAgentsAndModelsTool, ListDirectoryTool, MovePathTool, ProjectSnapshot, ReadFileTool,
     RenameTool, SandboxedTerminalTool, SearchSemanticTool, SpawnAgentTool, SystemPromptTemplate,
     Template, Templates, TerminalTool, ToolPermissionDecision, WebSearchTool, WriteFileTool,
@@ -1962,6 +1963,11 @@ impl Thread {
         self.add_tool(WebSearchTool);
 
         self.add_tool(DiagnosticsTool::new(self.project.clone()));
+        self.add_tool(GitStatusTool::new(self.project.clone()));
+        self.add_tool(GitLogTool::new(self.project.clone()));
+        self.add_tool(GitBranchTool::new(self.project.clone()));
+        self.add_tool(GitCommitTool::new(self.project.clone()));
+        self.add_tool(GitPushTool::new(self.project.clone()));
 
         let code_action_store: CodeActionStore = cx.new(|_cx| None);
         self.add_tool(FindReferencesTool::new(self.project.clone()));

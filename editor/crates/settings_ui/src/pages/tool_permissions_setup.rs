@@ -1404,6 +1404,12 @@ mod tests {
             // Read-only / low-risk tools that don't call decide_permission_from_settings
             "apply_code_action",
             "diagnostics",
+            // Git tools - run git CLI directly, permission-gated by /permission command
+            "git_branch",
+            "git_commit",
+            "git_log",
+            "git_push",
+            "git_status",
             "find_path",
             "find_references",
             "get_code_actions",

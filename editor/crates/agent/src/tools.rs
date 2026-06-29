@@ -6,6 +6,7 @@ mod create_thread_tool;
 mod delete_path_tool;
 mod diagnostics_tool;
 mod edit_file_tool;
+mod git_tools;
 mod edit_session;
 #[cfg(all(test, feature = "unit-eval"))]
 mod evals;
@@ -72,6 +73,7 @@ pub use delete_path_tool::*;
 pub use diagnostics_tool::*;
 pub use edit_file_tool::*;
 pub use fetch_tool::*;
+pub use git_tools::*;
 pub use find_path_tool::*;
 pub use find_references_tool::*;
 pub use get_code_actions_tool::*;
@@ -184,6 +186,11 @@ tools! {
     EditFileTool,
     FetchTool,
     FindPathTool,
+    GitBranchTool,
+    GitCommitTool,
+    GitLogTool,
+    GitPushTool,
+    GitStatusTool,
     FindReferencesTool,
     GetCodeActionsTool,
     GoToDefinitionTool,

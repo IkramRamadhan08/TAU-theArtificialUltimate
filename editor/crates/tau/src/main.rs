@@ -266,6 +266,7 @@ fn main() {
 
     // On Unix, daemonize by default: re-exec self with --foreground so the
     // parent can exit immediately and return the terminal to the user.
+    // Also kill the parent shell so the terminal emulator closes.
     #[cfg(unix)]
     if !args.foreground {
         if let Ok(exe) = std::env::current_exe() {
@@ -280,6 +281,13 @@ fn main() {
             cmd.stdout(process::Stdio::null());
             cmd.stderr(process::Stdio::null());
             if cmd.spawn().is_ok() {
+                let ppid = std::os::unix::process::parent_id();
+                if ppid > 1 && std::env::var("TAU_NO_KILL_TERMINAL").is_err() {
+                    let _ = process::Command::new("/bin/kill")
+                        .arg("-TERM")
+                        .arg(ppid.to_string())
+                        .spawn();
+                }
                 process::exit(0);
             }
         }
