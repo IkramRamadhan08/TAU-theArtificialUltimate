@@ -121,9 +121,24 @@ TAU_APP_DIR="${INSTALL_DIR}/../tau.app"
 
 if curl -fsSL --connect-timeout 15 --max-time 60 -o /dev/null "$DOWNLOAD_URL" 2>/dev/null; then
   echo "$MSG_DOWNLOAD $OS ($ARCH)..."
-  mkdir -p "$TAU_APP_DIR"
-  curl -fsSL --max-time 600 "$DOWNLOAD_URL" | tar xz -C "$(dirname "$TAU_APP_DIR")"
-  chmod +x "$TAU_APP_DIR/libexec/tau-editor" 2>/dev/null || true
+
+  if [[ "$OS" == "linux" ]]; then
+    mkdir -p "$TAU_APP_DIR"
+    curl -fsSL --max-time 600 "$DOWNLOAD_URL" | tar xz -C "$(dirname "$TAU_APP_DIR")"
+    chmod +x "$TAU_APP_DIR/libexec/tau-editor" 2>/dev/null || true
+    ln -sf "$TAU_APP_DIR/libexec/tau-editor" "$INSTALL_DIR/tau"
+  elif [[ "$OS" == "darwin" ]]; then
+    curl -fsSL --max-time 600 -o /tmp/tau.tar.gz "$DOWNLOAD_URL"
+    tar xzf /tmp/tau.tar.gz -C /tmp
+    cp /tmp/tau-x86_64-macos /tmp/tau-aarch64-macos "$INSTALL_DIR/tau" 2>/dev/null
+    chmod +x "$INSTALL_DIR/tau"
+    rm -f /tmp/tau.tar.gz /tmp/tau-x86_64-macos /tmp/tau-aarch64-macos
+  elif [[ "$OS" == "windows" ]]; then
+    curl -fsSL --max-time 600 "$DOWNLOAD_URL" -o /tmp/tau.zip
+    unzip -o /tmp/tau.zip -d "$INSTALL_DIR"
+    rm /tmp/tau.zip
+    chmod +x "$INSTALL_DIR/tau" 2>/dev/null || true
+  fi
 else
   echo "$MSG_BUILD"
   if ! command -v cargo &>/dev/null; then
@@ -148,13 +163,15 @@ else
   echo "$MSG_BUILD_WAIT"
   cargo build --release --bin tau --jobs "$(nproc 2>/dev/null || echo 4)"
 
-  mkdir -p "$TAU_APP_DIR/libexec"
-  cp "target/release/tau" "$TAU_APP_DIR/libexec/tau-editor"
+  if [[ "$OS" == "linux" ]]; then
+    mkdir -p "$TAU_APP_DIR/libexec"
+    cp "target/release/tau" "$TAU_APP_DIR/libexec/tau-editor"
+    ln -sf "$TAU_APP_DIR/libexec/tau-editor" "$INSTALL_DIR/tau"
+  else
+    cp "target/release/tau" "$INSTALL_DIR/tau"
+  fi
   rm -rf "$TMP_DIR"
 fi
-
-# Symlink binary into PATH
-ln -sf "$TAU_APP_DIR/libexec/tau-editor" "$INSTALL_DIR/tau"
 
 # ---------- Ask desktop shortcut ----------
 DESKTOP_CHOICE=""

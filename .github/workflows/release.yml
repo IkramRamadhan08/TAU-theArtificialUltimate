@@ -39,9 +39,9 @@ jobs:
         working-directory: editor
       - name: Package
         run: |
-          mkdir -p dist
-          cp editor/target/release/tau dist/tau-x86_64-macos
-          tar czf tau-x86_64-macos.tar.gz -C dist tau-x86_64-macos
+          cp editor/target/release/tau tau-x86_64-macos
+          chmod +x tau-x86_64-macos
+          tar czf tau-x86_64-macos.tar.gz tau-x86_64-macos
       - name: Upload
         uses: softprops/action-gh-release@v2
         with:
@@ -57,9 +57,9 @@ jobs:
         working-directory: editor
       - name: Package
         run: |
-          mkdir -p dist
-          cp editor/target/release/tau dist/tau-aarch64-macos
-          tar czf tau-aarch64-macos.tar.gz -C dist tau-aarch64-macos
+          cp editor/target/release/tau tau-aarch64-macos
+          chmod +x tau-aarch64-macos
+          tar czf tau-aarch64-macos.tar.gz tau-aarch64-macos
       - name: Upload
         uses: softprops/action-gh-release@v2
         with:
