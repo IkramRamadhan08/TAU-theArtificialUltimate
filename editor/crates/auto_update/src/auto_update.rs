@@ -14,14 +14,12 @@ use serde::{Deserialize, Serialize};
 use settings::{RegisterSetting, Settings, SettingsStore};
 use smol::fs::File;
 use smol::{fs, io::AsyncReadExt};
-use std::mem;
 use std::{
     env::{
         self,
         consts::{ARCH, OS},
     },
     ffi::OsStr,
-    ffi::OsString,
     path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, SystemTime},
@@ -168,39 +166,7 @@ pub struct ReleaseAsset {
     pub url: String,
 }
 
-struct MacOsUnmounter<'a> {
-    mount_path: PathBuf,
-    background_executor: &'a BackgroundExecutor,
-}
 
-impl Drop for MacOsUnmounter<'_> {
-    fn drop(&mut self) {
-        let mount_path = mem::take(&mut self.mount_path);
-        self.background_executor
-            .spawn(async move {
-                let unmount_output = new_command("hdiutil")
-                    .args(["detach", "-force"])
-                    .arg(&mount_path)
-                    .output()
-                    .await;
-                match unmount_output {
-                    Ok(output) if output.status.success() => {
-                        log::info!("Successfully unmounted the disk image");
-                    }
-                    Ok(output) => {
-                        log::error!(
-                            "Failed to unmount disk image: {:?}",
-                            String::from_utf8_lossy(&output.stderr)
-                        );
-                    }
-                    Err(error) => {
-                        log::error!("Error while trying to unmount disk image: {:?}", error);
-                    }
-                }
-            })
-            .detach();
-    }
-}
 
 #[derive(Clone, Copy, Debug, RegisterSetting)]
 struct AutoUpdateSetting(bool);
@@ -630,8 +596,8 @@ impl AutoUpdater {
 
         let ext = match os {
             "linux" => "tar.gz",
-            "macos" => "dmg",
-            "windows" => "exe",
+            "macos" => "tar.gz",
+            "windows" => "zip",
             other => anyhow::bail!("unsupported OS for auto-update: {}", other),
         };
         let asset_name = format!("{}-{}-{}.{}", asset, arch, os, ext);
@@ -839,11 +805,11 @@ impl AutoUpdater {
 
     async fn target_path(installer_dir: &InstallerDir) -> Result<PathBuf> {
         let filename = match OS {
-            "macos" => anyhow::Ok("tau.dmg"),
-            "linux" => Ok("tau.tar.gz"),
-            "windows" => Ok("tau.exe"),
+            "macos" => "tau.tar.gz",
+            "linux" => "tau.tar.gz",
+            "windows" => "tau.zip",
             unsupported_os => anyhow::bail!("not supported: {unsupported_os}"),
-        }?;
+        };
 
         Ok(installer_dir.path().join(filename))
     }
@@ -854,7 +820,7 @@ impl AutoUpdater {
         target_path: PathBuf,
         running_app_path: PathBuf,
         channel: &str,
-        background_executor: BackgroundExecutor,
+        _background_executor: BackgroundExecutor,
     ) -> Result<Option<PathBuf>> {
         match OS {
             "macos" => {
@@ -862,14 +828,13 @@ impl AutoUpdater {
                     &installer_dir,
                     &target_path,
                     running_app_path,
-                    &background_executor,
                 )
                 .await
             }
             "linux" => {
                 install_release_linux(&installer_dir, &target_path, channel, running_app_path).await
             }
-            "windows" => install_release_windows(&target_path).await,
+            "windows" => install_release_windows(&installer_dir, &target_path).await,
             unsupported_os => anyhow::bail!("not supported: {unsupported_os}"),
         }
     }
@@ -1081,56 +1046,72 @@ async fn install_release_linux(
 
 async fn install_release_macos(
     temp_dir: &InstallerDir,
-    downloaded_dmg: &Path,
+    downloaded_tar_gz: &Path,
     running_app_path: PathBuf,
-    background_executor: &BackgroundExecutor,
 ) -> Result<Option<PathBuf>> {
-    let running_app_filename = running_app_path
-        .file_name()
-        .with_context(|| format!("invalid running app path {running_app_path:?}"))?;
+    let extracted = temp_dir.path().join("tau");
+    fs::create_dir_all(&extracted)
+        .await
+        .context("failed to create extraction directory")?;
 
-    let mount_path = temp_dir.path().join("TAU");
-    let mut mounted_app_path: OsString = mount_path.join(running_app_filename).into();
-
-    mounted_app_path.push("/");
-    let mut cmd = new_command("hdiutil");
-    cmd.args(["attach", "-nobrowse"])
-        .arg(&downloaded_dmg)
-        .arg("-mountroot")
-        .arg(temp_dir.path());
+    let mut cmd = new_command("tar");
+    cmd.arg("-xzf")
+        .arg(downloaded_tar_gz)
+        .arg("-C")
+        .arg(&extracted);
     let output = cmd
         .output()
         .await
-        .with_context(|| "failed to mount: {cmd}")?;
+        .with_context(|| "failed to extract: {cmd}")?;
 
     anyhow::ensure!(
         output.status.success(),
-        "failed to mount: {:?}",
+        "failed to extract {:?} to {:?}: {:?}",
+        downloaded_tar_gz,
+        extracted,
         String::from_utf8_lossy(&output.stderr)
     );
 
-    // Create an MacOsUnmounter that will be dropped (and thus unmount the disk) when this function exits
-    let _unmounter = MacOsUnmounter {
-        mount_path: mount_path.clone(),
-        background_executor,
-    };
-
-    let mut cmd = new_command("rsync");
-    cmd.args(["-av", "--delete", "--exclude", "Icon?"])
-        .arg(&mounted_app_path)
-        .arg(&running_app_path);
-    let output = cmd
-        .output()
+    let parent = running_app_path
+        .parent()
+        .context("no parent dir for running app")?;
+    fs::create_dir_all(parent)
         .await
-        .with_context(|| "failed to rsync: {cmd}")?;
+        .context("failed to create parent directory")?;
+
+    // The tar.gz contains a single binary named tau-{arch}-macos
+    // Find it and copy over the running binary
+    let mut binary_path = None;
+    let mut entries = fs::read_dir(&extracted).await?;
+    while let Some(entry) = entries.next().await {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_file() {
+            fs::copy(&path, &running_app_path).await.with_context(|| {
+                format!(
+                    "failed to copy {:?} to {:?}",
+                    path, running_app_path
+                )
+            })?;
+            // Set executable permission
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                fs::set_permissions(&running_app_path, std::fs::Permissions::from_mode(0o755))
+                    .await?;
+            }
+            binary_path = Some(path);
+            break;
+        }
+    }
 
     anyhow::ensure!(
-        output.status.success(),
-        "failed to copy app: {:?}",
-        String::from_utf8_lossy(&output.stderr)
+        binary_path.is_some(),
+        "no binary found in extracted archive {:?}",
+        extracted
     );
 
-    Ok(None)
+    Ok(Some(running_app_path))
 }
 
 async fn cleanup_windows() -> Result<()> {
@@ -1147,26 +1128,63 @@ async fn cleanup_windows() -> Result<()> {
     Ok(())
 }
 
-async fn install_release_windows(downloaded_installer: &Path) -> Result<Option<PathBuf>> {
-    let mut cmd = new_command(downloaded_installer);
-    cmd.arg("/verysilent")
-        .arg("/update=true")
-        .arg("/MERGETASKS=!desktopicon");
-    let output = cmd.output().await?;
+async fn install_release_windows(
+    temp_dir: &InstallerDir,
+    downloaded_zip: &Path,
+) -> Result<Option<PathBuf>> {
+    let extracted = temp_dir.path().join("tau");
+    fs::create_dir_all(&extracted)
+        .await
+        .context("failed to create extraction directory")?;
+
+    let mut cmd = new_command("powershell");
+    cmd.args([
+        "Expand-Archive",
+        "-Path",
+    ])
+    .arg(downloaded_zip)
+    .args(["-DestinationPath"])
+    .arg(&extracted)
+    .arg("-Force");
+    let output = cmd
+        .output()
+        .await
+        .with_context(|| "failed to extract zip: {cmd}")?;
+
     anyhow::ensure!(
         output.status.success(),
-        "failed to start installer: {:?}",
+        "failed to extract {:?}: {:?}",
+        downloaded_zip,
         String::from_utf8_lossy(&output.stderr)
     );
-    // We return the path to the update helper program, because it will
-    // perform the final steps of the update process, copying the new binary,
-    // deleting the old one, and launching the new binary.
-    let helper_path = std::env::current_exe()?
-        .parent()
-        .context("No parent dir for Tau.exe")?
-        .join("tools")
-        .join("auto_update_helper.exe");
-    Ok(Some(helper_path))
+
+    let running_app_path = std::env::current_exe()?;
+
+    // Find the exe in the extracted folder and copy it over the running app
+    let mut binary_path = None;
+    let mut entries = fs::read_dir(&extracted).await?;
+    while let Some(entry) = entries.next().await {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension() == Some(OsStr::new("exe")) {
+            fs::copy(&path, &running_app_path).await.with_context(|| {
+                format!(
+                    "failed to copy {:?} to {:?}",
+                    path, running_app_path
+                )
+            })?;
+            binary_path = Some(path);
+            break;
+        }
+    }
+
+    anyhow::ensure!(
+        binary_path.is_some(),
+        "no exe found in extracted archive {:?}",
+        extracted
+    );
+
+    Ok(Some(running_app_path))
 }
 
 pub async fn finalize_auto_update_on_quit() {
