@@ -103,6 +103,8 @@ jobs:
           toolchain: "1.95.0"
       - name: Build release
         run: cargo build --release --bin tau
+        env:
+          RUSTFLAGS: "-Ctarget-feature=+crt-static -D warnings"
       - name: Package
         working-directory: .
         run: |
