@@ -40,6 +40,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: tau-x86_64-linux.tar.gz
+          make_latest: true
 
   build-macos-x86-64:
     runs-on: macos-13
@@ -63,6 +64,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: tau-x86_64-macos.tar.gz
+          make_latest: true
 
   build-macos-arm64:
     runs-on: macos-14
@@ -114,3 +116,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: tau-x86_64-windows.zip
+          make_latest: true
