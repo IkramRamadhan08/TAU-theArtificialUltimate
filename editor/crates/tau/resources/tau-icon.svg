@@ -1,6 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="TAU">
-  <rect width="512" height="512" rx="112" fill="#080A0F"/>
-  <path d="M96 126h320v64H288v196h-64V190H96z" fill="#F7FAFF"/>
-  <path d="M137 386 256 106l119 280h-70l-17-48h-65l22-58h23l-12-35-53 141z" fill="#21E6C1"/>
-  <path d="M384 126v132c0 38-13 70-39 94-24 23-55 34-93 34h-5l28-64c28-5 45-27 45-64V126z" fill="#6C63FF"/>
+  <rect width="512" height="512" rx="112" fill="#0A0A0F"/>
+  <g fill="#3B82F6">
+    <rect x="80" y="140" width="352" height="56" rx="18"/>
+    <rect x="220" y="196" width="72" height="256" rx="18"/>
+  </g>
 </svg>
