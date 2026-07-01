@@ -18,8 +18,14 @@
 
 ## Quick Start
 
+### Linux / macOS
 ```bash
 curl -fsSL https://raw.githubusercontent.com/IkramRamadhan08/TAU-theArtificialUltimate/main/install.sh | bash
+```
+
+### Windows
+```powershell
+powershell -c "& { $(Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/IkramRamadhan08/TAU-theArtificialUltimate/main/install.ps1' -UseBasicParsing).Content | Invoke-Expression }"
 ```
 
 The script will:
@@ -27,14 +33,20 @@ The script will:
 - **Windows x86-64** → download pre-built binary
 - **macOS** → build from source (requires Rust, see [rustup.rs](https://rustup.rs))
 - Ask about desktop shortcut
-- Add `~/.local/bin` to `PATH`
+- Add to `PATH`
 
 Then type `tau` — the terminal closes and TAU appears.
 
 ### Uninstall
 
+**Linux / macOS:**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/IkramRamadhan08/TAU-theArtificialUltimate/main/uninstall.sh | bash
+```
+
+**Windows:**
+```powershell
+powershell -c "Remove-Item -Recurse -Force \"$env:LOCALAPPDATA\TAU\"; `$path = [Environment]::GetEnvironmentVariable('Path', 'User') -replace ';$env:LOCALAPPDATA\\TAU', ''; [Environment]::SetEnvironmentVariable('Path', `$path, 'User')"
 ```
 
 ## Pre-built Binaries
