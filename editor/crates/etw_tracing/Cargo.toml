@@ -19,6 +19,6 @@ util.workspace = true
 workspace.workspace = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
-wprcontrol = { git = "https://github.com/IkramRamadhan08/wprcontrol", rev = "cd811f7" }
-windows-core = "0.61"
+wprcontrol = { git = "https://github.com/IkramRamadhan08/wprcontrol", rev = "0039ddd" }
+windows-core.workspace = true
 windows.workspace = true
