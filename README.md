@@ -88,7 +88,9 @@ Configure in `~/.config/tau/settings.json`:
 ## Limitations
 
 - **TAU Cloud** (collaboration): not implemented
-- **Auto-update**: checks GitHub Releases; works for Linux
+- **Auto-update**: checks GitHub Releases every 60 min; works for Linux & Windows
+- **macOS ARM build**: blocked by `webrtc-sys` + Xcode 15.4 libc++ incompatibility
+- **macOS x86-64 build**: GitHub Actions runner queue delay
 - **Web search tool**: requires external API config
 
 ## License
