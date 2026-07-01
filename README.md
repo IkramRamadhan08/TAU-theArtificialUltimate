@@ -10,7 +10,7 @@
 [![Rust](https://img.shields.io/badge/rust-1.95.0-orange)](rust-toolchain.toml)
 [![Release](https://img.shields.io/badge/release-v0.64-blue)]()
 
-![TAU Editor screenshot](editor_screenshot.png)
+![TAU](TAU.svg)
 
 </div>
 
