@@ -119,16 +119,16 @@ fi
 # ---------- Download / Build ----------
 TAU_APP_DIR="${INSTALL_DIR}/../tau.app"
 
-if curl -fsSL --connect-timeout 15 --max-time 60 -o /dev/null "$DOWNLOAD_URL" 2>/dev/null; then
+if curl -4 -fsSL --connect-timeout 15 --max-time 30 -I "$DOWNLOAD_URL" 2>/dev/null; then
   echo "$MSG_DOWNLOAD $OS ($ARCH)..."
 
   if [[ "$OS" == "linux" ]]; then
     mkdir -p "$TAU_APP_DIR"
-    curl -fsSL --max-time 600 "$DOWNLOAD_URL" | tar xz -C "$(dirname "$TAU_APP_DIR")"
+    curl -4 -fsSL --max-time 600 "$DOWNLOAD_URL" | tar xz -C "$(dirname "$TAU_APP_DIR")"
     chmod +x "$TAU_APP_DIR/libexec/tau-editor" 2>/dev/null || true
     ln -sf "$TAU_APP_DIR/libexec/tau-editor" "$INSTALL_DIR/tau"
   elif [[ "$OS" == "darwin" ]]; then
-    curl -fsSL --max-time 600 -o /tmp/tau.tar.gz "$DOWNLOAD_URL"
+    curl -4 -fsSL --max-time 600 -o /tmp/tau.tar.gz "$DOWNLOAD_URL"
     tar xzf /tmp/tau.tar.gz -C /tmp
     BINARY=$(ls /tmp/tau-*-macos 2>/dev/null | head -1)
     if [[ -n "$BINARY" ]]; then
@@ -140,7 +140,7 @@ if curl -fsSL --connect-timeout 15 --max-time 60 -o /dev/null "$DOWNLOAD_URL" 2>
     fi
     rm -f /tmp/tau.tar.gz /tmp/tau-*-macos
   elif [[ "$OS" == "windows" ]]; then
-    curl -fsSL --max-time 600 "$DOWNLOAD_URL" -o /tmp/tau.zip
+    curl -4 -fsSL --max-time 600 "$DOWNLOAD_URL" -o /tmp/tau.zip
     unzip -o /tmp/tau.zip -d /tmp/tau-install
     BINARY=$(ls /tmp/tau-install/*.exe 2>/dev/null | head -1)
     if [[ -n "$BINARY" ]]; then
@@ -207,7 +207,7 @@ if [[ "$DESKTOP_CHOICE" == "$MSG_DESKTOP_YES" || "$DESKTOP_CHOICE" == "y" || "$D
   echo "$MSG_DESKTOP_INSTALL"
 
   ICON_URL="$RAW_BASE/editor/crates/tau/resources/tau-icon.svg"
-  if curl -fsSL --max-time 15 "$ICON_URL" -o "$ICON_DIR/tau.svg" 2>/dev/null; then
+  if curl -4 -fsSL --max-time 15 "$ICON_URL" -o "$ICON_DIR/tau.svg" 2>/dev/null; then
     echo "  $MSG_ICON_INSTALL"
   else
     echo "  $MSG_ICON_FAIL"
@@ -259,7 +259,7 @@ fi
 if [[ "$OS" == "darwin" && "$DESKTOP_CHOICE" == "y" ]]; then
   ICON_URL="$RAW_BASE/editor/crates/tau/resources/tau-icon.svg"
   mkdir -p "$HOME/.local/share/icons"
-  curl -fsSL --max-time 15 "$ICON_URL" -o "$HOME/.local/share/icons/tau.svg" 2>/dev/null || true
+  curl -4 -fsSL --max-time 15 "$ICON_URL" -o "$HOME/.local/share/icons/tau.svg" 2>/dev/null || true
 fi
 
 # ---------- Add to PATH ----------
