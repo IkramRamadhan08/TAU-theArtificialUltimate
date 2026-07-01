@@ -26,7 +26,7 @@ case "$LANG_CODE" in
     MSG_DESKTOP_DONE="Ikon dan pintasan desktop terpasang"
     MSG_ICON_INSTALL="Memasang ikon..."
     MSG_PATH_ADD="Menambahkan ke PATH di"
-    MSG_SUCCESS="=== TAU v0.62 terpasang! ==="
+    MSG_SUCCESS="=== TAU v0.64 terpasang! ==="
     MSG_LAUNCH_DESKTOP="Klik dua kali ikon TAU di desktop untuk menjalankan."
     MSG_LAUNCH_TERMINAL="Ketik 'tau' di terminal untuk menjalankan."
     MSG_LAUNCH_WINDOWS="Jalankan 'tau' dari Command Prompt atau PowerShell."
@@ -53,7 +53,7 @@ case "$LANG_CODE" in
     MSG_DESKTOP_DONE="Desktop icon and shortcut installed"
     MSG_ICON_INSTALL="Installing icon..."
     MSG_PATH_ADD="Added to PATH in"
-    MSG_SUCCESS="=== TAU v0.62 installed! ==="
+    MSG_SUCCESS="=== TAU v0.64 installed! ==="
     MSG_LAUNCH_DESKTOP="Double-click the TAU icon on your desktop to launch."
     MSG_LAUNCH_TERMINAL="Type 'tau' in a terminal to launch."
     MSG_LAUNCH_WINDOWS="Run 'tau' from Command Prompt or PowerShell."
@@ -130,14 +130,27 @@ if curl -fsSL --connect-timeout 15 --max-time 60 -o /dev/null "$DOWNLOAD_URL" 2>
   elif [[ "$OS" == "darwin" ]]; then
     curl -fsSL --max-time 600 -o /tmp/tau.tar.gz "$DOWNLOAD_URL"
     tar xzf /tmp/tau.tar.gz -C /tmp
-    cp /tmp/tau-x86_64-macos /tmp/tau-aarch64-macos "$INSTALL_DIR/tau" 2>/dev/null
-    chmod +x "$INSTALL_DIR/tau"
-    rm -f /tmp/tau.tar.gz /tmp/tau-x86_64-macos /tmp/tau-aarch64-macos
+    BINARY=$(ls /tmp/tau-*-macos 2>/dev/null | head -1)
+    if [[ -n "$BINARY" ]]; then
+      cp "$BINARY" "$INSTALL_DIR/tau"
+      chmod +x "$INSTALL_DIR/tau"
+    else
+      echo "  Error: could not find binary in archive"
+      exit 1
+    fi
+    rm -f /tmp/tau.tar.gz /tmp/tau-*-macos
   elif [[ "$OS" == "windows" ]]; then
     curl -fsSL --max-time 600 "$DOWNLOAD_URL" -o /tmp/tau.zip
-    unzip -o /tmp/tau.zip -d "$INSTALL_DIR"
-    rm /tmp/tau.zip
-    chmod +x "$INSTALL_DIR/tau" 2>/dev/null || true
+    unzip -o /tmp/tau.zip -d /tmp/tau-install
+    BINARY=$(ls /tmp/tau-install/*.exe 2>/dev/null | head -1)
+    if [[ -n "$BINARY" ]]; then
+      mv "$BINARY" "$INSTALL_DIR/tau.exe"
+      chmod +x "$INSTALL_DIR/tau.exe"
+    else
+      echo "  Error: could not find binary in archive"
+      exit 1
+    fi
+    rm -rf /tmp/tau.zip /tmp/tau-install
   fi
 else
   echo "$MSG_BUILD"

@@ -4,6 +4,7 @@ set -e
 echo "=== TAU Editor Uninstaller ==="
 
 INSTALL_DIR="${HOME}/.local/bin"
+TAU_APP_DIR="${HOME}/.local/tau.app"
 CONFIG_DIR="${HOME}/.config/tau"
 AGENTS_DIR="${HOME}/.agents"
 
@@ -11,6 +12,16 @@ AGENTS_DIR="${HOME}/.agents"
 if [ -f "$INSTALL_DIR/tau" ]; then
   rm "$INSTALL_DIR/tau"
   echo "  Removed $INSTALL_DIR/tau"
+fi
+if [ -f "$INSTALL_DIR/tau.exe" ]; then
+  rm "$INSTALL_DIR/tau.exe"
+  echo "  Removed $INSTALL_DIR/tau.exe"
+fi
+
+# Remove app bundle (Linux)
+if [ -d "$TAU_APP_DIR" ]; then
+  rm -rf "$TAU_APP_DIR"
+  echo "  Removed $TAU_APP_DIR"
 fi
 
 # Remove agent skills

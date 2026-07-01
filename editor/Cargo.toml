@@ -827,7 +827,7 @@ zstd = "0.11"
 
 
 [workspace.dependencies.windows]
-version = "0.61"
+version = "0.64"
 features = [
     "Foundation_Numerics",
     "Globalization_DateTimeFormatting",

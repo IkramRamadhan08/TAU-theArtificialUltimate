@@ -8,7 +8,7 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE-GPL)
 [![Rust](https://img.shields.io/badge/rust-1.95.0-orange)](rust-toolchain.toml)
-[![Release](https://img.shields.io/badge/release-v0.62-blue)]()
+[![Release](https://img.shields.io/badge/release-v0.64-blue)]()
 
 ![TAU Editor screenshot](editor_screenshot.png)
 
@@ -24,7 +24,8 @@ curl -fsSL https://raw.githubusercontent.com/IkramRamadhan08/TAU-theArtificialUl
 
 The script will:
 - **Linux x86-64** → download pre-built binary
-- **macOS / Windows** → build from source (requires Rust, see [rustup.rs](https://rustup.rs))
+- **Windows x86-64** → download pre-built binary
+- **macOS** → build from source (requires Rust, see [rustup.rs](https://rustup.rs))
 - Ask about desktop shortcut
 - Add `~/.local/bin` to `PATH`
 
@@ -43,9 +44,9 @@ Pre-built binaries are built via GitHub Actions when a new tag is pushed.
 | Platform | Asset |
 |----------|-------|
 | Linux x86-64 | ✅ Available |
-| macOS x86-64 | ⚠️ Pending next release |
-| macOS ARM | ⚠️ Pending next release |
-| Windows x86-64 | ⚠️ Pending next release |
+| macOS x86-64 | ⚠️ GitHub Actions queue pending |
+| macOS ARM | ❌ Blocked (webrtc-sys + Xcode 15.4) |
+| Windows x86-64 | ✅ Available |
 
 ## Build from Source
 

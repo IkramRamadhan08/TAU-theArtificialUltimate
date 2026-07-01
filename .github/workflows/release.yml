@@ -108,9 +108,8 @@ jobs:
       - name: Package
         working-directory: .
         run: |
-          mkdir -p dist
-          copy editor\target\release\tau.exe dist\tau-x86_64-windows.exe
-          Compress-Archive -Path dist\tau-x86_64-windows.exe -DestinationPath tau-x86_64-windows.zip
+          copy editor\target\release\tau.exe tau-x86_64-windows.exe
+          Compress-Archive -Path tau-x86_64-windows.exe -DestinationPath tau-x86_64-windows.zip
       - name: Upload
         uses: softprops/action-gh-release@v2
         with:
