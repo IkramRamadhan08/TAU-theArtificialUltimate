@@ -67,7 +67,7 @@ jobs:
           make_latest: true
 
   build-macos-arm64:
-    runs-on: macos-14
+    runs-on: macos-latest
     continue-on-error: true
     defaults:
       run:

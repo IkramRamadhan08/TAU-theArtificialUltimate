@@ -8,7 +8,7 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE-GPL)
 [![Rust](https://img.shields.io/badge/rust-1.95.0-orange)](rust-toolchain.toml)
-[![Release](https://img.shields.io/badge/release-v0.64-blue)]()
+[![Release](https://img.shields.io/badge/release-v0.65-blue)]()
 
 ![TAU](TAU.svg)
 
