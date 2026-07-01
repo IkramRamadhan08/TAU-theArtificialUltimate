@@ -3545,8 +3545,8 @@ impl Dismissable for TauPredictUpsell {
     }
 }
 
-pub fn should_show_upsell_modal(cx: &App) -> bool {
-    !is_upsell_dismissed(cx)
+pub fn should_show_upsell_modal(_cx: &App) -> bool {
+    false
 }
 
 pub fn init(cx: &mut App) {

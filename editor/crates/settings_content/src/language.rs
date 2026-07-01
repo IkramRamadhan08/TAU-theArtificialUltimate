@@ -81,10 +81,10 @@ impl merge_from::MergeFrom for AllLanguageSettingsContent {
 #[serde(rename_all = "snake_case")]
 pub enum EditPredictionProvider {
     None,
-    #[default]
     Copilot,
-    Tau,
+    #[default]
     Codestral,
+    Tau,
     Ollama,
     OpenAiCompatibleApi,
     Mercury,
@@ -93,7 +93,7 @@ pub enum EditPredictionProvider {
 impl EditPredictionProvider {
     pub fn is_zed(&self) -> bool {
         match self {
-            EditPredictionProvider::Tau => true,
+            EditPredictionProvider::Tau => false,
             EditPredictionProvider::None
             | EditPredictionProvider::Copilot
             | EditPredictionProvider::Codestral

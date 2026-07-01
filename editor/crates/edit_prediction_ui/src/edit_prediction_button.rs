@@ -361,7 +361,7 @@ impl Render for EditPredictionButton {
                     }
                     _ => {
                         ep_icon = if enabled { icons.base } else { icons.disabled };
-                        tooltip_meta = "Powered by Zeta"
+                        tooltip_meta = "Local Edit Prediction"
                     }
                 };
 
@@ -404,7 +404,6 @@ impl Render for EditPredictionButton {
                 }
 
                 let show_editor_predictions = self.editor_show_predictions;
-                let user = self.user_store.read(cx).current_user();
 
                 let mercury_has_error = matches!(provider, EditPredictionProvider::Mercury)
                     && edit_prediction::EditPredictionStore::try_global(cx).is_some_and(
@@ -423,8 +422,7 @@ impl Render for EditPredictionButton {
                     None
                 };
 
-                let zed_cloud_needs_sign_in =
-                    matches!(provider, EditPredictionProvider::Tau) && user.is_none();
+                let zed_cloud_needs_sign_in = false;
                 let provider_unavailable =
                     missing_token || mercury_has_error || zed_cloud_needs_sign_in;
 
