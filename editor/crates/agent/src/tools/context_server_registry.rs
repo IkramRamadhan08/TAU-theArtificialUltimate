@@ -459,6 +459,7 @@ impl AnyAgentTool for ContextServerTool {
             Ok(AgentToolOutput {
                 raw_output,
                 llm_output,
+                error: None,
             })
         })
     }

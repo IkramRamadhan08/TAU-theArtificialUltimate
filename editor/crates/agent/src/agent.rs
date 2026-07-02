@@ -2301,6 +2301,12 @@ impl NativeAgentConnection {
                                     thread.update_context_compaction(update, cx);
                                 })?;
                             }
+                            ThreadEvent::Plan(_plan) => {
+                                log::debug!("Agent plan received");
+                            }
+                            ThreadEvent::PlanStepUpdate(description, status) => {
+                                log::debug!("Plan step update: {} = {:?}", description, status);
+                            }
                             ThreadEvent::Stop(stop_reason) => {
                                 log::debug!("Assistant message complete: {:?}", stop_reason);
                                 return Ok(acp::PromptResponse::new(stop_reason));

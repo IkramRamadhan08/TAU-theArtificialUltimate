@@ -11,12 +11,8 @@ const TAU_DOCS_URL: &str = "https://tau.ai/docs";
 
 /// stable | dev | nightly | preview
 pub static RELEASE_CHANNEL_NAME: LazyLock<String> = LazyLock::new(|| {
-    if cfg!(debug_assertions) {
-        env::var("TAU_RELEASE_CHANNEL")
-            .unwrap_or_else(|_| include_str!("../../tau/RELEASE_CHANNEL").trim().to_string())
-    } else {
-        include_str!("../../tau/RELEASE_CHANNEL").trim().to_string()
-    }
+    env::var("TAU_RELEASE_CHANNEL")
+        .unwrap_or_else(|_| include_str!("../../tau/RELEASE_CHANNEL").trim().to_string())
 });
 
 #[doc(hidden)]

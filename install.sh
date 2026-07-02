@@ -79,8 +79,12 @@ case "$OS" in
     ;;
   darwin)
     case "$ARCH" in
-      x86_64) ASSET="tau-x86_64-macos.tar.gz" ;;
       arm64|aarch64) ASSET="tau-aarch64-macos.tar.gz" ;;
+      x86_64)
+        echo "  Intel Mac (x86_64) binary not available. Building from source instead..."
+        echo "  (You can also use Rosetta 2 with the ARM64 build.)"
+        OS="darwin"
+        ;;
       *) echo "$MSG_ARCH: $ARCH"; exit 1 ;;
     esac
     ;;
