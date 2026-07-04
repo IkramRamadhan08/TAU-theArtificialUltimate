@@ -620,6 +620,11 @@ impl AutoUpdater {
             .strip_prefix('v')
             .unwrap_or(&release.tag_name)
             .to_string();
+        let version = if version.matches('.').count() < 2 {
+            format!("{}.0", version)
+        } else {
+            version
+        };
 
         Ok(ReleaseAsset {
             version,

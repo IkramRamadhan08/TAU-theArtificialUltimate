@@ -8,7 +8,6 @@
 
 ; Variables
 (variable_name) @variable
-(php_variable) @variable
 
 ; Functions
 (function_definition name: (name) @function)
