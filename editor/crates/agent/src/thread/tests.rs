@@ -12,8 +12,12 @@ use agent_settings::AutoCompactSettings;
 
 mod tests {
     use super::*;
+    use agent_settings::AutoCompactThreshold;
+    use crate::sandboxing::SandboxRequest;
+    use futures::StreamExt;
     use gpui::TestAppContext;
-    use language_model::LanguageModelToolUseId;
+    use collections::IndexMap;
+    use language_model::{LanguageModelToolUseId, LanguageModelImage, MessageContent};
     use language_model::fake_provider::FakeLanguageModel;
     use serde_json::json;
     use std::sync::Arc;

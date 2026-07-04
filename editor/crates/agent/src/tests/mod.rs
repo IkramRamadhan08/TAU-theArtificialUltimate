@@ -4404,6 +4404,7 @@ struct ThreadTest {
 
 enum TestModel {
     Sonnet4,
+    Mistral,
     Fake,
 }
 
@@ -4411,6 +4412,7 @@ impl TestModel {
     fn id(&self) -> LanguageModelId {
         match self {
             TestModel::Sonnet4 => LanguageModelId("claude-sonnet-4-latest".into()),
+            TestModel::Mistral => LanguageModelId("codestral-latest".into()),
             TestModel::Fake => unreachable!(),
         }
     }
@@ -4443,6 +4445,13 @@ async fn setup(cx: &mut TestAppContext, model: TestModel) -> ThreadTest {
                             StreamingJsonErrorContextTool::NAME: true,
                             StreamingFailingEchoTool::NAME: true,
                             TerminalTool::NAME: true,
+                            "read_file": true,
+                            "write_file": true,
+                            "edit_file": true,
+                            "grep": true,
+                            "list_directory": true,
+                            "fetch": true,
+                            "find_path": true,
                         }
                     }
                 }
@@ -4458,7 +4467,7 @@ async fn setup(cx: &mut TestAppContext, model: TestModel) -> ThreadTest {
 
         match model {
             TestModel::Fake => {}
-            TestModel::Sonnet4 => {
+            TestModel::Sonnet4 | TestModel::Mistral => {
                 gpui_tokio::init(cx);
                 let http_client = ReqwestClient::user_agent("agent tests").unwrap();
                 cx.set_http_client(Arc::new(http_client));
@@ -7817,4 +7826,182 @@ async fn test_mid_turn_model_and_settings_refresh(cx: &mut TestAppContext) {
 
     // Thinking should now be enabled.
     assert!(model_b_completions[0].thinking_allowed);
+}
+
+// ── E2E Torture Tests ──────────────────────────────────────────
+// These tests run against real LLM APIs (Mistral/Codestral).
+// Usage: MISTRAL_API_KEY=... cargo test -p agent --features e2e -- --ignored test_mistral
+
+#[gpui::test]
+#[cfg_attr(not(feature = "e2e"), ignore)]
+async fn test_mistral_create_and_edit_file(cx: &mut TestAppContext) {
+    let ThreadTest { thread, fs, .. } = setup(cx, TestModel::Mistral).await;
+
+    fs.create_dir(path!("/test/tmp").as_ref()).await.unwrap();
+
+    let events = thread
+        .update(cx, |thread, cx| {
+            thread.send(
+                UserMessageId::new(),
+                [
+                    "Create a file at /test/tmp/hello.txt containing exactly: 'Hello from Codestral!'",
+                ],
+                cx,
+            )
+        })
+        .unwrap()
+        .collect()
+        .await;
+    assert_eq!(stop_events(events), vec![acp::StopReason::EndTurn]);
+
+    let text = fs.load(path!("/test/tmp/hello.txt").as_ref()).await.unwrap();
+    assert!(
+        text.contains("Hello from Codestral"),
+        "Expected file to contain greeting, got: {text}"
+    );
+}
+
+#[gpui::test]
+#[cfg_attr(not(feature = "e2e"), ignore)]
+async fn test_mistral_bash_and_read(cx: &mut TestAppContext) {
+    let ThreadTest { thread, .. } = setup(cx, TestModel::Mistral).await;
+
+    let events = thread
+        .update(cx, |thread, cx| {
+            thread.send(
+                UserMessageId::new(),
+                ["Run the command `echo 'TAU_E2E_OK'` and tell me the output."],
+                cx,
+            )
+        })
+        .unwrap()
+        .collect()
+        .await;
+    assert_eq!(stop_events(events), vec![acp::StopReason::EndTurn]);
+
+    thread.update(cx, |thread, _cx| {
+        let message = thread.last_received_or_pending_message().unwrap();
+        let last = message.as_agent_message().unwrap();
+        let text: String = last.content.iter().filter_map(|c| {
+            if let AgentMessageContent::Text(t) = c { Some(t.clone()) } else { None }
+        }).collect();
+        assert!(
+            text.contains("TAU_E2E_OK"),
+            "Expected agent to report TAU_E2E_OK, got: {text}"
+        );
+    });
+}
+
+#[gpui::test]
+#[cfg_attr(not(feature = "e2e"), ignore)]
+async fn test_mistral_list_then_read_then_edit(cx: &mut TestAppContext) {
+    let ThreadTest { thread, fs, .. } = setup(cx, TestModel::Mistral).await;
+
+    fs.create_dir(path!("/test/tmp").as_ref()).await.unwrap();
+    fs.save(path!("/test/tmp/data.txt").as_ref(), &"old_value\nsecond_line".into(), Default::default())
+        .await
+        .unwrap();
+
+    let events = thread
+        .update(cx, |thread, cx| {
+            thread.send(
+                UserMessageId::new(),
+                [
+                    "First list files in /test/tmp. Then read /test/tmp/data.txt. \
+                     Then edit it: replace 'old_value' with 'new_value'. \
+                     Finally read it again to confirm."
+                ],
+                cx,
+            )
+        })
+        .unwrap()
+        .collect()
+        .await;
+    assert_eq!(stop_events(events), vec![acp::StopReason::EndTurn]);
+
+    let text = fs.load(path!("/test/tmp/data.txt").as_ref()).await.unwrap();
+    assert!(
+        text.contains("new_value"),
+        "Expected file to contain new_value, got: {text}"
+    );
+    assert!(
+        !text.contains("old_value"),
+        "Expected file to not contain old_value, got: {text}"
+    );
+}
+
+#[gpui::test]
+#[cfg_attr(not(feature = "e2e"), ignore)]
+async fn test_mistral_grep_search(cx: &mut TestAppContext) {
+    let ThreadTest { thread, fs, .. } = setup(cx, TestModel::Mistral).await;
+
+    fs.create_dir(path!("/test/tmp").as_ref()).await.unwrap();
+    fs.save(
+        path!("/test/tmp/source.rs").as_ref(),
+        &"fn greet() -> &'static str { \"hello\" }\nfn add(x: i32, y: i32) -> i32 { x + y }\n".into(),
+        Default::default(),
+    )
+    .await
+    .unwrap();
+
+    let events = thread
+        .update(cx, |thread, cx| {
+            thread.send(
+                UserMessageId::new(),
+                ["Search for all lines containing 'fn ' in /test/tmp/source.rs and report them."],
+                cx,
+            )
+        })
+        .unwrap()
+        .collect()
+        .await;
+    assert_eq!(stop_events(events), vec![acp::StopReason::EndTurn]);
+
+    thread.update(cx, |thread, _cx| {
+        let last = thread.last_received_or_pending_message().unwrap();
+        let markdown = last.to_markdown();
+        assert!(
+            markdown.contains("fn greet") && markdown.contains("fn add"),
+            "Expected agent to report both functions, got: {markdown}"
+        );
+    });
+}
+
+#[gpui::test]
+#[cfg_attr(not(feature = "e2e"), ignore)]
+async fn test_mistral_deep_nested_directory(cx: &mut TestAppContext) {
+    let ThreadTest { thread, fs, .. } = setup(cx, TestModel::Mistral).await;
+
+    // Create deeply nested structure
+    let deep_path = Path::new("/test/a/b/c/d/e/f/g");
+    fs.create_dir(deep_path.parent().unwrap()).await.unwrap();
+    fs.create_dir(deep_path).await.unwrap();
+    fs.save(
+        Path::new("/test/a/b/c/d/e/f/g/secret.txt"),
+        &"apple".into(),
+        Default::default(),
+    )
+    .await
+    .unwrap();
+
+    let events = thread
+        .update(cx, |thread, cx| {
+            thread.send(
+                UserMessageId::new(),
+                ["Navigate through the nested directories /test/a/b/c/d/e/f/g/, \
+                 read secret.txt, then change 'apple' to 'banana' using edit_file. \
+                 Then read it again to confirm."],
+                cx,
+            )
+        })
+        .unwrap()
+        .collect()
+        .await;
+    assert_eq!(stop_events(events), vec![acp::StopReason::EndTurn]);
+
+    let text = fs.load(Path::new("/test/a/b/c/d/e/f/g/secret.txt")).await.unwrap();
+    assert!(
+        text.contains("banana"),
+        "Expected file to contain banana, got: {text}"
+    );
 }

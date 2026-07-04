@@ -276,7 +276,7 @@ repl = { workspace = true, features = ["test-support"] }
 
 
 [package.metadata.bundle-dev]
-icon = ["resources/tau-icon@2x.png", "resources/tau-icon.png"]
+icon = ["../../assets/images/tau-icon@2x.png", "../../assets/images/tau-icon.png"]
 identifier = "ai.tau.TAU-Dev"
 name = "TAU Dev"
 osx_minimum_system_version = "10.15.7"
@@ -284,7 +284,7 @@ osx_info_plist_exts = ["resources/info/*"]
 osx_url_schemes = ["tau"]
 
 [package.metadata.bundle-nightly]
-icon = ["resources/tau-icon@2x.png", "resources/tau-icon.png"]
+icon = ["../../assets/images/tau-icon@2x.png", "../../assets/images/tau-icon.png"]
 identifier = "ai.tau.TAU-Nightly"
 name = "TAU Nightly"
 osx_minimum_system_version = "10.15.7"
@@ -292,7 +292,7 @@ osx_info_plist_exts = ["resources/info/*"]
 osx_url_schemes = ["tau"]
 
 [package.metadata.bundle-preview]
-icon = ["resources/tau-icon@2x.png", "resources/tau-icon.png"]
+icon = ["../../assets/images/tau-icon@2x.png", "../../assets/images/tau-icon.png"]
 identifier = "ai.tau.TAU-Preview"
 name = "TAU Preview"
 osx_minimum_system_version = "10.15.7"
@@ -300,7 +300,7 @@ osx_info_plist_exts = ["resources/info/*"]
 osx_url_schemes = ["tau"]
 
 [package.metadata.bundle-stable]
-icon = ["resources/tau-icon@2x.png", "resources/tau-icon.png"]
+icon = ["../../assets/images/tau-icon@2x.png", "../../assets/images/tau-icon.png"]
 identifier = "ai.tau.TAU"
 name = "TAU"
 osx_minimum_system_version = "10.15.7"

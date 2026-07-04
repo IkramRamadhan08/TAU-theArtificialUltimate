@@ -132,7 +132,7 @@ mod constants {
     pub const BASELINE_DIR: &str = "crates/tau/test_fixtures/visual_tests";
 
     /// Embedded test image (Tau app icon) for visual tests.
-    pub const EMBEDDED_TEST_IMAGE: &[u8] = include_bytes!("../resources/app-icon.png");
+    pub const EMBEDDED_TEST_IMAGE: &[u8] = include_bytes!("../../../assets/images/app-icon.png");
 
     /// Threshold for image comparison (0.0 to 1.0)
     /// Images must match at least this percentage to pass
@@ -183,7 +183,6 @@ fn run_visual_tests(project_path: PathBuf, update_baseline: bool) -> Result<()> 
         release_channel::init(semver::Version::new(0, 0, 0), cx);
         command_palette::init(cx);
         editor::init(cx);
-        call::init(app_state.client.clone(), app_state.user_store.clone(), cx);
         title_bar::init(cx);
         project_panel::init(cx);
         outline_panel::init(cx);

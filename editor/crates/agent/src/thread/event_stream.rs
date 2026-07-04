@@ -16,6 +16,8 @@ use fs::Fs;
 use futures::channel::mpsc;
 use futures::channel::oneshot;
 use futures::FutureExt;
+#[cfg(any(test, feature = "test-support"))]
+use futures::StreamExt;
 use gpui::{App, AsyncApp, Entity, SharedString, Task};
 use language_model::LanguageModelToolUseId;
 use settings::{
@@ -1039,14 +1041,14 @@ impl ToolCallEventStreamReceiver {
 impl std::ops::Deref for ToolCallEventStreamReceiver {
     type Target = mpsc::UnboundedReceiver<Result<ThreadEvent>>;
 
-    pub(crate) fn deref(&self) -> &Self::Target {
+    fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
 #[cfg(any(test, feature = "test-support"))]
 impl std::ops::DerefMut for ToolCallEventStreamReceiver {
-    pub(crate) fn deref_mut(&mut self) -> &mut Self::Target {
+    fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }

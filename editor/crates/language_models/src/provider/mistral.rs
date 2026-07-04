@@ -815,6 +815,8 @@ impl ConfigurationView {
                 .await
         })
         .detach_and_log_err(cx);
+
+        cx.notify();
     }
 
     fn should_render_api_key_editor(&self, cx: &mut Context<Self>) -> bool {

@@ -50,9 +50,10 @@ Follow this workflow for every task:
 2. **Plan** — Think through the approach. Consider tradeoffs and alternatives.
 3. **Execute** — Use your tools to make changes. Work incrementally.
 4. **Validate** — After making changes, run build and test commands to verify correctness.
-5. **Report** — Summarize what changed, reference files by path, and state what validation passed.
+5. **Loop** — If validation reveals issues, diagnose the root cause and fix them. Then re-validate. Do NOT stop after a failure.
+6. **Report** — When all validation passes, summarize what changed, reference files by path, and state what validation passed.
 
-Do NOT skip the validation step. Running `cargo check` (or equivalent) and `cargo test` is required before reporting completion.
+Do NOT skip the validation or loop steps. Running `cargo check` (or equivalent) and `cargo test` is required before reporting completion. Never report failure to the user without first attempting to fix it yourself.
 
 ## Searching & Reading
 

@@ -236,18 +236,19 @@ impl<S: ApiCompatibleProviderSettings> Render for ApiCompatibleProviderConfigura
                 )
                 .child(
                     h_flex().flex_shrink_0().child(
-                        Button::new("reset-api-key", "Reset API Key")
-                            .label_size(LabelSize::Small)
-                            .start_icon(Icon::new(IconName::Undo).size(IconSize::Small))
-                            .layer(ElevationIndex::ModalSurface)
-                            .when(env_var_set, |this| {
-                                this.tooltip(Tooltip::text(format!(
-                                    "To reset your API key, unset the {env_var_name} environment variable.",
-                                )))
-                            })
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.reset_api_key(window, cx)
-                            })),
+                    Button::new("reset-api-key", "Reset API Key")
+                        .label_size(LabelSize::Small)
+                        .start_icon(Icon::new(IconName::Undo).size(IconSize::Small))
+                        .layer(ElevationIndex::ModalSurface)
+                        .disabled(env_var_set)
+                        .when(env_var_set, |this| {
+                            this.tooltip(Tooltip::text(format!(
+                                "To reset your API key, unset the {env_var_name} environment variable.",
+                            )))
+                        })
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.reset_api_key(window, cx)
+                        })),
                     ),
                 )
                 .into_any()

@@ -97,6 +97,7 @@ mod tests {
             date: "2026-01-01".to_string(),
             user_agents_md: None,
             sandboxing: false,
+            require_verification: false,
         };
         let templates = Templates::new();
         let rendered = template.render(&templates).unwrap();
@@ -128,6 +129,7 @@ mod tests {
             date: "2026-01-01".to_string(),
             user_agents_md: Some("always be concise".into()),
             sandboxing: false,
+            require_verification: false,
         };
         let templates = Templates::new();
         let rendered = template.render(&templates).unwrap();
@@ -155,6 +157,7 @@ mod tests {
             date: "2026-01-01".to_string(),
             user_agents_md: None,
             sandboxing: false,
+            require_verification: false,
         };
         let templates = Templates::new();
         let rendered = template.render(&templates).unwrap();
@@ -186,6 +189,7 @@ mod tests {
             date: "2026-01-01".to_string(),
             user_agents_md: None,
             sandboxing: true,
+            require_verification: false,
         };
         let templates = Templates::new();
         let rendered = template.render(&templates).unwrap();
@@ -210,6 +214,7 @@ mod tests {
             date: "2026-01-01".to_string(),
             user_agents_md: None,
             sandboxing: true,
+            require_verification: false,
         };
         let templates = Templates::new();
         let rendered = template.render(&templates).unwrap();
@@ -228,6 +233,7 @@ mod tests {
             date: "2026-01-01".to_string(),
             user_agents_md: None,
             sandboxing: false,
+            require_verification: false,
         };
         let templates = Templates::new();
         let rendered = template.render(&templates).unwrap();
@@ -244,6 +250,7 @@ mod tests {
             date: "2026-01-01".to_string(),
             user_agents_md: None,
             sandboxing: false,
+            require_verification: false,
         };
         let templates = Templates::new();
         let rendered = template.render(&templates).unwrap();

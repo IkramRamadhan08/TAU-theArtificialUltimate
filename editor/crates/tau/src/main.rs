@@ -207,13 +207,6 @@ fn main() {
 
     let args = Args::parse();
 
-    // `tau --askpass` makes TAU operate in nc/netcat mode for use with askpass.
-    #[cfg(not(target_os = "windows"))]
-    if let Some(socket) = &args.askpass {
-        askpass::main(socket);
-        return;
-    }
-
     // `tau --crash-handler` makes TAU operate in minidump crash handler mode.
     if let Some(socket) = &args.crash_handler {
         crashes::crash_server(socket.as_path(), paths::logs_dir().clone());
@@ -296,17 +289,6 @@ fn main() {
     // Set custom data directory.
     if let Some(dir) = &args.user_data_dir {
         paths::set_custom_data_dir(dir);
-    }
-
-    #[cfg(target_os = "windows")]
-    match util::get_zed_cli_path() {
-        Ok(path) => askpass::set_askpass_program(path),
-        Err(err) => {
-            eprintln!("Error: {}", err);
-            if std::option_env!("TAU_BUNDLE").is_some() {
-                process::exit(1);
-            }
-        }
     }
 
     let file_errors = init_paths();
@@ -713,7 +695,6 @@ fn main() {
         outline_panel::init(cx);
         tasks_ui::init(cx);
         snippets_ui::init(cx);
-        channel::init(&app_state.client.clone(), app_state.user_store.clone(), cx);
         search::init(cx);
         cx.set_global(workspace::PaneSearchBarCallbacks {
             setup_search_bar: |languages, toolbar, window, cx| {
@@ -735,6 +716,7 @@ fn main() {
         settings_profile_selector::init(cx);
         language_tools::init(cx);
         call::init(app_state.client.clone(), app_state.user_store.clone(), cx);
+        channel::init(&app_state.client, app_state.user_store.clone(), cx);
         notifications::init(app_state.client.clone(), app_state.user_store.clone(), cx);
         title_bar::init(cx);
         git_ui::init(cx);
