@@ -1,7 +1,8 @@
 use crate::{
-    ApplyCodeActionTool, CodeActionStore, ContextServerRegistry, CopyPathTool, CreateDirectoryTool,
-    CreateThreadTool, DbLanguageModel, DbThread, DeletePathTool, DiagnosticsTool, EditFileTool,
-    FetchTool, FindPathTool, FindReferencesTool, GitBranchTool, GitCommitTool, GitLogTool,
+    ApplyCodeActionTool, BrowserNavigateTool, BrowserScreenshotTool, CodeActionStore,
+    ContextServerRegistry, CopyPathTool, CreateDirectoryTool, CreateThreadTool, DbLanguageModel,
+    DbThread, DeletePathTool, DiagnosticsTool, EditFileTool, FetchTool, FindPathTool,
+    FindReferencesTool, GitBranchTool, GitCommitTool, GitLogTool,
     GitPushTool, GitStatusTool, GetCodeActionsTool, GoToDefinitionTool, GrepTool,
     ListAgentsAndModelsTool, ListDirectoryTool, MovePathTool, ProjectSnapshot, ReadFileTool,
     RenameTool, SandboxedTerminalTool, SearchSemanticTool, SpawnAgentTool, SystemPromptTemplate,
@@ -933,6 +934,8 @@ impl Thread {
             environment.clone(),
         ));
         self.add_tool(WebSearchTool);
+        self.add_tool(BrowserNavigateTool);
+        self.add_tool(BrowserScreenshotTool);
 
         self.add_tool(DiagnosticsTool::new(self.project.clone()));
         self.add_tool(GitStatusTool::new(self.project.clone()));

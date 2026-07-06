@@ -1429,6 +1429,9 @@ mod tests {
             // tool calls inside the spawned thread, not the spawning itself.
             "create_thread",
             "spawn_agent",
+            // Browser tools - read-only, use local Chrome binary
+            "browser_navigate",
+            "browser_screenshot",
         ];
 
         let tool_info_ids: Vec<&str> = TOOLS.iter().map(|t| t.id).collect();

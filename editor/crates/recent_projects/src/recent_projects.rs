@@ -102,6 +102,32 @@ enum ProjectPickerEntry {
     /// whether the picker was invoked for new-window behavior and whether this was a primary or
     /// secondary confirm.
     RecentProject(StringMatch),
+    /// A git repository URL to clone. Shown when the user types a git URL.
+    CloneRepository {
+        url: String,
+    },
+}
+
+fn is_git_url(s: &str) -> bool {
+    let s = s.trim();
+    if s.starts_with("git@") && s.contains(':') {
+        return true;
+    }
+    if (s.starts_with("https://") || s.starts_with("http://") || s.starts_with("ssh://"))
+        && s.contains("://")
+        && s.contains('/')
+    {
+        let without_scheme = &s[s.find("://").unwrap() + 3..];
+        let host = without_scheme.split('/').next().unwrap_or("");
+        host.contains("github")
+            || host.contains("gitlab")
+            || host.contains("bitbucket")
+            || host.contains("gitee")
+            || host.contains("codeberg")
+            || host.contains("sourceforge")
+    } else {
+        false
+    }
 }
 
 fn is_selectable_entry(entry: &ProjectPickerEntry) -> bool {
@@ -110,6 +136,7 @@ fn is_selectable_entry(entry: &ProjectPickerEntry) -> bool {
         ProjectPickerEntry::OpenFolder { .. }
             | ProjectPickerEntry::ProjectGroup(_)
             | ProjectPickerEntry::RecentProject(_)
+            | ProjectPickerEntry::CloneRepository { .. }
     )
 }
 
@@ -925,6 +952,7 @@ impl RecentProjectsDelegate {
                 .is_some_and(|workspace| {
                     matches!(workspace.location, SerializedWorkspaceLocation::Remote(_))
                 }),
+            ProjectPickerEntry::CloneRepository { .. } => false,
         }
     }
 }
@@ -1131,6 +1159,12 @@ impl PickerDelegate for RecentProjectsDelegate {
             }
         }
 
+        if !is_empty_query && is_git_url(query) {
+            entries.push(ProjectPickerEntry::CloneRepository {
+                url: query.to_string(),
+            });
+        }
+
         self.filtered_entries = entries;
 
         if self.snap_selection_to_first_non_header_match {
@@ -1227,6 +1261,10 @@ impl PickerDelegate for RecentProjectsDelegate {
             Some(ProjectPickerEntry::RecentProject(selected_match)) => {
                 let candidate_id = selected_match.candidate_id;
                 self.open_recent_projects(candidate_id, secondary, window, cx);
+            }
+            Some(ProjectPickerEntry::CloneRepository { url }) => {
+                cx.emit(DismissEvent);
+                clone_and_open_repo(url, self.workspace.clone(), cx);
             }
             _ => {}
         }
@@ -1691,6 +1729,25 @@ impl PickerDelegate for RecentProjectsDelegate {
                         .into_any_element(),
                 )
             }
+            ProjectPickerEntry::CloneRepository { url } => Some(
+                ListItem::new(ix)
+                    .toggle_state(selected)
+                    .inset(true)
+                    .spacing(ListItemSpacing::Sparse)
+                    .child(
+                        h_flex()
+                            .w_full()
+                            .min_w_0()
+                            .gap_2p5()
+                            .child(Icon::new(IconName::Folder).color(Color::Muted))
+                            .child(
+                                v_flex()
+                                    .min_w_0()
+                                    .child(Label::new(format!("Clone Repository: {}", url))),
+                            ),
+                    )
+                    .into_any_element(),
+            ),
         }
     }
 
@@ -2096,6 +2153,60 @@ fn move_project_group_to_new_window(key: &ProjectGroupKey, window: &mut Window, 
                 })
                 .log_err();
         });
+    }
+}
+
+fn clone_and_open_repo(url: &str, workspace: WeakEntity<Workspace>, cx: &mut App) {
+    let repo_name = url
+        .trim_end_matches(".git")
+        .split('/')
+        .next_back()
+        .unwrap_or("repo");
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    let projects_dir = std::path::Path::new(&home).join("Projects");
+    std::fs::create_dir_all(&projects_dir).ok();
+    let clone_dir = projects_dir.join(repo_name);
+    let clone_dir_str = clone_dir.to_string_lossy().to_string();
+
+    let output = std::process::Command::new("git")
+        .arg("clone")
+        .arg(url)
+        .arg(&clone_dir_str)
+        .output();
+
+    match output {
+        Ok(output) if output.status.success() => {
+            if let Some(workspace) = workspace.upgrade() {
+                workspace.update(cx, |workspace, cx| {
+                    let app_state = workspace.app_state().clone();
+                    let clone_dir = clone_dir.clone();
+                    cx.spawn(async move |_, cx| {
+                        cx.update(|cx| {
+                            workspace::open_paths(
+                                &[clone_dir.clone()],
+                                app_state,
+                                workspace::OpenOptions {
+                                    open_mode: workspace::OpenMode::Activate,
+                                    add_dirs_to_sidebar: false,
+                                    ..Default::default()
+                                },
+                                cx,
+                            )
+                        })
+                        .await
+                        .log_err();
+                    })
+                    .detach();
+                });
+            }
+        }
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            log::error!("git clone failed: {}", stderr.trim());
+        }
+        Err(e) => {
+            log::error!("failed to run git clone: {}", e);
+        }
     }
 }
 

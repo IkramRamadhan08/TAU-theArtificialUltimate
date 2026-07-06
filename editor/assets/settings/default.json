@@ -1160,6 +1160,8 @@
           "spawn_agent": true,
           "terminal": true,
           "search_web": true,
+          "browser_navigate": true,
+          "browser_screenshot": true,
         },
       },
       "ask": {
@@ -1187,6 +1189,8 @@
           "skill": true,
           "spawn_agent": true,
           "search_web": true,
+          "browser_navigate": true,
+          "browser_screenshot": true,
         },
       },
       "minimal": {
