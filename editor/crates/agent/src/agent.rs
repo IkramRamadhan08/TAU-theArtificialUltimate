@@ -166,6 +166,10 @@ impl From<&Skill> for NativeAvailableSkill {
 
 pub const COMPACT_COMMAND_NAME: &str = "compact";
 pub const PERMISSION_COMMAND_NAME: &str = "permission";
+pub const HELP_COMMAND_NAME: &str = "help";
+pub const CLEAR_COMMAND_NAME: &str = "clear";
+pub const MODEL_COMMAND_NAME: &str = "model";
+pub const MODE_COMMAND_NAME: &str = "mode";
 
 /// Returns the set of MCP prompt names that must be server-qualified
 /// (`/<server>.<name>`) to stay unambiguous in the slash-command popup: names
@@ -1517,14 +1521,56 @@ impl NativeAgent {
         .meta(acp_thread::meta_with_command_category(
             acp_thread::CommandCategory::Native,
         ));
+        let help_command = acp::AvailableCommand::new(
+            HELP_COMMAND_NAME,
+            "Show available slash commands and their usage",
+        )
+        .meta(acp_thread::meta_with_command_category(
+            acp_thread::CommandCategory::Native,
+        ));
+        let clear_command = acp::AvailableCommand::new(
+            CLEAR_COMMAND_NAME,
+            "Clear the current conversation",
+        )
+        .meta(acp_thread::meta_with_command_category(
+            acp_thread::CommandCategory::Native,
+        ));
+        let model_command = acp::AvailableCommand::new(
+            MODEL_COMMAND_NAME,
+            "Switch the active language model. Use /model to see available models",
+        )
+        .input(acp::AvailableCommandInput::Unstructured(
+            acp::UnstructuredCommandInput::new("<model-name>"),
+        ))
+        .meta(acp_thread::meta_with_command_category(
+            acp_thread::CommandCategory::Native,
+        ));
+        let mode_command = acp::AvailableCommand::new(
+            MODE_COMMAND_NAME,
+            "Switch agent profile: ask (chat) or write (autonomous)",
+        )
+        .input(acp::AvailableCommandInput::Unstructured(
+            acp::UnstructuredCommandInput::new("<ask|write>"),
+        ))
+        .meta(acp_thread::meta_with_command_category(
+            acp_thread::CommandCategory::Native,
+        ));
 
         let registry = state.context_server_registry.read(cx);
 
         // Reserve the built-in command name so a same-named MCP prompt is
         // force-prefixed (`/<server>.compact`) and stays reachable: an
         // unqualified `/compact` always routes to the native command.
+        let native_command_names: &[&str] = &[
+            COMPACT_COMMAND_NAME,
+            PERMISSION_COMMAND_NAME,
+            HELP_COMMAND_NAME,
+            CLEAR_COMMAND_NAME,
+            MODEL_COMMAND_NAME,
+            MODE_COMMAND_NAME,
+        ];
         let ambiguous_prompt_names = ambiguous_mcp_prompt_names(
-            [COMPACT_COMMAND_NAME, PERMISSION_COMMAND_NAME],
+            native_command_names.iter().copied(),
             registry.prompts().map(|p| p.prompt.name.as_str()),
         );
 
@@ -1565,6 +1611,10 @@ impl NativeAgent {
 
         std::iter::once(compact_command)
             .chain(std::iter::once(permission_command))
+            .chain(std::iter::once(help_command))
+            .chain(std::iter::once(clear_command))
+            .chain(std::iter::once(model_command))
+            .chain(std::iter::once(mode_command))
             .chain(mcp_commands)
             .collect()
     }
@@ -1991,6 +2041,181 @@ impl NativeAgent {
                 thread.require_verification = verify;
             });
 
+            Ok(acp::PromptResponse::new(acp::StopReason::EndTurn))
+        })
+    }
+
+    fn send_help_command(
+        &self,
+        _message_id: UserMessageId,
+        session_id: acp::SessionId,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<acp::PromptResponse>> {
+        let Some(project_state) = self.session_project_state(&session_id) else {
+            return Task::ready(Ok(acp::PromptResponse::new(acp::StopReason::EndTurn)));
+        };
+        let commands = Self::build_available_commands_for_project(Some(project_state), cx);
+        let Some(state) = self.sessions.get(&session_id) else {
+            return Task::ready(Ok(acp::PromptResponse::new(acp::StopReason::EndTurn)));
+        };
+        let acp_thread = state.acp_thread.clone();
+
+        cx.spawn(async move |_this, cx| {
+            let mut lines = vec!["## Available Slash Commands".to_string()];
+            for cmd in &commands {
+                if acp_thread::command_category_from_meta(&cmd.meta)
+                    == Some(acp_thread::CommandCategory::Native)
+                {
+                    let placeholder_info =
+                        if let Some(acp::AvailableCommandInput::Unstructured(meta)) = &cmd.input {
+                            format!(" {}", meta.hint)
+                        } else {
+                            String::new()
+                        };
+                    lines.push(format!(
+                        "- `/{}{}` — {}",
+                        cmd.name, placeholder_info, cmd.description
+                    ));
+                }
+            }
+            lines.push(String::new());
+            lines.push("Type `/` to see all available commands.".to_string());
+
+            acp_thread.update(cx, |thread, cx| {
+                thread.push_assistant_content_block(lines.join("\n").into(), false, cx);
+                thread.update_token_usage(None, cx);
+            });
+
+            Ok(acp::PromptResponse::new(acp::StopReason::EndTurn))
+        })
+    }
+
+    fn send_clear_command(
+        &self,
+        _message_id: UserMessageId,
+        session_id: acp::SessionId,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<acp::PromptResponse>> {
+        let Some(state) = self.sessions.get(&session_id) else {
+            return Task::ready(Ok(acp::PromptResponse::new(acp::StopReason::EndTurn)));
+        };
+        let thread = state.thread.clone();
+
+        cx.spawn(async move |_this, cx| {
+            thread.update(cx, |thread, cx| thread.clear_conversation(cx));
+            Ok(acp::PromptResponse::new(acp::StopReason::EndTurn))
+        })
+    }
+
+    fn send_model_command(
+        &self,
+        _message_id: UserMessageId,
+        session_id: acp::SessionId,
+        arg: &str,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<acp::PromptResponse>> {
+        let model_name = arg.trim().to_string();
+        let Some(state) = self.sessions.get(&session_id) else {
+            return Task::ready(Ok(acp::PromptResponse::new(acp::StopReason::EndTurn)));
+        };
+        let thread = state.thread.clone();
+        let acp_thread = state.acp_thread.clone();
+
+        if model_name.is_empty() {
+            let list = LanguageModelRegistry::global(cx)
+                .read(cx)
+                .visible_providers()
+                .iter()
+                .flat_map(|p| p.recommended_models(cx))
+                .map(|m| m.id().0.to_string())
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            cx.spawn(async move |_this, cx| {
+                acp_thread.update(cx, |thread, cx| {
+                    thread.push_assistant_content_block(
+                        format!("Available models:\n{list}\n\nSwitch with `/model <model-name>`.").into(),
+                        false,
+                        cx,
+                    );
+                    thread.update_token_usage(None, cx);
+                });
+                Ok(acp::PromptResponse::new(acp::StopReason::EndTurn))
+            })
+        } else {
+            cx.spawn(async move |_this, cx| {
+                let found = cx.update(|cx| {
+                    LanguageModelRegistry::read_global(cx)
+                        .visible_providers()
+                        .iter()
+                        .flat_map(|p| p.recommended_models(cx))
+                        .find(|m| m.id().0.to_string() == model_name)
+                });
+
+                if let Some(model) = found {
+                    thread.update(cx, |thread, cx| {
+                        thread.set_model(model, cx);
+                    });
+                    acp_thread.update(cx, |thread, cx| {
+                        thread.push_assistant_content_block(
+                            format!("Switched to model: {model_name}").into(),
+                            false,
+                            cx,
+                        );
+                        thread.update_token_usage(None, cx);
+                    });
+                } else {
+                    acp_thread.update(cx, |thread, cx| {
+                        thread.push_assistant_content_block(
+                            format!("Model '{model_name}' not found. Use /model to list available models.").into(),
+                            false,
+                            cx,
+                        );
+                        thread.update_token_usage(None, cx);
+                    });
+                }
+
+                Ok(acp::PromptResponse::new(acp::StopReason::EndTurn))
+            })
+        }
+    }
+
+    fn send_mode_command(
+        &self,
+        _message_id: UserMessageId,
+        session_id: acp::SessionId,
+        arg: &str,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<acp::PromptResponse>> {
+        let profile_id = match arg.trim().to_lowercase().as_str() {
+            "write" => Some(agent_settings::AgentProfileId("write".into())),
+            "ask" => Some(agent_settings::AgentProfileId("ask".into())),
+            "minimal" => Some(agent_settings::AgentProfileId("minimal".into())),
+            _ => None,
+        };
+
+        let Some(profile_id) = profile_id else {
+            return Task::ready(Ok(acp::PromptResponse::new(acp::StopReason::EndTurn)));
+        };
+
+        let Some(state) = self.sessions.get(&session_id) else {
+            return Task::ready(Ok(acp::PromptResponse::new(acp::StopReason::EndTurn)));
+        };
+        let thread = state.thread.clone();
+        let acp_thread = state.acp_thread.clone();
+
+        cx.spawn(async move |_this, cx| {
+            thread.update(cx, |thread, cx| {
+                thread.set_profile(profile_id.clone(), cx);
+            });
+            acp_thread.update(cx, |thread, cx| {
+                thread.push_assistant_content_block(
+                    format!("Switched to **{profile_id}** mode.").into(),
+                    false,
+                    cx,
+                );
+                thread.update_token_usage(None, cx);
+            });
             Ok(acp::PromptResponse::new(acp::StopReason::EndTurn))
         })
     }
@@ -2694,6 +2919,30 @@ impl acp_thread::AgentConnection for NativeAgentConnection {
             if parsed_command.is_unqualified(PERMISSION_COMMAND_NAME) {
                 return self.0.update(cx, |agent, cx| {
                     agent.send_permission_command(id, session_id, parsed_command.arg_value, cx)
+                });
+            }
+
+            if parsed_command.is_unqualified(HELP_COMMAND_NAME) {
+                return self.0.update(cx, |agent, cx| {
+                    agent.send_help_command(id, session_id, cx)
+                });
+            }
+
+            if parsed_command.is_unqualified(CLEAR_COMMAND_NAME) {
+                return self.0.update(cx, |agent, cx| {
+                    agent.send_clear_command(id, session_id, cx)
+                });
+            }
+
+            if parsed_command.is_unqualified(MODEL_COMMAND_NAME) {
+                return self.0.update(cx, |agent, cx| {
+                    agent.send_model_command(id, session_id, parsed_command.arg_value, cx)
+                });
+            }
+
+            if parsed_command.is_unqualified(MODE_COMMAND_NAME) {
+                return self.0.update(cx, |agent, cx| {
+                    agent.send_mode_command(id, session_id, parsed_command.arg_value, cx)
                 });
             }
 

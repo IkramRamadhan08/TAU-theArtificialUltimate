@@ -291,7 +291,7 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
                         url: "https://tau.ai/docs".into(),
                     },
                 ),
-                MenuItem::action("TAU Repository", feedback::OpenZedRepo),
+                MenuItem::action("TAU Repository", feedback::OpenTauRepo),
                 MenuItem::action(
                     "TAU Twitter",
                     super::OpenBrowser {

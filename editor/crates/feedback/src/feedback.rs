@@ -10,7 +10,7 @@ actions!(
     tau,
     [
         /// Opens the TAU repository on GitHub.
-        OpenZedRepo,
+        OpenTauRepo,
         /// Copies installed extensions to the clipboard for bug reports.
         CopyInstalledExtensionsIntoClipboard
     ]
@@ -84,7 +84,7 @@ pub fn init(cx: &mut App) {
                 })
                 .detach();
             })
-            .register_action(move |_, _: &OpenZedRepo, _, cx| {
+            .register_action(move |_, _: &OpenTauRepo, _, cx| {
                 cx.open_url(TAU_REPO_URL);
             });
     })

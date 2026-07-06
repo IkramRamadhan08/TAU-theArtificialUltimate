@@ -880,6 +880,13 @@ impl Thread {
         self.messages.last().map(std::ops::Deref::deref)
     }
 
+    pub fn clear_conversation(&mut self, cx: &mut Context<Self>) {
+        self.messages.clear();
+        self.summary = None;
+        self.clear_summary();
+        cx.notify();
+    }
+
     #[cfg(any(test, feature = "test-support"))]
     pub fn last_received_or_pending_message(&self) -> Option<Arc<Message>> {
         if let Some(message) = self.pending_message.clone() {
