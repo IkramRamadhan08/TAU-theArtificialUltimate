@@ -22,7 +22,6 @@ test-support = [
     "workspace/test-support",
     "agent/test-support",
 ]
-audio = ["dep:audio"]
 unit-eval = []
 
 [dependencies]
@@ -37,7 +36,6 @@ agent_skills.workspace = true
 ai_onboarding.workspace = true
 anyhow.workspace = true
 heapless.workspace = true
-audio = { workspace = true, optional = true }
 base64.workspace = true
 buffer_diff.workspace = true
 chrono.workspace = true

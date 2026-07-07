@@ -593,6 +593,8 @@ fn main() {
 
         Client::set_global(client.clone(), cx);
 
+        let _p2p = p2p::init_p2p(client.clone(), cx);
+
         app::init(cx);
         #[cfg(target_os = "macos")]
         app::move_to_applications::init(cx);
@@ -682,7 +684,6 @@ fn main() {
         repl::notebook::init(cx);
         diagnostics::init(cx);
 
-        audio::init(cx);
         workspace::init(app_state.clone(), cx);
         ui_prompt::init(cx);
 
@@ -715,8 +716,6 @@ fn main() {
         theme_selector::init(cx);
         settings_profile_selector::init(cx);
         language_tools::init(cx);
-        call::init(app_state.client.clone(), app_state.user_store.clone(), cx);
-        channel::init(&app_state.client, app_state.user_store.clone(), cx);
         notifications::init(app_state.client.clone(), app_state.user_store.clone(), cx);
         title_bar::init(cx);
         git_ui::init(cx);

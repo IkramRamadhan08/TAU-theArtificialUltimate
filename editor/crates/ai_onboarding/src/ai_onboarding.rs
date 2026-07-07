@@ -156,7 +156,7 @@ impl ZedAiOnboarding {
             .gap_1()
             .child(Headline::new("Welcome to TAU AI"))
             .child(
-                Label::new("Configure 9router or another local provider to use TAU AI.")
+                Label::new("Configure a provider to use TAU AI.")
                     .color(Color::Muted)
                     .mb_2(),
             )

@@ -62,8 +62,6 @@ use crate::{
 use agent_settings::AgentSettings;
 use ai_onboarding::AgentPanelOnboarding;
 use anyhow::{Context as _, Result, anyhow};
-#[cfg(feature = "audio")]
-use audio::{Audio, Sound};
 use chrono::{DateTime, Utc};
 use client::UserStore;
 use cloud_api_types::Plan;
@@ -2521,11 +2519,6 @@ impl AgentPanel {
         if newly_notified {
             cx.emit(AgentPanelEvent::EntryChanged);
             cx.notify();
-            #[cfg(feature = "audio")]
-            self.play_terminal_notification_sound(
-                self.terminal_status_visible(terminal_id, window, cx),
-                cx,
-            );
             self.show_terminal_notification(terminal_id, window, cx);
         }
     }
@@ -2772,14 +2765,6 @@ impl AgentPanel {
             pop_up.update(cx, |notification, cx| {
                 notification.dismiss(cx);
             });
-        }
-    }
-
-    #[cfg(feature = "audio")]
-    fn play_terminal_notification_sound(&self, visible: bool, cx: &mut App) {
-        let settings = AgentSettings::get_global(cx);
-        if settings.play_sound_when_agent_done.should_play(visible) {
-            Audio::play_sound(Sound::AgentDone, cx);
         }
     }
 

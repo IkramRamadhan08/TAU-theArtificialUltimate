@@ -1,13 +1,13 @@
 <div align="center">
 
-<img src="TAU.png" alt="TAU Logo" width="100">
+<img src="TAU.png" alt="TAU Logo" width="120">
 
 # TAU — The Artificial Ultimate
 
 **A local-first, agentic coding IDE. Forked from [Zed](https://zed.dev).**
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE-GPL)
-[![Rust](https://img.shields.io/badge/rust-1.95.0-orange)](rust-toolchain.toml)
+[![Rust](https://img.shields.io/badge/rust-1.85.0-orange)](rust-toolchain.toml)
 [![Release](https://img.shields.io/github/v/release/IkramRamadhan08/TAU-theArtificialUltimate)](https://github.com/IkramRamadhan08/TAU-theArtificialUltimate/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/IkramRamadhan08/TAU-theArtificialUltimate/release.yml?label=build)](https://github.com/IkramRamadhan08/TAU-theArtificialUltimate/actions)
 [![Downloads](https://img.shields.io/github/downloads/IkramRamadhan08/TAU-theArtificialUltimate/total)](https://github.com/IkramRamadhan08/TAU-theArtificialUltimate/releases)
@@ -16,7 +16,15 @@
 
 <br>
 
-> **Experimental.** TAU extends Zed with a deeply integrated AI agent that writes code, runs commands, edits files, and builds projects — all from natural language. Expect rough edges.
+> **Experimental.** TAU extends Zed with a deeply integrated AI agent that writes code, runs commands, edits files, and builds projects — all from natural language. All AI features run through your own LLM provider API keys. No cloud dependency. No telemetry. Expect rough edges.
+
+---
+
+## IDE Preview
+
+<div align="center">
+  <img src="editor/assets/images/IDElook.png" alt="TAU IDE Screenshot" width="90%">
+</div>
 
 ---
 
@@ -28,9 +36,9 @@
 - [Build from Source](#build-from-source)
 - [Configure LLM Providers](#configure-llm-providers)
 - [Agent Overview](#agent-overview)
-- [CLI Usage](#cli-usage)
 - [Keyboard Shortcuts](#keyboard-shortcuts)
 - [Project Structure](#project-structure)
+- [FAQ](#faq)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -59,14 +67,25 @@
 |---|---|
 | **Multi-cursor editing** | Vim mode, column selection, multiple cursors |
 | **LSP integration** | Go-to-definition, completions, diagnostics, hover, rename |
-| **Built-in terminal** | Integrated shell with sandbox support |
+| **Built-in terminal** | Integrated shell with inline AI assistant |
 | **Git panel** | Diff viewer, staging, blame, inline git status |
 | **Command palette** | Fuzzy-find any action |
 | **File explorer** | Project tree with git status decorations |
 | **Syntax highlighting** | Tree-sitter for 100+ languages |
 | **Multi-buffer search** | Search across entire project with live preview |
-| **Themes** | Ayu, Gruvbox, One Dark, and more |
+| **Edit prediction** | AI-powered inline code suggestions (Mistral, Codestral, Mercury) |
+| **Themes** | Dark and light themes included |
 | **Extensions** | WASM-based extension system |
+
+### Local-First
+
+| Capability | Description |
+|---|---|
+| **No cloud dependency** | All AI features use your own API keys |
+| **No telemetry** | Zero data collection |
+| **No account required** | No sign-up, no login |
+| **Offline-capable editor** | Full editor functionality without internet |
+| **Local provider support** | Ollama, LM Studio for fully offline AI |
 
 ---
 
@@ -92,7 +111,7 @@ The installer:
 - Adds TAU to your `PATH`
 - On Linux, installs system dependencies automatically
 
-After installation, type **`tau`** in your terminal. The terminal window closes and TAU appears.
+After installation, type **`tau`** in your terminal.
 
 ### Uninstall
 
@@ -126,7 +145,7 @@ Binaries are built automatically via GitHub Actions when a new tag is pushed.
 
 ## Build from Source
 
-Requires **Rust 1.95.0** ([rustup.rs](https://rustup.rs)):
+Requires **Rust 1.85.0** ([rustup.rs](https://rustup.rs)):
 
 ```bash
 git clone https://github.com/IkramRamadhan08/TAU-theArtificialUltimate.git
@@ -149,7 +168,7 @@ cargo test --release
 
 ## Configure LLM Providers
 
-TAU supports multiple LLM providers. Configure them in `~/.config/tau/settings.json`.
+TAU supports multiple LLM providers. Configure them via the UI (**Settings → Language Models**) or directly in `~/.config/tau/settings.json`.
 
 ### Minimal Setup (Mistral)
 
@@ -197,8 +216,9 @@ TAU supports multiple LLM providers. Configure them in `~/.config/tau/settings.j
       "api_key": "...",
       "model": "deepseek-coder"
     },
-    "copilot_chat": {
-      "model": "gpt-4o"
+    "xai": {
+      "api_key": "...",
+      "model": "grok-2"
     },
     "lm_studio": {
       "base_url": "http://localhost:1234/v1",
@@ -208,9 +228,9 @@ TAU supports multiple LLM providers. Configure them in `~/.config/tau/settings.j
 }
 ```
 
-**Tested providers:** Mistral, Ollama, OpenAI, Anthropic, Google, Copilot Chat.
+**Tested providers:** Mistral, Ollama, OpenAI, Anthropic, Google.
 
-**Available but community-tested:** DeepSeek, xAI (Grok), AWS Bedrock, OpenRouter, LM Studio, Azure.
+**Available but community-tested:** DeepSeek, xAI (Grok), OpenRouter, LM Studio, Vercel AI Gateway.
 
 ---
 
@@ -279,26 +299,6 @@ Create your own skills in `~/.agents/skills/`:
 
 ---
 
-## CLI Usage
-
-```
-tau [OPTIONS] [PATHS...]
-```
-
-| Option | Description |
-|---|---|
-| `-w`, `--wait` | Wait for the editor to close before returning |
-| `-n`, `--new` | Open a new window |
-| `-a`, `--add` | Add paths to current window |
-| `--dev-server` | Run the dev server for TAU Cloud |
-| `--foreground` | Run in foreground (print logs to stdout) |
-| `--profile` | Launch with a specific data directory |
-| `--version` | Print version and exit |
-| `--diagnostics` | Print system diagnostics |
-| `--help` | Print help |
-
----
-
 ## Keyboard Shortcuts
 
 ### AI Agent
@@ -322,8 +322,6 @@ tau [OPTIONS] [PATHS...]
 | Toggle file explorer | `Ctrl+Shift+E` | `Cmd+Shift+E` |
 | Toggle git panel | `Ctrl+Shift+G` | `Cmd+Shift+G` |
 
-Full keybinding reference: [editor/docs/guide/keybindings.md](editor/docs/guide/keybindings.md)
-
 ---
 
 ## Project Structure
@@ -331,28 +329,45 @@ Full keybinding reference: [editor/docs/guide/keybindings.md](editor/docs/guide/
 ```
 TAU-theArtificialUltimate/
 ├── editor/                          # Main editor workspace (Rust)
-│   ├── crates/                      # 236+ crates
+│   ├── crates/                      # 230+ crates
 │   │   ├── agent/                   # AI agent core (planning, tool execution)
 │   │   ├── agent_skills/            # Built-in skills and skill system
 │   │   ├── agent_settings/          # Agent configuration schema
 │   │   ├── agent_ui/                # Agent chat panel UI
-│   │   ├── auto_update/             # Automatic update checker
 │   │   ├── gpui/                    # GPU-accelerated UI framework
 │   │   ├── language/                # Language and Tree-sitter integration
 │   │   ├── project/                 # Project and worktree management
 │   │   ├── terminal/                # Integrated terminal emulator
+│   │   ├── terminal_view/           # Terminal panel with inline AI
 │   │   ├── lsp/                     # LSP client
+│   │   ├── edit_prediction_ui/      # AI inline code suggestions
 │   │   ├── anthropic/               # Anthropic API provider
 │   │   ├── openai/                  # OpenAI API provider
 │   │   ├── ollama/                  # Ollama provider
 │   │   ├── google_ai/               # Google AI provider
 │   │   └── ...                      # 220+ additional crates
 │   ├── docs/                        # Documentation
-│   └── assets/                      # Themes, icons, settings defaults
+│   └── assets/                      # Themes, icons, images, sounds
 ├── install.sh                       # Linux/macOS installer
 ├── install.ps1                      # Windows installer
-└── uninstall.sh                     # Linux/macOS uninstaller
+├── uninstall.sh                     # Linux/macOS uninstaller
+├── TAU.png                          # Project logo
+└── README.md
 ```
+
+---
+
+## FAQ
+
+**Do I need an account?** No. TAU has no accounts, no sign-in, no cloud service.
+
+**Does TAU collect telemetry?** No. Zero data collection. No crash reporting. No analytics.
+
+**Can I use TAU offline?** The editor is fully offline. AI features require API access to your LLM provider, except when using local providers like Ollama or LM Studio.
+
+**What's the difference from Zed?** TAU strips out Zed's collaborative infrastructure (channels, calls, collab servers, LiveKit) and focuses entirely on local-first agentic AI with deep terminal integration, custom skills, and multi-provider LLM support.
+
+**How do I get an API key?** Sign up with any supported provider (Mistral, OpenAI, Anthropic, Google, etc.) and paste the key in Settings → Language Models.
 
 ---
 

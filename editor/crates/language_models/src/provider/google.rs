@@ -502,11 +502,7 @@ impl Render for ConfigurationView {
                 .into_any_element()
         } else {
             ConfiguredApiCard::new(configured_card_label)
-                .disabled(env_var_set)
                 .on_click(cx.listener(|this, _, window, cx| this.reset_api_key(window, cx)))
-                .when(env_var_set, |this| {
-                    this.tooltip_label(format!("To reset your API key, make sure {GEMINI_API_KEY_VAR_NAME} and {GOOGLE_AI_API_KEY_VAR_NAME} environment variables are unset."))
-                })
                 .into_any_element()
         }
     }

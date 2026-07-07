@@ -4,7 +4,7 @@ use std::process::Command;
 fn main() {
     #[cfg(target_os = "linux")]
     {
-        // Add rpaths for libraries that webrtc-sys dlopens at runtime.
+        // Add rpaths for dynamically loaded libraries.
         // This is mostly required for hosts with non-standard SO installation
         // locations such as NixOS.
         let dlopened_libs = ["libva", "libva-drm", "egl"];

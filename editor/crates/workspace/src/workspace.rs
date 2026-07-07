@@ -8325,7 +8325,6 @@ impl ParticipantLocation {
     }
 }
 /// Workspace-local view of a remote collaborator's state.
-/// This is the subset of `call::RemoteParticipant` that workspace needs.
 #[derive(Clone)]
 pub struct RemoteCollaborator {
     pub user: Arc<User>,

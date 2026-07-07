@@ -15,8 +15,6 @@ use agent_servers::AgentServerDelegate;
 use agent_servers::{AgentServer, GEMINI_TERMINAL_AUTH_METHOD_ID};
 use agent_settings::{AgentProfileId, AgentSettings};
 use anyhow::{Result, anyhow};
-#[cfg(feature = "audio")]
-use audio::{Audio, Sound};
 use buffer_diff::BufferDiff;
 use client::tau_urls;
 use collections::{HashMap, HashSet, IndexMap};
@@ -2662,8 +2660,6 @@ impl ConversationView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        #[cfg(feature = "audio")]
-        self.play_notification_sound(window, cx);
         self.show_notification(caption, icon, window, cx);
     }
 
@@ -2703,22 +2699,6 @@ impl ConversationView {
             self.workspace
                 .upgrade()
                 .is_some_and(|workspace| self.is_visible_in_agent_panel(&workspace, cx))
-        }
-    }
-
-    #[cfg(feature = "audio")]
-    fn play_notification_sound(&self, window: &Window, cx: &mut Context<Self>) {
-        let visible = window.is_window_active()
-            && if let Some(mw) = window.root::<MultiWorkspace>().flatten() {
-                self.is_visible(&mw, cx)
-            } else {
-                self.workspace
-                    .upgrade()
-                    .is_some_and(|workspace| self.is_visible_in_agent_panel(&workspace, cx))
-            };
-        let settings = AgentSettings::get_global(cx);
-        if settings.play_sound_when_agent_done.should_play(visible) {
-            Audio::play_sound(Sound::AgentDone, cx);
         }
     }
 

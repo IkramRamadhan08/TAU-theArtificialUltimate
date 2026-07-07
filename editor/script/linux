@@ -58,12 +58,7 @@ if [[ -n $apt ]]; then
   elif (grep -qP 'PRETTY_NAME="((Debian|Raspbian).+12|Linux Mint 21|.+22\.04)' /etc/os-release); then
     deps+=( libstdc++-12-dev )
   elif (grep -qP 'PRETTY_NAME="((Debian|Raspbian).+11|Linux Mint 20|.+20\.04)' /etc/os-release); then
-    # Ubuntu 20.04 ships clang-10 and libstdc++-10 which lack adequate C++20
-    # support for building webrtc-sys (requires -std=c++20, lambdas in
-    # unevaluated contexts from clang 17+, and working std::ranges in the
-    # stdlib).
-    # Note: the prebuilt libwebrtc.a is compiled with libstdc++, so we must
-    # use libstdc++ (not libc++) to avoid ABI mismatches at link time.
+    # Use libstdc++-11-dev for C++20 support in the build.
 
     # libstdc++-11-dev (headers with working pointer_traits/contiguous_range)
     # is only available from the ubuntu-toolchain-r PPA. Add the source list

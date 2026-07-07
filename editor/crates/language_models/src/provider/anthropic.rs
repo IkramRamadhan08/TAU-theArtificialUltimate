@@ -674,13 +674,7 @@ impl Render for ConfigurationView {
                 .into_any_element()
         } else {
             ConfiguredApiCard::new(configured_card_label)
-                .disabled(env_var_set)
                 .on_click(cx.listener(|this, _, window, cx| this.reset_api_key(window, cx)))
-                .when(env_var_set, |this| {
-                    this.tooltip_label(format!(
-                    "To reset your API key, unset the {API_KEY_ENV_VAR_NAME} environment variable."
-                ))
-                })
                 .into_any_element()
         }
     }

@@ -28,6 +28,26 @@ use util::command::new_command;
 use workspace::Workspace;
 
 const SHOULD_SHOW_UPDATE_NOTIFICATION_KEY: &str = "auto-updater-should-show-updated-notification";
+const LATEST_UPDATED_VERSION_KEY: &str = "auto-updater-latest-version";
+
+/// Extract commit SHA from a version string.
+/// Tries build metadata first (`1.0.0+nightly.SHA`), then pre-release (`1.0.0-nightly.SHA`).
+fn extract_sha(version: &Version) -> Option<&str> {
+    version
+        .build
+        .as_str()
+        .rsplit('.')
+        .next()
+        .filter(|s| !s.is_empty())
+        .or_else(|| {
+            version
+                .pre
+                .as_str()
+                .rsplit('.')
+                .next()
+                .filter(|s| !s.is_empty())
+        })
+}
 
 #[derive(Debug)]
 struct MissingDependencyError(String);
@@ -654,12 +674,28 @@ impl AutoUpdater {
         let fetched_release_data =
             Self::get_release_asset(&this, release_channel, None, "tau", OS, ARCH, cx).await?;
         let fetched_version = fetched_release_data.clone().version;
+
+        let kvp = cx.update(|cx| KeyValueStore::global(cx));
+        if let Ok(Some(last_version)) = kvp.read_kvp(LATEST_UPDATED_VERSION_KEY)
+        {
+            if last_version == fetched_version {
+                log::info!(
+                    "Auto Update: already updated to version {fetched_version}, skipping"
+                );
+                this.update(cx, |this, cx| {
+                    this.status = AutoUpdateStatus::Idle;
+                    cx.notify();
+                });
+                return Ok(());
+            }
+        }
+
         let app_commit_sha = Ok(cx.update(|cx| AppCommitSha::try_global(cx).map(|sha| sha.full())));
         let newer_version = Self::check_if_fetched_version_is_newer(
             release_channel,
             app_commit_sha,
             installed_version,
-            fetched_version,
+            fetched_version.clone(),
             previous_status.clone(),
         )?;
 
@@ -726,6 +762,13 @@ impl AutoUpdater {
             cx.update(|cx| cx.set_restart_path(new_binary_path));
         }
 
+        let kvp = cx.update(|cx| KeyValueStore::global(cx));
+        kvp.write_kvp(
+            LATEST_UPDATED_VERSION_KEY.to_string(),
+            fetched_version.clone(),
+        )
+        .await?;
+
         this.update(cx, |this, cx| {
             this.set_should_show_update_notification(true, cx)
                 .detach_and_log_err(cx);
@@ -751,8 +794,7 @@ impl AutoUpdater {
                 VersionCheckType::Sha(cached_version) => {
                     let should_download =
                         parsed_fetched_version.as_ref().ok().is_none_or(|version| {
-                            version.build.as_str().rsplit('.').next()
-                                != Some(&cached_version.full())
+                            extract_sha(version) != Some(&cached_version.full())
                         });
                     let newer_version = should_download
                         .then(|| VersionCheckType::Sha(AppCommitSha::new(fetched_version)));
@@ -774,7 +816,7 @@ impl AutoUpdater {
                     .flatten()
                     .map(|sha| {
                         parsed_fetched_version.as_ref().ok().is_none_or(|version| {
-                            version.build.as_str().rsplit('.').next() != Some(&sha)
+                            extract_sha(version) != Some(&sha)
                         })
                     })
                     .unwrap_or(true);

@@ -1,6 +1,5 @@
 use anyhow::Result;
-use client::{Client, UserStore, tau_urls};
-use cloud_llm_client::UsageLimit;
+use client::UserStore;
 use codestral::{self, CodestralEditPredictionDelegate};
 use copilot::Status;
 use edit_prediction::EditPredictionStore;
@@ -13,7 +12,7 @@ use fs::Fs;
 use gpui::{
     Action, Anchor, Animation, AnimationExt, App, AsyncWindowContext, Entity, FocusHandle,
     Focusable, IntoElement, ParentElement, Render, Subscription, TaskExt, WeakEntity, actions, div,
-    ease_in_out, pulsating_between,
+    pulsating_between,
 };
 use indoc::indoc;
 use language::{
@@ -32,7 +31,7 @@ use std::{
 };
 use ui::{
     Clickable, ContextMenu, ContextMenuEntry, DocumentationSide, IconButton, IconButtonShape,
-    Indicator, PopoverMenu, PopoverMenuHandle, ProgressBar, Tooltip, prelude::*,
+    Indicator, PopoverMenu, PopoverMenuHandle, Tooltip, prelude::*,
 };
 use util::ResultExt as _;
 
@@ -1067,182 +1066,7 @@ impl EditPredictionButton {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Entity<ContextMenu> {
-        ContextMenu::build(window, cx, |mut menu, window, cx| {
-            let user = self.user_store.read(cx).current_user();
-
-            let needs_sign_in = user.is_none()
-                && matches!(
-                    provider,
-                    EditPredictionProvider::None | EditPredictionProvider::Tau
-                );
-
-            if needs_sign_in {
-                menu = menu
-                    .custom_row(move |_window, cx| {
-                        let description = indoc! {
-                            "You get 2,000 accepted suggestions at every keystroke for free, \
-                            powered by Zeta, our open-source, open-data model"
-                        };
-
-                        v_flex()
-                            .max_w_64()
-                            .h(rems_from_px(148.))
-                            .child(render_zeta_tab_animation(cx))
-                            .child(Label::new("Edit Prediction"))
-                            .child(
-                                Label::new(description)
-                                    .color(Color::Muted)
-                                    .size(LabelSize::Small),
-                            )
-                            .into_any_element()
-                    })
-                    .separator()
-                    .entry("Sign In & Start Using", None, |window, cx| {
-                        telemetry::event!(
-                            "Edit Prediction Menu Action",
-                            action = "sign_in",
-                            provider = "tau",
-                        );
-                        let client = Client::global(cx);
-                        window
-                            .spawn(cx, async move |cx| {
-                                client
-                                    .sign_in_with_optional_connect(true, &cx)
-                                    .await
-                                    .log_err();
-                            })
-                            .detach();
-                    })
-                    .link_with_handler(
-                        "Learn More",
-                        OpenBrowser {
-                            url: tau_urls::edit_prediction_docs(cx).into(),
-                        }
-                        .boxed_clone(),
-                        |_window, _cx| {
-                            telemetry::event!(
-                                "Edit Prediction Menu Action",
-                                action = "view_docs",
-                                source = "upsell",
-                            );
-                        },
-                    )
-                    .separator();
-            } else {
-                let mercury_payment_required = matches!(provider, EditPredictionProvider::Mercury)
-                    && edit_prediction::EditPredictionStore::try_global(cx).is_some_and(
-                        |ep_store| ep_store.read(cx).mercury_has_payment_required_error(),
-                    );
-
-                if mercury_payment_required {
-                    menu = menu
-                        .header("Mercury")
-                        .item(ContextMenuEntry::new("Free tier limit reached").disabled(true))
-                        .item(
-                            ContextMenuEntry::new(
-                                "Upgrade to a paid plan to continue using the service",
-                            )
-                            .disabled(true),
-                        )
-                        .separator();
-                }
-
-                if let Some(usage) = self
-                    .edit_prediction_provider
-                    .as_ref()
-                    .and_then(|provider| provider.usage(cx))
-                {
-                    menu = menu.header("Usage");
-                    menu = menu
-                        .custom_entry(
-                            move |_window, cx| {
-                                let used_percentage = match usage.limit {
-                                    UsageLimit::Limited(limit) => {
-                                        Some((usage.amount as f32 / limit as f32) * 100.)
-                                    }
-                                    UsageLimit::Unlimited => None,
-                                };
-
-                                h_flex()
-                                    .flex_1()
-                                    .gap_1p5()
-                                    .children(used_percentage.map(|percent| {
-                                        ProgressBar::new("usage", percent, 100., cx)
-                                    }))
-                                    .child(
-                                        Label::new(match usage.limit {
-                                            UsageLimit::Limited(limit) => {
-                                                format!("{} / {limit}", usage.amount)
-                                            }
-                                            UsageLimit::Unlimited => {
-                                                format!("{} / ∞", usage.amount)
-                                            }
-                                        })
-                                        .size(LabelSize::Small)
-                                        .color(Color::Muted),
-                                    )
-                                    .into_any_element()
-                            },
-                            move |_, cx| cx.open_url(&tau_urls::account_url(cx)),
-                        )
-                        .when(usage.over_limit(), |menu| -> ContextMenu {
-                            menu.entry("Subscribe to increase your limit", None, |_window, cx| {
-                                telemetry::event!(
-                                    "Edit Prediction Menu Action",
-                                    action = "upsell_clicked",
-                                    reason = "usage_limit",
-                                );
-                                cx.open_url(&tau_urls::account_url(cx))
-                            })
-                        })
-                        .separator();
-                } else if self.user_store.read(cx).account_too_young() {
-                    menu = menu
-                        .custom_entry(
-                            |_window, _cx| {
-                                Label::new("Your GitHub account is less than 30 days old.")
-                                    .size(LabelSize::Small)
-                                    .color(Color::Warning)
-                                    .into_any_element()
-                            },
-                            |_window, cx| cx.open_url(&tau_urls::account_url(cx)),
-                        )
-                        .entry("Upgrade to Tau Pro or contact us.", None, |_window, cx| {
-                            telemetry::event!(
-                                "Edit Prediction Menu Action",
-                                action = "upsell_clicked",
-                                reason = "account_age",
-                            );
-                            cx.open_url(&tau_urls::account_url(cx))
-                        })
-                        .separator();
-                } else if self.user_store.read(cx).has_overdue_invoices() {
-                    menu = menu
-                        .custom_entry(
-                            |_window, _cx| {
-                                Label::new("You have an outstanding invoice")
-                                    .size(LabelSize::Small)
-                                    .color(Color::Warning)
-                                    .into_any_element()
-                            },
-                            |_window, cx| {
-                                cx.open_url(&tau_urls::account_url(cx))
-                            },
-                        )
-                        .entry(
-                            "Check your payment status or contact us at billing-support@tau.dev to continue using this feature.",
-                            None,
-                            |_window, cx| {
-                                cx.open_url(&tau_urls::account_url(cx))
-                            },
-                        )
-                        .separator();
-                }
-            }
-
-            if !needs_sign_in {
-                menu = self.build_language_settings_menu(menu, window, cx);
-            }
+        ContextMenu::build(window, cx, |mut menu, _window, cx| {
             menu = self.add_provider_switching_section(menu, provider, cx);
 
             if cx.is_staff() {
@@ -1528,73 +1352,6 @@ fn toggle_edit_prediction_mode(fs: Arc<dyn Fs>, mode: EditPredictionsMode, cx: &
             }
         });
     }
-}
-
-fn render_zeta_tab_animation(cx: &App) -> impl IntoElement {
-    let tab = |n: u64, inverted: bool| {
-        let text_color = cx.theme().colors().text;
-
-        h_flex().child(
-            h_flex()
-                .text_size(TextSize::XSmall.rems(cx))
-                .text_color(text_color)
-                .child("tab")
-                .with_animation(
-                    ElementId::Integer(n),
-                    Animation::new(Duration::from_secs(3)).repeat(),
-                    move |tab, delta| {
-                        let n_f32 = n as f32;
-
-                        let offset = if inverted {
-                            0.2 * (4.0 - n_f32)
-                        } else {
-                            0.2 * n_f32
-                        };
-
-                        let phase = (delta - offset + 1.0) % 1.0;
-                        let pulse = if phase < 0.6 {
-                            let t = phase / 0.6;
-                            1.0 - (0.5 - t).abs() * 2.0
-                        } else {
-                            0.0
-                        };
-
-                        let eased = ease_in_out(pulse);
-                        let opacity = 0.1 + 0.5 * eased;
-
-                        tab.text_color(text_color.opacity(opacity))
-                    },
-                ),
-        )
-    };
-
-    let tab_sequence = |inverted: bool| {
-        h_flex()
-            .gap_1()
-            .child(tab(0, inverted))
-            .child(tab(1, inverted))
-            .child(tab(2, inverted))
-            .child(tab(3, inverted))
-            .child(tab(4, inverted))
-    };
-
-    h_flex()
-        .my_1p5()
-        .p_4()
-        .justify_center()
-        .gap_2()
-        .rounded_xs()
-        .border_1()
-        .border_dashed()
-        .border_color(cx.theme().colors().border)
-        .bg(gpui::pattern_slash(
-            cx.theme().colors().border.opacity(0.5),
-            1.,
-            8.,
-        ))
-        .child(tab_sequence(true))
-        .child(Icon::new(IconName::TauPredict))
-        .child(tab_sequence(false))
 }
 
 fn emit_edit_prediction_menu_opened(

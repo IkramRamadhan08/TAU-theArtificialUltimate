@@ -273,15 +273,6 @@ fn render_api_key_provider(
             ConfiguredApiCard::new(configured_card_label)
                 .button_label("Reset Key")
                 .button_tab_index(0)
-                .disabled(is_from_env_var)
-                .when_some(env_var_name, |this, env_var_name| {
-                    this.when(is_from_env_var, |this| {
-                        this.tooltip_label(format!(
-                            "To reset your API key, unset the {} environment variable.",
-                            env_var_name
-                        ))
-                    })
-                })
                 .on_click(move |_, _, cx| {
                     write_key(None, cx);
                 }),
