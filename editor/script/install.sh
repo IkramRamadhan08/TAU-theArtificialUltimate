@@ -19,21 +19,24 @@ case "$LANG_CODE" in
     MSG_RUN_AGAIN="Jalankan script ini lagi setelah Rust terpasang."
     MSG_BUILD_WAIT="Membangun TAU (ini akan memakan waktu)..."
     MSG_DEPS_INSTALL="Memasang dependensi sistem..."
-    MSG_DESKTOP_ASK="Ingin menampilkan TAU di desktop?"
+    MSG_DESKTOP_ASK="Tampilkan TAU di menu aplikasi dan desktop?"
     MSG_DESKTOP_YES="y"
     MSG_DESKTOP_NO="n"
     MSG_DESKTOP_INSTALL="Memasang ikon dan pintasan desktop..."
     MSG_DESKTOP_DONE="Ikon dan pintasan desktop terpasang"
     MSG_ICON_INSTALL="Memasang ikon..."
     MSG_PATH_ADD="Menambahkan ke PATH di"
-    MSG_SUCCESS="=== TAU v0.65 terpasang! ==="
-    MSG_LAUNCH_DESKTOP="Klik dua kali ikon TAU di desktop untuk menjalankan."
+    MSG_SUCCESS="TAU berhasil dipasang!"
+    MSG_LAUNCH_DESKTOP="Klik ikon TAU di menu aplikasi atau desktop."
     MSG_LAUNCH_TERMINAL="Ketik 'tau' di terminal untuk menjalankan."
     MSG_LAUNCH_WINDOWS="Jalankan 'tau' dari Command Prompt atau PowerShell."
     MSG_DESKTOP_NOTE="Terminal akan tertutup otomatis dan TAU akan muncul."
     MSG_CHOICE="Pilihan"
     MSG_INVALID="Pilihan tidak valid. Gunakan"
     MSG_ICON_FAIL="Peringatan: gagal mengunduh ikon"
+    MSG_VERIFY="Memverifikasi pemasangan..."
+    MSG_VERIFY_OK="TAU siap digunakan!"
+    MSG_VERIFY_FAIL="Peringatan: TAU tidak dapat dijalankan. Coba jalankan manual:"
     ;;
   *)
     MSG_TITLE="=== TAU Editor Installer ==="
@@ -46,21 +49,24 @@ case "$LANG_CODE" in
     MSG_RUN_AGAIN="Run this script again after Rust is installed."
     MSG_BUILD_WAIT="Building TAU (this will take a while)..."
     MSG_DEPS_INSTALL="Installing system dependencies..."
-    MSG_DESKTOP_ASK="Show TAU on your desktop?"
+    MSG_DESKTOP_ASK="Add TAU to application menu and desktop?"
     MSG_DESKTOP_YES="y"
     MSG_DESKTOP_NO="n"
     MSG_DESKTOP_INSTALL="Installing desktop icon and shortcut..."
     MSG_DESKTOP_DONE="Desktop icon and shortcut installed"
     MSG_ICON_INSTALL="Installing icon..."
     MSG_PATH_ADD="Added to PATH in"
-    MSG_SUCCESS="=== TAU v0.65 installed! ==="
-    MSG_LAUNCH_DESKTOP="Double-click the TAU icon on your desktop to launch."
+    MSG_SUCCESS="TAU installed successfully!"
+    MSG_LAUNCH_DESKTOP="Click the TAU icon in your app menu or desktop."
     MSG_LAUNCH_TERMINAL="Type 'tau' in a terminal to launch."
     MSG_LAUNCH_WINDOWS="Run 'tau' from Command Prompt or PowerShell."
     MSG_DESKTOP_NOTE="The terminal will close automatically and TAU will appear."
     MSG_CHOICE="Choice"
     MSG_INVALID="Invalid choice. Use"
     MSG_ICON_FAIL="Warning: could not download icon"
+    MSG_VERIFY="Verifying installation..."
+    MSG_VERIFY_OK="TAU is ready to use!"
+    MSG_VERIFY_FAIL="Warning: TAU may not work correctly. Try running manually:"
     ;;
 esac
 
@@ -122,9 +128,16 @@ fi
 
 # ---------- Download / Build ----------
 TAU_APP_DIR="${INSTALL_DIR}/../tau.app"
+RELEASE_VERSION=""
 
 if curl -4 -fsSL --connect-timeout 15 --max-time 30 -I "$DOWNLOAD_URL" 2>/dev/null; then
   echo "$MSG_DOWNLOAD $OS ($ARCH)..."
+
+  # Get version from redirect URL
+  REDIRECT_URL=$(curl -4 -fsSL --connect-timeout 15 --max-time 15 -o /dev/null -w '%{redirect_url}' "$DOWNLOAD_URL" 2>/dev/null || echo "")
+  if [[ -n "$REDIRECT_URL" ]]; then
+    RELEASE_VERSION=$(echo "$REDIRECT_URL" | grep -oP 'tag/v\K[0-9]+\.[0-9]+' | head -1)
+  fi
 
   if [[ "$OS" == "linux" ]]; then
     mkdir -p "$TAU_APP_DIR"
@@ -187,37 +200,46 @@ else
   else
     cp "target/release/tau" "$INSTALL_DIR/tau"
   fi
+  RELEASE_VERSION="source"
   rm -rf "$TMP_DIR"
 fi
 
-# ---------- Ask desktop shortcut ----------
-DESKTOP_CHOICE=""
-if [ -t 0 ]; then
-  case "$LANG_CODE" in
-    id)
-      echo -n "$MSG_DESKTOP_ASK (y/n): "
-      read -r DESKTOP_CHOICE
-      ;;
-    *)
-      echo -n "$MSG_DESKTOP_ASK (y/n): "
-      read -r DESKTOP_CHOICE
-      ;;
-  esac
+# ---------- Verify binary ----------
+echo "  $MSG_VERIFY"
+if [[ -f "$INSTALL_DIR/tau" ]]; then
+  echo "  $MSG_VERIFY_OK"
+else
+  echo "  $MSG_VERIFY_FAIL"
+  echo "  $INSTALL_DIR/tau"
 fi
-# Non-interactive (piped) or empty response defaults to no
 
-if [[ "$DESKTOP_CHOICE" == "$MSG_DESKTOP_YES" || "$DESKTOP_CHOICE" == "y" || "$DESKTOP_CHOICE" == "Y" ]]; then
-  # ---------- Install icon to applications ----------
-  echo "$MSG_DESKTOP_INSTALL"
+# ---------- Desktop shortcut (default yes if interactive + display) ----------
+HAS_DISPLAY=false
+if [[ -n "$DISPLAY" || -n "$WAYLAND_DISPLAY" ]]; then
+  HAS_DISPLAY=true
+fi
+
+DESKTOP_CHOICE=""
+if [ -t 0 ] && $HAS_DISPLAY; then
+  echo ""
+  echo -n "$MSG_DESKTOP_ASK (Y/n): "
+  read -r DESKTOP_CHOICE
+  DESKTOP_CHOICE="${DESKTOP_CHOICE:-y}"
+elif $HAS_DISPLAY; then
+  # Non-interactive but display available: default yes
+  DESKTOP_CHOICE="y"
+fi
+
+if [[ "$DESKTOP_CHOICE" == "y" || "$DESKTOP_CHOICE" == "Y" ]]; then
+  echo "  $MSG_DESKTOP_INSTALL"
 
   ICON_URL="$RAW_BASE/editor/crates/tau/resources/tau-icon.svg"
   if curl -4 -fsSL --max-time 15 "$ICON_URL" -o "$ICON_DIR/tau.svg" 2>/dev/null; then
-    echo "  $MSG_ICON_INSTALL"
+    echo "    $MSG_ICON_INSTALL"
   else
-    echo "  $MSG_ICON_FAIL"
+    echo "    $MSG_ICON_FAIL"
   fi
 
-  # Applications menu entry
   cat > "$DESKTOP_FILE" << DESKTOP
 [Desktop Entry]
 Version=1.0
@@ -239,7 +261,6 @@ Exec=$INSTALL_DIR/tau --new %F
 Name=Open a new workspace
 DESKTOP
 
-  # Desktop shortcut
   DESKTOP_SCREEN="$HOME/Desktop/tau.desktop"
   if [[ -d "$HOME/Desktop" ]]; then
     cp "$DESKTOP_FILE" "$DESKTOP_SCREEN"
@@ -260,13 +281,13 @@ DESKTOP
 fi
 
 # ---------- macOS icon ----------
-if [[ "$OS" == "darwin" && "$DESKTOP_CHOICE" == "y" ]]; then
+if [[ "$OS" == "darwin" ]] && [[ "$DESKTOP_CHOICE" == "y" || "$DESKTOP_CHOICE" == "Y" ]]; then
   ICON_URL="$RAW_BASE/editor/crates/tau/resources/tau-icon.svg"
   mkdir -p "$HOME/.local/share/icons"
   curl -4 -fsSL --max-time 15 "$ICON_URL" -o "$HOME/.local/share/icons/tau.svg" 2>/dev/null || true
 fi
 
-# ---------- Add to PATH ----------
+# ---------- Add to PATH (shell rc) ----------
 SHELL_CONFIG=""
 case "$SHELL" in
   */zsh) SHELL_CONFIG="$HOME/.zshrc" ;;
@@ -278,17 +299,27 @@ if [[ -n "$SHELL_CONFIG" ]] && ! grep -q "$INSTALL_DIR" "$SHELL_CONFIG" 2>/dev/n
   echo "" >> "$SHELL_CONFIG"
   echo "# TAU Editor" >> "$SHELL_CONFIG"
   echo "export PATH=\"\$PATH:$INSTALL_DIR\"" >> "$SHELL_CONFIG"
-  echo "$MSG_PATH_ADD $SHELL_CONFIG"
+  echo "  $MSG_PATH_ADD $SHELL_CONFIG"
 fi
 
+# ---------- Export PATH for CURRENT session ----------
+export PATH="$PATH:$INSTALL_DIR"
+
+# ---------- Done ----------
 echo ""
-echo "$MSG_SUCCESS"
+echo "  $MSG_SUCCESS"
+if [[ -n "$RELEASE_VERSION" ]]; then
+  echo "  Version: v$RELEASE_VERSION"
+fi
 echo ""
 
-if [[ "$DESKTOP_CHOICE" == "$MSG_DESKTOP_YES" || "$DESKTOP_CHOICE" == "y" || "$DESKTOP_CHOICE" == "Y" ]]; then
-  echo "$MSG_LAUNCH_DESKTOP"
+if [[ "$DESKTOP_CHOICE" == "y" || "$DESKTOP_CHOICE" == "Y" ]]; then
+  echo "  $MSG_LAUNCH_DESKTOP"
 else
-  echo "$MSG_LAUNCH_TERMINAL"
-  echo "$MSG_DESKTOP_NOTE"
+  echo "  $MSG_LAUNCH_TERMINAL"
+  echo "  $MSG_DESKTOP_NOTE"
 fi
+echo ""
+echo "  Tip: You can immediately use 'tau' in this terminal."
+echo "       New terminals will also have 'tau' available."
 echo ""

@@ -85,6 +85,10 @@ if command -v gtk-update-icon-cache &>/dev/null; then
   gtk-update-icon-cache -f -t "$HOME/.local/share/icons" 2>/dev/null || true
 fi
 
+# Remove from current session PATH
+export PATH=$(echo "$PATH" | tr ':' '\n' | grep -v "$INSTALL_DIR" | tr '\n' ':' | sed 's/:$//')
+
 echo ""
 echo "=== TAU has been uninstalled. ==="
 echo "Config files kept at: $CONFIG_DIR (remove manually if needed)"
+echo "Close and reopen your terminal for PATH changes to take full effect."
