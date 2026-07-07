@@ -5813,7 +5813,7 @@ impl AgentPanel {
                                     !showing_terminal && is_agent_selected(Agent::NativeAgent),
                                     |this| this.action(Box::new(NewThread)),
                                 )
-                                .icon(IconName::TauAgent)
+                                .icon(IconName::Sparkle)
                                 .icon_color(Color::Muted)
                                 .handler({
                                     let workspace = workspace.clone();

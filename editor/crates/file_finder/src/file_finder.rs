@@ -7,7 +7,7 @@ pub use open_path_prompt::OpenPathDelegate;
 use collections::HashMap;
 use editor::Editor;
 use file_icons::FileIcons;
-use fuzzy::{StringMatch, StringMatchCandidate};
+
 use fuzzy_nucleo::{PathMatch, PathMatchCandidate};
 use gpui::{
     Action, AnyElement, App, Context, DismissEvent, Empty, Entity, EventEmitter, FocusHandle,
@@ -497,6 +497,7 @@ impl Match {
         }
     }
 
+    #[allow(dead_code)]
     fn full_path(&self) -> Option<&Arc<Path>> {
         match self {
             Match::History { .. } => None,

@@ -1,13 +1,11 @@
 use anyhow::{Context as _, Result};
-use client::Client;
 use db::kvp::KeyValueStore;
 use futures_lite::StreamExt;
 use gpui::{
     App, AppContext as _, AsyncApp, BackgroundExecutor, Context, Entity, Global, Task, TaskExt,
     Window, actions,
 };
-use http_client::{HttpClient, HttpClientWithUrl};
-use paths::remote_servers_dir;
+use http_client::HttpClientWithUrl;
 use release_channel::{AppCommitSha, ReleaseChannel};
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -22,10 +20,9 @@ use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
     sync::Arc,
-    time::{Duration, SystemTime},
+    time::Duration,
 };
 use util::command::new_command;
-use workspace::Workspace;
 
 const SHOULD_SHOW_UPDATE_NOTIFICATION_KEY: &str = "auto-updater-should-show-updated-notification";
 const LATEST_UPDATED_VERSION_KEY: &str = "auto-updater-latest-version";
@@ -61,7 +58,6 @@ impl std::fmt::Display for MissingDependencyError {
 impl std::error::Error for MissingDependencyError {}
 const POLL_INTERVAL: Duration = Duration::from_secs(60 * 60);
 const NIGHTLY_POLL_INTERVAL: Duration = Duration::from_secs(15 * 60);
-const REMOTE_SERVER_CACHE_LIMIT: usize = 5;
 
 #[cfg(target_os = "linux")]
 fn linux_rsync_install_hint() -> &'static str {
@@ -174,7 +170,7 @@ impl AutoUpdateStatus {
 pub struct AutoUpdater {
     status: AutoUpdateStatus,
     current_version: Version,
-    client: Arc<Client>,
+    http_client: Arc<HttpClientWithUrl>,
     pending_poll: Option<Task<Option<()>>>,
     quit_subscription: Option<gpui::Subscription>,
     update_check_type: UpdateCheckType,
@@ -205,19 +201,10 @@ struct GlobalAutoUpdate(Option<Entity<AutoUpdater>>);
 
 impl Global for GlobalAutoUpdate {}
 
-pub fn init(client: Arc<Client>, cx: &mut App) {
-    cx.observe_new(|workspace: &mut Workspace, _window, _cx| {
-        workspace.register_action(|_, action, window, cx| check(action, window, cx));
-
-        workspace.register_action(|_, action, _, cx| {
-            view_release_notes(action, cx);
-        });
-    })
-    .detach();
-
+pub fn init(http_client: Arc<HttpClientWithUrl>, cx: &mut App) {
     let version = release_channel::AppVersion::global(cx);
     let auto_updater = cx.new(|cx| {
-        let updater = AutoUpdater::new(version, client, cx);
+        let updater = AutoUpdater::new(version, http_client, cx);
 
         let poll_for_updates = ReleaseChannel::try_global(cx)
             .map(|channel| channel.poll_for_updates())
@@ -354,7 +341,7 @@ impl AutoUpdater {
         cx.default_global::<GlobalAutoUpdate>().0.clone()
     }
 
-    fn new(current_version: Version, client: Arc<Client>, cx: &mut Context<Self>) -> Self {
+    fn new(current_version: Version, http_client: Arc<HttpClientWithUrl>, cx: &mut Context<Self>) -> Self {
         // On windows, executable files cannot be overwritten while they are
         // running, so we must wait to overwrite the application until quitting
         // or restarting. When quitting the app, we spawn the auto update helper
@@ -375,7 +362,7 @@ impl AutoUpdater {
         Self {
             status: AutoUpdateStatus::Idle,
             current_version,
-            client,
+            http_client,
             pending_poll: None,
             quit_subscription,
             update_check_type: UpdateCheckType::Automatic,
@@ -473,85 +460,25 @@ impl AutoUpdater {
         true
     }
 
-    // If you are packaging Tau and need to override the place it downloads SSH remotes from,
-    // you can override this function. You should also update get_remote_server_release_url to return
-    // Ok(None).
     pub async fn download_remote_server_release(
-        release_channel: ReleaseChannel,
-        version: Option<Version>,
-        os: &str,
-        arch: &str,
-        set_status: impl Fn(&str, &mut AsyncApp) + Send + 'static,
-        cx: &mut AsyncApp,
+        _release_channel: ReleaseChannel,
+        _version: Option<Version>,
+        _os: &str,
+        _arch: &str,
+        _set_status: impl Fn(&str, &mut AsyncApp) + Send + 'static,
+        _cx: &mut AsyncApp,
     ) -> Result<PathBuf> {
-        let this = cx.update(|cx| {
-            cx.default_global::<GlobalAutoUpdate>()
-                .0
-                .clone()
-                .context("auto-update not initialized")
-        })?;
-
-        set_status("Fetching remote server release", cx);
-        let release = Self::get_release_asset(
-            &this,
-            release_channel,
-            version,
-            "tau-remote-server",
-            os,
-            arch,
-            cx,
-        )
-        .await?;
-
-        let servers_dir = paths::remote_servers_dir();
-        let channel_dir = servers_dir.join(release_channel.dev_name());
-        let platform_dir = channel_dir.join(format!("{}-{}", os, arch));
-        let version_path = platform_dir.join(format!("{}.gz", release.version));
-        smol::fs::create_dir_all(&platform_dir).await.ok();
-
-        let client = this.read_with(cx, |this, _| this.client.http_client());
-
-        if smol::fs::metadata(&version_path).await.is_err() {
-            log::info!(
-                "downloading tau-remote-server {os} {arch} version {}",
-                release.version
-            );
-            set_status("Downloading remote server", cx);
-            download_remote_server_binary(&version_path, release, client).await?;
-        }
-
-        if let Err(error) =
-            cleanup_remote_server_cache(&platform_dir, &version_path, REMOTE_SERVER_CACHE_LIMIT)
-                .await
-        {
-            log::warn!(
-                "Failed to clean up remote server cache in {:?}: {error:#}",
-                platform_dir
-            );
-        }
-
-        Ok(version_path)
+        anyhow::bail!("remote server downloads are no longer supported")
     }
 
     pub async fn get_remote_server_release_url(
-        channel: ReleaseChannel,
-        version: Option<Version>,
-        os: &str,
-        arch: &str,
-        cx: &mut AsyncApp,
+        _channel: ReleaseChannel,
+        _version: Option<Version>,
+        _os: &str,
+        _arch: &str,
+        _cx: &mut AsyncApp,
     ) -> Result<Option<String>> {
-        let this = cx.update(|cx| {
-            cx.default_global::<GlobalAutoUpdate>()
-                .0
-                .clone()
-                .context("auto-update not initialized")
-        })?;
-
-        let release =
-            Self::get_release_asset(&this, channel, version, "tau-remote-server", os, arch, cx)
-                .await?;
-
-        Ok(Some(release.url))
+        anyhow::bail!("remote server downloads are no longer supported")
     }
 
     async fn get_release_asset(
@@ -563,7 +490,7 @@ impl AutoUpdater {
         arch: &str,
         cx: &mut AsyncApp,
     ) -> Result<ReleaseAsset> {
-        let http_client = this.read_with(cx, |this, _| this.client.http_client());
+        let http_client = this.read_with(cx, |this, _| this.http_client.clone());
 
         const REPO: &str = "IkramRamadhan08/TAU-theArtificialUltimate";
         let version_str = if let Some(mut v) = version {
@@ -653,10 +580,10 @@ impl AutoUpdater {
     }
 
     async fn update(this: Entity<Self>, cx: &mut AsyncApp) -> Result<()> {
-        let (client, installed_version, previous_status, release_channel) =
+        let (http_client, installed_version, previous_status, release_channel) =
             this.read_with(cx, |this, cx| {
                 (
-                    this.client.http_client(),
+                    this.http_client.clone(),
                     this.current_version.clone(),
                     this.status.clone(),
                     ReleaseChannel::try_global(cx).unwrap_or(ReleaseChannel::Stable),
@@ -722,7 +649,7 @@ impl AutoUpdater {
             .await
             .context("Failed to create installer dir")?;
         let target_path = Self::target_path(&installer_dir).await?;
-        download_release(&target_path, fetched_release_data, client)
+        download_release(&target_path, fetched_release_data, http_client)
             .await
             .with_context(|| format!("Failed to download update to {}", target_path.display()))?;
 
@@ -925,83 +852,6 @@ impl AutoUpdater {
             Ok(kvp.read_kvp(SHOULD_SHOW_UPDATE_NOTIFICATION_KEY)?.is_some())
         })
     }
-}
-
-async fn download_remote_server_binary(
-    target_path: &PathBuf,
-    release: ReleaseAsset,
-    client: Arc<HttpClientWithUrl>,
-) -> Result<()> {
-    let temp = tempfile::Builder::new().tempfile_in(remote_servers_dir())?;
-    let mut temp_file = File::create(&temp).await?;
-
-    let mut response = client.get(&release.url, Default::default(), true).await?;
-    anyhow::ensure!(
-        response.status().is_success(),
-        "failed to download remote server release: {:?}",
-        response.status()
-    );
-    smol::io::copy(response.body_mut(), &mut temp_file).await?;
-    smol::fs::rename(&temp, &target_path).await?;
-
-    Ok(())
-}
-
-async fn cleanup_remote_server_cache(
-    platform_dir: &Path,
-    keep_path: &Path,
-    limit: usize,
-) -> Result<()> {
-    if limit == 0 {
-        return Ok(());
-    }
-
-    let mut entries = smol::fs::read_dir(platform_dir).await?;
-    let now = SystemTime::now();
-    let mut candidates = Vec::new();
-
-    while let Some(entry) = entries.next().await {
-        let entry = entry?;
-        let path = entry.path();
-        if path.extension() != Some(OsStr::new("gz")) {
-            continue;
-        }
-
-        let mtime = if path == keep_path {
-            now
-        } else {
-            smol::fs::metadata(&path)
-                .await
-                .and_then(|metadata| metadata.modified())
-                .unwrap_or(SystemTime::UNIX_EPOCH)
-        };
-
-        candidates.push((path, mtime));
-    }
-
-    if candidates.len() <= limit {
-        return Ok(());
-    }
-
-    candidates.sort_by(|(path_a, time_a), (path_b, time_b)| {
-        time_b.cmp(time_a).then_with(|| path_a.cmp(path_b))
-    });
-
-    for (index, (path, _)) in candidates.into_iter().enumerate() {
-        if index < limit || path == keep_path {
-            continue;
-        }
-
-        if let Err(error) = smol::fs::remove_file(&path).await {
-            log::warn!(
-                "Failed to remove old remote server archive {:?}: {}",
-                path,
-                error
-            );
-        }
-    }
-
-    Ok(())
 }
 
 async fn download_release(
@@ -1260,8 +1110,6 @@ pub async fn finalize_auto_update_on_quit() {
 
 #[cfg(test)]
 mod tests {
-    use client::Client;
-    use clock::FakeSystemClock;
     use futures::channel::oneshot;
     use gpui::TestAppContext;
     use http_client::{FakeHttpClient, Response};
@@ -1314,10 +1162,9 @@ mod tests {
             let current_version = semver::Version::new(0, 100, 0);
             release_channel::init_test(current_version, ReleaseChannel::Stable, cx);
 
-            let clock = Arc::new(FakeSystemClock::new());
             let release_available = Arc::clone(&release_available);
             let dmg_rx = Arc::new(parking_lot::Mutex::new(Some(dmg_rx)));
-            let fake_client_http = FakeHttpClient::create(move |req| {
+            let fake_client_http: Arc<HttpClientWithUrl> = FakeHttpClient::create(move |req| {
                 let release_available = release_available.load(atomic::Ordering::Relaxed);
                 let dmg_rx = dmg_rx.clone();
                 async move {
@@ -1340,8 +1187,7 @@ mod tests {
                 Ok(Response::builder().status(404).body("".into()).unwrap())
                 }
             });
-            let client = Client::new(clock, fake_client_http, cx);
-            crate::init(client, cx);
+            crate::init(fake_client_http, cx);
         });
 
         let auto_updater = cx.update(|cx| AutoUpdater::get(cx).expect("auto updater should exist"));

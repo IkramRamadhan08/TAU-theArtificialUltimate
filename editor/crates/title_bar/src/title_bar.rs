@@ -27,7 +27,7 @@ use command_palette_hooks::CommandPaletteFilter;
 use gpui::{
     Action, Anchor, Animation, AnimationExt, AnyElement, App, Context, Element, Entity, Focusable,
     InteractiveElement, IntoElement, MouseButton, ParentElement, Render,
-    StatefulInteractiveElement, Styled, Subscription, TaskExt, WeakEntity, Window, actions, div,
+    StatefulInteractiveElement, Styled, Subscription, WeakEntity, Window, actions, div,
     pulsating_between,
 };
 use onboarding_banner::OnboardingBanner;
@@ -203,7 +203,7 @@ pub struct TitleBar {
     _subscriptions: Vec<Subscription>,
     banner: Option<Entity<OnboardingBanner>>,
     update_version: Entity<UpdateVersion>,
-    screen_share_popover_handle: PopoverMenuHandle<ContextMenu>,
+    _screen_share_popover_handle: PopoverMenuHandle<ContextMenu>,
 
 }
 
@@ -495,7 +495,7 @@ impl TitleBar {
 
         let banner = None;
 
-        let mut this = Self {
+        let this = Self {
             platform_titlebar,
             application_menu,
             workspace: workspace.weak_handle(),
@@ -506,7 +506,7 @@ impl TitleBar {
             _subscriptions: subscriptions,
             banner,
             update_version,
-            screen_share_popover_handle: PopoverMenuHandle::default(),
+            _screen_share_popover_handle: PopoverMenuHandle::default(),
         };
 
 

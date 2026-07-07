@@ -1287,7 +1287,6 @@ name = "auto_update"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "client",
  "clock",
  "ctor",
  "db",
@@ -1297,7 +1296,6 @@ dependencies = [
  "http_client",
  "log",
  "parking_lot",
- "paths",
  "release_channel",
  "semver",
  "serde",
@@ -1307,7 +1305,6 @@ dependencies = [
  "tempfile",
  "util",
  "which 6.0.3",
- "workspace",
  "zlog",
 ]
 
