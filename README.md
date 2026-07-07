@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="TAU.png" alt="TAU Logo" width="120">
+<img src="editor/assets/images/TAU.png" alt="TAU Logo" width="120">
 
 # TAU — The Artificial Ultimate
 
@@ -94,13 +94,13 @@
 ### Linux / macOS
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/IkramRamadhan08/TAU-theArtificialUltimate/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/IkramRamadhan08/TAU-theArtificialUltimate/main/editor/script/install.sh | bash
 ```
 
 ### Windows (PowerShell)
 
 ```powershell
-powershell -c "& { $(Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/IkramRamadhan08/TAU-theArtificialUltimate/main/install.ps1' -UseBasicParsing).Content | Invoke-Expression }"
+powershell -c "& { $(Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/IkramRamadhan08/TAU-theArtificialUltimate/main/editor/script/install.ps1' -UseBasicParsing).Content | Invoke-Expression }"
 ```
 
 The installer:
@@ -118,7 +118,7 @@ After installation, type **`tau`** in your terminal.
 **Linux / macOS:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/IkramRamadhan08/TAU-theArtificialUltimate/main/uninstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/IkramRamadhan08/TAU-theArtificialUltimate/main/editor/script/uninstall.sh | bash
 ```
 
 **Windows (PowerShell):**
@@ -348,10 +348,10 @@ TAU-theArtificialUltimate/
 │   │   └── ...                      # 220+ additional crates
 │   ├── docs/                        # Documentation
 │   └── assets/                      # Themes, icons, images, sounds
-├── install.sh                       # Linux/macOS installer
-├── install.ps1                      # Windows installer
-├── uninstall.sh                     # Linux/macOS uninstaller
-├── TAU.png                          # Project logo
+├── editor/script/install.sh         # Linux/macOS installer
+├── editor/script/install.ps1        # Windows installer
+├── editor/script/uninstall.sh       # Linux/macOS uninstaller
+├── editor/assets/images/TAU.png     # Project logo
 └── README.md
 ```
 

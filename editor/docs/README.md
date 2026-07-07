@@ -14,7 +14,6 @@
 
 | Doc | Description |
 |-----|-------------|
-| [Architecture](dev/architecture.md) | Crate structure and codebase overview |
 | [GPUI Framework](../crates/gpui/docs/contexts.md) | GPUI context and concurrency guide |
 
 ## Reference

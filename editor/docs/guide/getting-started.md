@@ -23,7 +23,7 @@ cp target/release/tau ~/.local/bin/
 
 Or use the install script:
 ```bash
-./install.sh
+script/install.sh
 ```
 
 ## First Launch

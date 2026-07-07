@@ -1,160 +1,90 @@
-#!/usr/bin/env sh
-set -eu
+#!/usr/bin/env bash
+set -e
 
-# Uninstalls TAU that was installed using the install.sh script
+echo "=== TAU Editor Uninstaller ==="
 
-check_remaining_installations() {
-    platform="$(uname -s)"
-    if [ "$platform" = "Darwin" ]; then
-        # Check for any TAU variants in /Applications
-        remaining=$(ls -d /Applications/TAU*.app 2>/dev/null | wc -l)
-        [ "$remaining" -eq 0 ]
-    else
-        # Check for any TAU variants in ~/.local
-        remaining=$(ls -d "$HOME/.local/tau"*.app 2>/dev/null | wc -l)
-        [ "$remaining" -eq 0 ]
-    fi
-}
+INSTALL_DIR="${HOME}/.local/bin"
+TAU_APP_DIR="${HOME}/.local/tau.app"
+CONFIG_DIR="${HOME}/.config/tau"
+AGENTS_DIR="${HOME}/.agents"
 
-prompt_remove_preferences() {
-    printf "Do you want to keep your TAU preferences? [Y/n] "
-    read -r response
-    case "$response" in
-        [nN]|[nN][oO])
-            rm -rf "$HOME/.config/tau"
-            echo "Preferences removed."
-            ;;
-        *)
-            echo "Preferences kept."
-            ;;
-    esac
-}
+# Remove binary
+if [ -f "$INSTALL_DIR/tau" ]; then
+  rm "$INSTALL_DIR/tau"
+  echo "  Removed $INSTALL_DIR/tau"
+fi
+if [ -f "$INSTALL_DIR/tau.exe" ]; then
+  rm "$INSTALL_DIR/tau.exe"
+  echo "  Removed $INSTALL_DIR/tau.exe"
+fi
 
-main() {
-    platform="$(uname -s)"
-    channel="${ZED_CHANNEL:-stable}"
+# Remove app bundle (Linux)
+if [ -d "$TAU_APP_DIR" ]; then
+  rm -rf "$TAU_APP_DIR"
+  echo "  Removed $TAU_APP_DIR"
+fi
 
-    if [ "$platform" = "Darwin" ]; then
-        platform="macos"
-    elif [ "$platform" = "Linux" ]; then
-        platform="linux"
-    else
-        echo "Unsupported platform $platform"
-        exit 1
-    fi
+# Remove agent skills
+if [ -d "$AGENTS_DIR" ]; then
+  rm -rf "$AGENTS_DIR"
+  echo "  Removed $AGENTS_DIR"
+fi
 
-    "$platform"
+# Remove desktop/app entries
+DESKTOP_FILE="${HOME}/.local/share/applications/tau.desktop"
+if [ -f "$DESKTOP_FILE" ]; then
+  rm "$DESKTOP_FILE"
+  echo "  Removed $DESKTOP_FILE"
+fi
 
-    echo "TAU has been uninstalled"
-}
+# Remove icon
+ICON_FILE="${HOME}/.local/share/icons/hicolor/scalable/apps/tau.svg"
+if [ -f "$ICON_FILE" ]; then
+  rm "$ICON_FILE"
+  echo "  Removed $ICON_FILE"
+fi
 
-linux() {
-    suffix=""
-    if [ "$channel" != "stable" ]; then
-        suffix="-$channel"
-    fi
+# Remove desktop shortcuts
+if [ -f "$HOME/Desktop/tau.desktop" ]; then
+  rm "$HOME/Desktop/tau.desktop"
+  echo "  Removed $HOME/Desktop/tau.desktop"
+fi
 
-    appid=""
-    db_suffix="stable"
-    case "$channel" in
-      stable)
-        appid="ai.tau.TAU"
-        db_suffix="stable"
-        ;;
-      nightly)
-        appid="ai.tau.TAU-Nightly"
-        db_suffix="nightly"
-        ;;
-      preview)
-        appid="ai.tau.TAU-Preview"
-        db_suffix="preview"
-        ;;
-      dev)
-        appid="ai.tau.TAU-Dev"
-        db_suffix="dev"
-        ;;
-      *)
-        echo "Unknown release channel: ${channel}. Using stable app ID."
-        appid="ai.tau.TAU"
-        db_suffix="stable"
-        ;;
-    esac
+if [ -f "$HOME/Área de Trabalho/tau.desktop" ]; then
+  rm "$HOME/Área de Trabalho/tau.desktop"
+  echo "  Removed $HOME/Área de Trabalho/tau.desktop"
+fi
 
-    # Remove the app directory
-    rm -rf "$HOME/.local/tau$suffix.app"
+# Clean PATH entries from shell configs
+for CONFIG in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.config/fish/config.fish"; do
+  if [ -f "$CONFIG" ]; then
+    sed -i '/# TAU Editor/d' "$CONFIG" 2>/dev/null || true
+    sed -i '\|export PATH="\$PATH:'"$INSTALL_DIR"'"|d' "$CONFIG" 2>/dev/null || true
+  fi
+done
 
-    # Remove the binary symlink
-    rm -f "$HOME/.local/bin/tau"
-    rm -f "$HOME/.local/bin/TAU"
+# Remove config (ask first)
+if [ -d "$CONFIG_DIR" ]; then
+  echo ""
+  echo "Remove TAU configuration files in $CONFIG_DIR?"
+  echo -n "This includes settings, keymaps, themes. (y/N): "
+  read -r CONFIRM
+  if [[ "$CONFIRM" == "y" || "$CONFIRM" == "Y" ]]; then
+    rm -rf "$CONFIG_DIR"
+    echo "  Removed $CONFIG_DIR"
+  else
+    echo "  Kept $CONFIG_DIR"
+  fi
+fi
 
-    # Remove the .desktop file
-    rm -f "$HOME/.local/share/applications/${appid}.desktop"
+# Refresh desktop database
+if command -v update-desktop-database &>/dev/null; then
+  update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
+fi
+if command -v gtk-update-icon-cache &>/dev/null; then
+  gtk-update-icon-cache -f -t "$HOME/.local/share/icons" 2>/dev/null || true
+fi
 
-    # Remove the database directory for this channel
-    rm -rf "$HOME/.local/share/tau/db/0-$db_suffix"
-
-    # Remove socket file
-    rm -f "$HOME/.local/share/tau/tau-$db_suffix.sock"
-
-    # Remove the entire TAU directory if no installations remain
-    if check_remaining_installations; then
-        rm -rf "$HOME/.local/share/tau"
-        prompt_remove_preferences
-    fi
-
-    rm -rf "$HOME/.tau_server"
-}
-
-macos() {
-    app="TAU.app"
-    db_suffix="stable"
-    app_id="ai.tau.TAU"
-    case "$channel" in
-      nightly)
-        app="TAU Nightly.app"
-        db_suffix="nightly"
-        app_id="ai.tau.TAU-Nightly"
-        ;;
-      preview)
-        app="TAU Preview.app"
-        db_suffix="preview"
-        app_id="ai.tau.TAU-Preview"
-        ;;
-      dev)
-        app="TAU Dev.app"
-        db_suffix="dev"
-        app_id="ai.tau.TAU-Dev"
-        ;;
-    esac
-
-    # Remove the app bundle
-    if [ -d "/Applications/$app" ]; then
-        rm -rf "/Applications/$app"
-    fi
-
-    # Remove the binary symlink
-    rm -f "$HOME/.local/bin/tau"
-    rm -f "$HOME/.local/bin/TAU"
-
-    # Remove the database directory for this channel
-    rm -rf "$HOME/Library/Application Support/TAU/db/0-$db_suffix"
-
-    # Remove app-specific files and directories
-    rm -rf "$HOME/Library/Application Support/com.apple.sharedfilelist/com.apple.LSSharedFileList.ApplicationRecentDocuments/$app_id.sfl"*
-    rm -rf "$HOME/Library/Caches/$app_id"
-    rm -rf "$HOME/Library/HTTPStorages/$app_id"
-    rm -rf "$HOME/Library/Preferences/$app_id.plist"
-    rm -rf "$HOME/Library/Saved Application State/$app_id.savedState"
-
-    # Remove the entire TAU directory if no installations remain
-    if check_remaining_installations; then
-        rm -rf "$HOME/Library/Application Support/TAU"
-        rm -rf "$HOME/Library/Logs/TAU"
-
-        prompt_remove_preferences
-    fi
-
-    rm -rf "$HOME/.tau_server"
-}
-
-main "$@"
+echo ""
+echo "=== TAU has been uninstalled. ==="
+echo "Config files kept at: $CONFIG_DIR (remove manually if needed)"

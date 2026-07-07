@@ -87,10 +87,7 @@ collections.workspace = true
 command_palette.workspace = true
 component.workspace = true
 component_preview.workspace = true
-copilot.workspace = true
-copilot_chat.workspace = true
-copilot_ui.workspace = true
-crashes.workspace = true
+
 csv_preview.workspace = true
 dap_adapters.workspace = true
 db.workspace = true
@@ -133,8 +130,7 @@ edit_prediction.workspace = true
 edit_prediction_ui.workspace = true
 http_client.workspace = true
 image_viewer.workspace = true
-input_latency_ui.workspace = true
-inspector_ui.workspace = true
+
 install_cli.workspace = true
 journal.workspace = true
 json_schema_store.workspace = true
@@ -153,14 +149,14 @@ markdown.workspace = true
 markdown_preview.workspace = true
 menu.workspace = true
 migrator.workspace = true
-miniprofiler_ui.workspace = true
+
 mimalloc = { version = "0.1", optional = true }
 node_runtime.workspace = true
 notifications.workspace = true
 onboarding.workspace = true
 outline.workspace = true
 outline_panel.workspace = true
-p2p.workspace = true
+
 parking_lot.workspace = true
 paths.workspace = true
 picker.workspace = true

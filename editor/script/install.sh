@@ -1,150 +1,294 @@
-#!/usr/bin/env sh
-set -eu
+#!/usr/bin/env bash
+set -e
 
-# Installs a TAU tarball and unpacks it
-# into ~/.local/. If you'd prefer to do this manually, instructions are at
-# the TAU release notes.
+REPO="IkramRamadhan08/TAU-theArtificialUltimate"
+VERSION="latest"
+RAW_BASE="https://raw.githubusercontent.com/$REPO/main"
 
-main() {
-    platform="$(uname -s)"
-    arch="$(uname -m)"
-    channel="${ZED_CHANNEL:-stable}"
-    ZED_VERSION="${ZED_VERSION:-latest}"
-    # Use TMPDIR if available (for environments with non-standard temp directories)
-    if [ -n "${TMPDIR:-}" ] && [ -d "${TMPDIR}" ]; then
-        temp="$(mktemp -d "$TMPDIR/tau-XXXXXX")"
-    else
-        temp="$(mktemp -d "/tmp/tau-XXXXXX")"
-    fi
+# ---------- Language detection ----------
+LANG_CODE="${LANG:0:2}"
+case "$LANG_CODE" in
+  id)
+    MSG_TITLE="=== Pemasang TAU Editor ==="
+    MSG_ARCH="Arsitektur tidak didukung"
+    MSG_OS="Sistem operasi tidak didukung"
+    MSG_DOWNLOAD="Mengunduh TAU untuk"
+    MSG_BUILD="Tidak ada binary siap pakai. Membangun dari sumber..."
+    MSG_RUST_REQUIRED="Rust diperlukan untuk membangun TAU dari sumber."
+    MSG_RUST_INSTALL="Pasang dari: https://rustup.rs"
+    MSG_RUN_AGAIN="Jalankan script ini lagi setelah Rust terpasang."
+    MSG_BUILD_WAIT="Membangun TAU (ini akan memakan waktu)..."
+    MSG_DEPS_INSTALL="Memasang dependensi sistem..."
+    MSG_DESKTOP_ASK="Ingin menampilkan TAU di desktop?"
+    MSG_DESKTOP_YES="y"
+    MSG_DESKTOP_NO="n"
+    MSG_DESKTOP_INSTALL="Memasang ikon dan pintasan desktop..."
+    MSG_DESKTOP_DONE="Ikon dan pintasan desktop terpasang"
+    MSG_ICON_INSTALL="Memasang ikon..."
+    MSG_PATH_ADD="Menambahkan ke PATH di"
+    MSG_SUCCESS="=== TAU v0.65 terpasang! ==="
+    MSG_LAUNCH_DESKTOP="Klik dua kali ikon TAU di desktop untuk menjalankan."
+    MSG_LAUNCH_TERMINAL="Ketik 'tau' di terminal untuk menjalankan."
+    MSG_LAUNCH_WINDOWS="Jalankan 'tau' dari Command Prompt atau PowerShell."
+    MSG_DESKTOP_NOTE="Terminal akan tertutup otomatis dan TAU akan muncul."
+    MSG_CHOICE="Pilihan"
+    MSG_INVALID="Pilihan tidak valid. Gunakan"
+    MSG_ICON_FAIL="Peringatan: gagal mengunduh ikon"
+    ;;
+  *)
+    MSG_TITLE="=== TAU Editor Installer ==="
+    MSG_ARCH="Unsupported architecture"
+    MSG_OS="Unsupported OS"
+    MSG_DOWNLOAD="Downloading TAU for"
+    MSG_BUILD="No pre-built binary. Building from source..."
+    MSG_RUST_REQUIRED="Rust is required to build TAU from source."
+    MSG_RUST_INSTALL="Install from: https://rustup.rs"
+    MSG_RUN_AGAIN="Run this script again after Rust is installed."
+    MSG_BUILD_WAIT="Building TAU (this will take a while)..."
+    MSG_DEPS_INSTALL="Installing system dependencies..."
+    MSG_DESKTOP_ASK="Show TAU on your desktop?"
+    MSG_DESKTOP_YES="y"
+    MSG_DESKTOP_NO="n"
+    MSG_DESKTOP_INSTALL="Installing desktop icon and shortcut..."
+    MSG_DESKTOP_DONE="Desktop icon and shortcut installed"
+    MSG_ICON_INSTALL="Installing icon..."
+    MSG_PATH_ADD="Added to PATH in"
+    MSG_SUCCESS="=== TAU v0.65 installed! ==="
+    MSG_LAUNCH_DESKTOP="Double-click the TAU icon on your desktop to launch."
+    MSG_LAUNCH_TERMINAL="Type 'tau' in a terminal to launch."
+    MSG_LAUNCH_WINDOWS="Run 'tau' from Command Prompt or PowerShell."
+    MSG_DESKTOP_NOTE="The terminal will close automatically and TAU will appear."
+    MSG_CHOICE="Choice"
+    MSG_INVALID="Invalid choice. Use"
+    MSG_ICON_FAIL="Warning: could not download icon"
+    ;;
+esac
 
-    if [ "$platform" = "Darwin" ]; then
-        platform="macos"
-    elif [ "$platform" = "Linux" ]; then
-        platform="linux"
-    else
-        echo "Unsupported platform $platform"
-        exit 1
-    fi
+echo "$MSG_TITLE"
 
-    case "$platform-$arch" in
-        macos-arm64* | linux-arm64* | linux-armhf | linux-aarch64)
-            arch="aarch64"
-            ;;
-        macos-x86* | linux-x86* | linux-i686*)
-            arch="x86_64"
-            ;;
-        *)
-            echo "Unsupported platform or architecture"
-            exit 1
-            ;;
+ARCH="$(uname -m)"
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+
+case "$OS" in
+  linux)
+    case "$ARCH" in
+      x86_64) ASSET="tau-x86_64-linux.tar.gz" ;;
+      aarch64|arm64) ASSET="tau-aarch64-linux.tar.gz" ;;
+      *) echo "$MSG_ARCH: $ARCH"; exit 1 ;;
     esac
-
-    if command -v curl >/dev/null 2>&1; then
-        curl () {
-            command curl -fL "$@"
-        }
-    elif command -v wget >/dev/null 2>&1; then
-        curl () {
-            wget -O- "$@"
-        }
-    else
-        echo "Could not find 'curl' or 'wget' in your path"
-        exit 1
-    fi
-
-    "$platform" "$@"
-
-    tau_path="$(command -v tau || true)"
-    if [ "$tau_path" = "$HOME/.local/bin/tau" ]; then
-        echo "TAU has been installed. Run with 'TAU'"
-    else
-        echo "To run TAU from your terminal, you must add ~/.local/bin to your PATH"
-        echo "Run:"
-
-        case "$SHELL" in
-            *zsh)
-                echo "   echo 'export PATH=\$HOME/.local/bin:\$PATH' >> ~/.zshrc"
-                echo "   source ~/.zshrc"
-                ;;
-            *fish)
-                echo "   fish_add_path -U $HOME/.local/bin"
-                ;;
-            *)
-                echo "   echo 'export PATH=\$HOME/.local/bin:\$PATH' >> ~/.bashrc"
-                echo "   source ~/.bashrc"
-                ;;
-        esac
-
-        echo "To run TAU now, '~/.local/bin/TAU'"
-    fi
-}
-
-linux() {
-    if [ -n "${ZED_BUNDLE_PATH:-}" ]; then
-        cp "$ZED_BUNDLE_PATH" "$temp/tau-linux-$arch.tar.gz"
-    else
-        echo "Set ZED_BUNDLE_PATH to a TAU Linux tarball before running this installer."
-        exit 1
-    fi
-
-    suffix=""
-    if [ "$channel" != "stable" ]; then
-        suffix="-$channel"
-    fi
-
-    appid=""
-    case "$channel" in
-      stable)
-        appid="ai.tau.TAU"
+    ;;
+  darwin)
+    case "$ARCH" in
+      arm64|aarch64) ASSET="tau-aarch64-macos.tar.gz" ;;
+      x86_64)
+        echo "  Intel Mac (x86_64) binary not available. Building from source instead..."
+        echo "  (You can also use Rosetta 2 with the ARM64 build.)"
+        OS="darwin"
         ;;
-      nightly)
-        appid="ai.tau.TAU-Nightly"
-        ;;
-      preview)
-        appid="ai.tau.TAU-Preview"
-        ;;
-      dev)
-        appid="ai.tau.TAU-Dev"
-        ;;
-      *)
-        echo "Unknown release channel: ${channel}. Using stable app ID."
-        appid="ai.tau.TAU"
-        ;;
+      *) echo "$MSG_ARCH: $ARCH"; exit 1 ;;
     esac
-
-    # Unpack
-    rm -rf "$HOME/.local/tau$suffix.app"
-    mkdir -p "$HOME/.local/tau$suffix.app"
-    tar -xzf "$temp/tau-linux-$arch.tar.gz" -C "$HOME/.local/"
-
-    # Setup ~/.local directories
-    mkdir -p "$HOME/.local/bin" "$HOME/.local/share/applications"
-
-    # Link the binary
-    if [ -f "$HOME/.local/tau$suffix.app/bin/tau" ]; then
-        ln -sf "$HOME/.local/tau$suffix.app/bin/tau" "$HOME/.local/bin/tau"
-        ln -sf "$HOME/.local/tau$suffix.app/bin/tau" "$HOME/.local/bin/TAU"
-    else
-        echo "TAU binary missing from tarball"
-        exit 1
-    fi
-
-    # Copy .desktop file
-    desktop_file_path="$HOME/.local/share/applications/${appid}.desktop"
-    src_dir="$HOME/.local/tau$suffix.app/share/applications"
-    if [ -f "$src_dir/${appid}.desktop" ]; then
-        cp "$src_dir/${appid}.desktop" "${desktop_file_path}"
-    else
-        echo "TAU desktop file missing from tarball"
-        exit 1
-    fi
-    sed -i "s|Icon=tau|Icon=$HOME/.local/tau$suffix.app/share/icons/hicolor/512x512/apps/tau.png|g" "${desktop_file_path}"
-    sed -i "s|Exec=tau|Exec=$HOME/.local/tau$suffix.app/bin/tau|g" "${desktop_file_path}"
-}
-
-macos() {
-    echo "macOS install is not wired for TAU public releases yet."
+    ;;
+  mingw*|msys*|cygwin*)
+    case "$ARCH" in
+      x86_64) ASSET="tau-x86_64-windows.zip" ;;
+      *) echo "$MSG_ARCH: $ARCH"; exit 1 ;;
+    esac
+    OS="windows"
+    ;;
+  *)
+    echo "$MSG_OS: $OS"
     exit 1
-}
+    ;;
+esac
 
-main "$@"
+DOWNLOAD_URL="https://github.com/$REPO/releases/$VERSION/download/$ASSET"
+
+INSTALL_DIR="${HOME}/.local/bin"
+ICON_DIR="${HOME}/.local/share/icons/hicolor/scalable/apps"
+APP_DIR="${HOME}/.local/share/applications"
+DESKTOP_FILE="$APP_DIR/tau.desktop"
+mkdir -p "$INSTALL_DIR" "$ICON_DIR" "$APP_DIR"
+
+# ---------- Install runtime deps ----------
+if [[ "$OS" == "linux" ]]; then
+  if command -v apt &>/dev/null; then
+    sudo apt install -y libxkbcommon-x11-0 libxcb-cursor0 2>/dev/null || true
+  elif command -v pacman &>/dev/null; then
+    sudo pacman -S --noconfirm libxkbcommon libxcb wayland fontconfig libva mesa alsa-lib 2>/dev/null || true
+  elif command -v dnf &>/dev/null; then
+    sudo dnf install -y libxkbcommon libxcb wayland fontconfig libva mesa-libGL alsa-lib 2>/dev/null || true
+  fi
+fi
+
+# ---------- Download / Build ----------
+TAU_APP_DIR="${INSTALL_DIR}/../tau.app"
+
+if curl -4 -fsSL --connect-timeout 15 --max-time 30 -I "$DOWNLOAD_URL" 2>/dev/null; then
+  echo "$MSG_DOWNLOAD $OS ($ARCH)..."
+
+  if [[ "$OS" == "linux" ]]; then
+    mkdir -p "$TAU_APP_DIR"
+    curl -4 -fsSL --max-time 600 "$DOWNLOAD_URL" | tar xz -C "$(dirname "$TAU_APP_DIR")"
+    chmod +x "$TAU_APP_DIR/libexec/tau-editor" 2>/dev/null || true
+    ln -sf "$TAU_APP_DIR/libexec/tau-editor" "$INSTALL_DIR/tau"
+  elif [[ "$OS" == "darwin" ]]; then
+    curl -4 -fsSL --max-time 600 -o /tmp/tau.tar.gz "$DOWNLOAD_URL"
+    tar xzf /tmp/tau.tar.gz -C /tmp
+    BINARY=$(ls /tmp/tau-*-macos 2>/dev/null | head -1)
+    if [[ -n "$BINARY" ]]; then
+      cp "$BINARY" "$INSTALL_DIR/tau"
+      chmod +x "$INSTALL_DIR/tau"
+    else
+      echo "  Error: could not find binary in archive"
+      exit 1
+    fi
+    rm -f /tmp/tau.tar.gz /tmp/tau-*-macos
+  elif [[ "$OS" == "windows" ]]; then
+    curl -4 -fsSL --max-time 600 "$DOWNLOAD_URL" -o /tmp/tau.zip
+    unzip -o /tmp/tau.zip -d /tmp/tau-install
+    BINARY=$(ls /tmp/tau-install/*.exe 2>/dev/null | head -1)
+    if [[ -n "$BINARY" ]]; then
+      mv "$BINARY" "$INSTALL_DIR/tau.exe"
+      chmod +x "$INSTALL_DIR/tau.exe"
+    else
+      echo "  Error: could not find binary in archive"
+      exit 1
+    fi
+    rm -rf /tmp/tau.zip /tmp/tau-install
+  fi
+else
+  echo "$MSG_BUILD"
+  if ! command -v cargo &>/dev/null; then
+    echo "$MSG_RUST_REQUIRED"
+    echo "$MSG_RUST_INSTALL"
+    echo ""
+    echo "$MSG_RUN_AGAIN"
+    exit 1
+  fi
+
+  echo "$MSG_DEPS_INSTALL"
+  if [[ "$OS" == "darwin" ]]; then
+    if command -v brew &>/dev/null; then
+      brew install fontconfig 2>/dev/null || true
+    fi
+  fi
+
+  TMP_DIR="$(mktemp -d)"
+  git clone --depth 1 "https://github.com/$REPO.git" "$TMP_DIR"
+  cd "$TMP_DIR/editor"
+
+  echo "$MSG_BUILD_WAIT"
+  cargo build --release --bin tau --jobs "$(nproc 2>/dev/null || echo 4)"
+
+  if [[ "$OS" == "linux" ]]; then
+    mkdir -p "$TAU_APP_DIR/libexec"
+    cp "target/release/tau" "$TAU_APP_DIR/libexec/tau-editor"
+    ln -sf "$TAU_APP_DIR/libexec/tau-editor" "$INSTALL_DIR/tau"
+  else
+    cp "target/release/tau" "$INSTALL_DIR/tau"
+  fi
+  rm -rf "$TMP_DIR"
+fi
+
+# ---------- Ask desktop shortcut ----------
+DESKTOP_CHOICE=""
+if [ -t 0 ]; then
+  case "$LANG_CODE" in
+    id)
+      echo -n "$MSG_DESKTOP_ASK (y/n): "
+      read -r DESKTOP_CHOICE
+      ;;
+    *)
+      echo -n "$MSG_DESKTOP_ASK (y/n): "
+      read -r DESKTOP_CHOICE
+      ;;
+  esac
+fi
+# Non-interactive (piped) or empty response defaults to no
+
+if [[ "$DESKTOP_CHOICE" == "$MSG_DESKTOP_YES" || "$DESKTOP_CHOICE" == "y" || "$DESKTOP_CHOICE" == "Y" ]]; then
+  # ---------- Install icon to applications ----------
+  echo "$MSG_DESKTOP_INSTALL"
+
+  ICON_URL="$RAW_BASE/editor/crates/tau/resources/tau-icon.svg"
+  if curl -4 -fsSL --max-time 15 "$ICON_URL" -o "$ICON_DIR/tau.svg" 2>/dev/null; then
+    echo "  $MSG_ICON_INSTALL"
+  else
+    echo "  $MSG_ICON_FAIL"
+  fi
+
+  # Applications menu entry
+  cat > "$DESKTOP_FILE" << DESKTOP
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=TAU
+GenericName=AI Code Editor
+Comment=The Artificial Ultimate local agentic coding IDE.
+TryExec=$INSTALL_DIR/tau
+Exec=$INSTALL_DIR/tau %F
+Icon=tau
+Categories=Utility;TextEditor;Development;IDE;
+Keywords=tau;agent;code;ide;
+MimeType=text/plain;application/x-zerosize;x-scheme-handler/tau;
+StartupNotify=false
+Actions=NewWorkspace;
+
+[Desktop Action NewWorkspace]
+Exec=$INSTALL_DIR/tau --new %F
+Name=Open a new workspace
+DESKTOP
+
+  # Desktop shortcut
+  DESKTOP_SCREEN="$HOME/Desktop/tau.desktop"
+  if [[ -d "$HOME/Desktop" ]]; then
+    cp "$DESKTOP_FILE" "$DESKTOP_SCREEN"
+    chmod +x "$DESKTOP_SCREEN"
+  elif [[ -d "$HOME/Área de Trabalho" ]]; then
+    cp "$DESKTOP_FILE" "$HOME/Área de Trabalho/tau.desktop"
+    chmod +x "$HOME/Área de Trabalho/tau.desktop"
+  fi
+
+  if command -v update-desktop-database &>/dev/null; then
+    update-desktop-database "$APP_DIR" 2>/dev/null || true
+  fi
+  if command -v gtk-update-icon-cache &>/dev/null; then
+    gtk-update-icon-cache -f -t "$HOME/.local/share/icons" 2>/dev/null || true
+  fi
+
+  echo "  $MSG_DESKTOP_DONE"
+fi
+
+# ---------- macOS icon ----------
+if [[ "$OS" == "darwin" && "$DESKTOP_CHOICE" == "y" ]]; then
+  ICON_URL="$RAW_BASE/editor/crates/tau/resources/tau-icon.svg"
+  mkdir -p "$HOME/.local/share/icons"
+  curl -4 -fsSL --max-time 15 "$ICON_URL" -o "$HOME/.local/share/icons/tau.svg" 2>/dev/null || true
+fi
+
+# ---------- Add to PATH ----------
+SHELL_CONFIG=""
+case "$SHELL" in
+  */zsh) SHELL_CONFIG="$HOME/.zshrc" ;;
+  */bash) SHELL_CONFIG="$HOME/.bashrc" ;;
+  */fish) SHELL_CONFIG="$HOME/.config/fish/config.fish" ;;
+esac
+
+if [[ -n "$SHELL_CONFIG" ]] && ! grep -q "$INSTALL_DIR" "$SHELL_CONFIG" 2>/dev/null; then
+  echo "" >> "$SHELL_CONFIG"
+  echo "# TAU Editor" >> "$SHELL_CONFIG"
+  echo "export PATH=\"\$PATH:$INSTALL_DIR\"" >> "$SHELL_CONFIG"
+  echo "$MSG_PATH_ADD $SHELL_CONFIG"
+fi
+
+echo ""
+echo "$MSG_SUCCESS"
+echo ""
+
+if [[ "$DESKTOP_CHOICE" == "$MSG_DESKTOP_YES" || "$DESKTOP_CHOICE" == "y" || "$DESKTOP_CHOICE" == "Y" ]]; then
+  echo "$MSG_LAUNCH_DESKTOP"
+else
+  echo "$MSG_LAUNCH_TERMINAL"
+  echo "$MSG_DESKTOP_NOTE"
+fi
+echo ""

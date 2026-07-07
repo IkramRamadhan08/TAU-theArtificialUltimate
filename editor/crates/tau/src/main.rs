@@ -1,7 +1,7 @@
 // Disable command line from opening on release mode
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod reliability;
+mod hang_detection;
 mod app;
 
 // Ensure the binary name stays in sync with APP_NAME so that the paths used
@@ -22,7 +22,7 @@ use clap::Parser;
 use cli::FORCE_CLI_MODE_ENV_VAR_NAME;
 use client::{Client, ProxySettings, RefreshLlmTokenListener, UserStore, parse_tau_link};
 use collections::HashMap;
-use crashes::InitCrashHandler;
+
 use db::kvp::{GlobalKeyValueStore, KeyValueStore};
 use editor::Editor;
 use extension::ExtensionHostProxy;
@@ -32,7 +32,7 @@ use git::GitHostingProviderRegistry;
 use git_ui::clone::clone_and_open;
 use gpui::{
     App, AppContext, Application, AsyncApp, Focusable as _, QuitMode, Task, TaskExt,
-    UpdateGlobal as _, block_on,
+    UpdateGlobal as _,
 };
 use gpui_platform;
 
@@ -54,7 +54,7 @@ use release_channel::{AppCommitSha, AppVersion, ReleaseChannel};
 use session::{AppSession, Session};
 use settings::{Settings, SettingsStore, watch_config_file};
 use title_bar;
-use smol::future::poll_once;
+
 use std::{
     cell::RefCell,
     env,
@@ -79,7 +79,7 @@ use app::{
     handle_keymap_file_changes, initialize_workspace, open_paths_with_positions,
 };
 
-use crate::app::{CrashHandler, OpenRequestKind, eager_load_active_theme_and_icon_theme};
+use crate::app::{OpenRequestKind, eager_load_active_theme_and_icon_theme};
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
@@ -207,9 +207,9 @@ fn main() {
 
     let args = Args::parse();
 
-    // `tau --crash-handler` makes TAU operate in minidump crash handler mode.
-    if let Some(socket) = &args.crash_handler {
-        crashes::crash_server(socket.as_path(), paths::logs_dir().clone());
+    // `tau --crash-handler` used to make TAU operate in minidump crash handler mode.
+    // The crashes crate has been removed, so this mode is disabled.
+    if args.crash_handler.is_some() {
         return;
     }
 
@@ -359,8 +359,6 @@ fn main() {
         session_id.clone(),
         KeyValueStore::from_app_db(&app_db),
     ));
-    let background_executor = app.background_executor();
-
     let (open_listener, mut open_rx) = OpenListener::new();
 
     let failed_single_instance_check = if *tau_env_vars::TAU_STATELESS
@@ -389,45 +387,7 @@ fn main() {
         return;
     }
 
-    let should_install_crash_handler = matches!(
-        env::var("TAU_GENERATE_MINIDUMPS").as_deref(),
-        Ok("true" | "1")
-    ) || *release_channel::RELEASE_CHANNEL
-        != ReleaseChannel::Dev;
 
-    let crash_handler = if should_install_crash_handler {
-        Some(
-            app.background_executor().spawn(crashes::init(
-                InitCrashHandler {
-                    session_id,
-                    // strip the build and channel information from the version string, we send them separately
-                    zed_version: semver::Version::new(
-                        app_version.major,
-                        app_version.minor,
-                        app_version.patch,
-                    )
-                    .to_string(),
-                    binary: "tau".to_string(),
-                    release_channel: release_channel::RELEASE_CHANNEL_NAME.clone(),
-                    commit_sha: app_commit_sha
-                        .as_ref()
-                        .map(|sha| sha.full())
-                        .unwrap_or_else(|| "no sha".to_owned()),
-                },
-                {
-                    let background_executor1 = app.background_executor();
-                    move |task| {
-                        background_executor1.spawn(task).detach();
-                    }
-                },
-                |pid| paths::temp_dir().join(format!("tau-crash-handler-{pid}")),
-                move |duration| background_executor.timer(duration),
-            )),
-        )
-    } else {
-        crashes::force_backtrace();
-        None
-    };
 
     let git_hosting_provider_registry = Arc::new(GitHostingProviderRegistry::new());
     let git_binary_path =
@@ -593,8 +553,6 @@ fn main() {
 
         Client::set_global(client.clone(), cx);
 
-        let _p2p = p2p::init_p2p(client.clone(), cx);
-
         app::init(cx);
         #[cfg(target_os = "macos")]
         app::move_to_applications::init(cx);
@@ -626,7 +584,7 @@ fn main() {
         auto_update::init(client.http_client(), cx);
         dap_adapters::init(cx);
         auto_update_ui::init(cx);
-        reliability::init(client.clone(), cx);
+        hang_detection::start(client.clone(), cx);
         extension_host::init(
             extension_host_proxy.clone(),
             app_state.fs.clone(),
@@ -719,7 +677,7 @@ fn main() {
         notifications::init(app_state.client.clone(), app_state.user_store.clone(), cx);
         title_bar::init(cx);
         git_ui::init(cx);
-        feedback::init(cx);
+
         markdown_preview::init(cx);
         csv_preview::init(cx);
         svg_preview::init(cx);
@@ -728,9 +686,8 @@ fn main() {
         keymap_editor::init(cx);
         extensions_ui::init(cx);
         edit_prediction::init(cx);
-        inspector_ui::init(app_state.clone(), cx);
+        feedback::init(cx);
         json_schema_store::init(cx);
-        miniprofiler_ui::init(*STARTUP_TIME.get().unwrap(), cx);
         which_key::init(cx);
         #[cfg(target_os = "windows")]
         etw_tracing::init(cx);
@@ -787,24 +744,6 @@ fn main() {
 
         let menus = app_menus(cx);
         cx.set_menus(menus);
-
-        if let Some(mut crash_handler) = crash_handler {
-            let crash_handler2 = block_on(poll_once(&mut crash_handler));
-            match crash_handler2 {
-                Some(crash_handler) => {
-                    cx.set_global(CrashHandler(crash_handler));
-                }
-                None => {
-                    cx.spawn(async move |cx| {
-                        let client1 = crash_handler.await;
-                        cx.update(|cx| {
-                            cx.set_global(CrashHandler(client1));
-                        });
-                    })
-                    .detach();
-                }
-            }
-        }
 
         initialize_workspace(app_state.clone(), cx);
 
