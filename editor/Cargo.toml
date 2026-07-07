@@ -229,6 +229,7 @@ default-members = ["crates/tau"]
 
 [workspace.package]
 publish = false
+version = "0.71"
 edition = "2024"
 
 [workspace.dependencies]
@@ -803,7 +804,7 @@ zstd = "0.11"
 
 
 [workspace.dependencies.windows]
-version = "0.71"
+version = "0.62"
 features = [
     "Foundation_Numerics",
     "Globalization_DateTimeFormatting",
