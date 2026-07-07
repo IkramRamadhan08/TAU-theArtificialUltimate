@@ -229,7 +229,7 @@ default-members = ["crates/tau"]
 
 [workspace.package]
 publish = false
-version = "0.71"
+version = "0.71.0"
 edition = "2024"
 
 [workspace.dependencies]
