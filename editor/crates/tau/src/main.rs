@@ -310,10 +310,21 @@ fn main() {
     }
     ztracing::init();
 
-    let version = option_env!("TAU_BUILD_ID");
+    let build_id = option_env!("TAU_BUILD_ID");
     let app_commit_sha =
         option_env!("TAU_COMMIT_SHA").map(|commit_sha| AppCommitSha::new(commit_sha.to_string()));
-    let app_version = AppVersion::load(env!("CARGO_PKG_VERSION"), version, app_commit_sha.clone());
+    let app_version = AppVersion::load(env!("CARGO_PKG_VERSION"), build_id, app_commit_sha.clone());
+
+    if args.version {
+        println!("TAU {}", app_version);
+        if let Some(sha) = &app_commit_sha {
+            println!("Commit: {}", sha.short());
+        }
+        if let Some(bid) = build_id {
+            println!("Build: {}", bid);
+        }
+        return;
+    }
 
     if args.system_specs {
         let system_specs = system_specs::SystemSpecs::new_stateless(
@@ -1615,6 +1626,10 @@ struct Args {
     /// Instructs TAU to run as a dev server on this machine. (not implemented)
     #[arg(long)]
     dev_server_token: Option<String>,
+
+    /// Print version information and exit.
+    #[arg(long)]
+    version: bool,
 
     /// Prints system specs.
     ///
