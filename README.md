@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="editor/assets/images/TAU.png" alt="TAU Logo" width="120">
+<img src="editor/assets/images/tau-icon.png" alt="TAU Logo" width="120">
 
 # TAU — The Artificial Ultimate
 
@@ -351,7 +351,7 @@ TAU-theArtificialUltimate/
 ├── editor/script/install.sh         # Linux/macOS installer
 ├── editor/script/install.ps1        # Windows installer
 ├── editor/script/uninstall.sh       # Linux/macOS uninstaller
-├── editor/assets/images/TAU.png     # Project logo
+├── editor/assets/images/tau-icon.png # Project logo
 └── README.md
 ```
 
