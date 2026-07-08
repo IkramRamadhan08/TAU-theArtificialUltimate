@@ -7,7 +7,9 @@ use crate::{
 use agent_client_protocol::schema as acp;
 use std::cell::RefCell;
 
-use acp_thread::{ContentBlock, PlanEntry, SandboxAuthorizationDetails};
+use acp_thread::{
+    AuthorizationKind, ContentBlock, FormField, PlanEntry, SandboxAuthorizationDetails,
+};
 use agent::{SkillLoadingIssue, SkillLoadingIssueKind, SkillLoadingIssuesUpdated};
 use agent_settings::UserAgentsMd;
 use agent_skills::MAX_SKILL_DESCRIPTION_LEN;
@@ -630,6 +632,9 @@ pub struct ThreadView {
     /// dropped from this set so a future regression of the same kind would
     /// re-show.
     dismissed_skill_loading_issues: HashSet<SkillLoadingIssue>,
+    /// Per-tool-call editors for credential form fields.
+    pub(crate) credential_form_editors:
+        HashMap<acp::ToolCallId, Vec<Entity<Editor>>>,
 }
 impl Focusable for ThreadView {
     fn focus_handle(&self, cx: &App) -> FocusHandle {
@@ -1003,6 +1008,7 @@ impl ThreadView {
             generating_indicator_in_list: false,
             skill_loading_issues: Vec::new(),
             dismissed_skill_loading_issues: HashSet::default(),
+            credential_form_editors: HashMap::default(),
         };
 
         this.sync_generating_indicator(cx);
@@ -2323,6 +2329,7 @@ impl ThreadView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.credential_form_editors.remove(&tool_call_id);
         self.conversation.update(cx, |conversation, cx| {
             conversation.authorize_tool_call(session_id, tool_call_id, outcome, cx);
         });
@@ -7363,7 +7370,11 @@ impl ThreadView {
 
         let tool_output_display = if is_open {
             match &tool_call.status {
-                ToolCallStatus::WaitingForConfirmation { options, .. } => {
+                ToolCallStatus::WaitingForConfirmation {
+                    options,
+                    kind,
+                    ..
+                } => {
                     let confirmation_content = v_flex()
                         .w_full()
                         .children(tool_call.content.iter().enumerate().map(
@@ -7464,15 +7475,69 @@ impl ThreadView {
                             )
                         });
 
+                    let form_fields =
+                        if let AuthorizationKind::FormInput(fields) = kind {
+                            self.credential_form_editors
+                                .get(&tool_call.id)
+                                .map(|editors| {
+                                    let border_color = self.tool_card_border_color(cx);
+
+                                    v_flex()
+                                        .w_full()
+                                        .px_2()
+                                        .py_1()
+                                        .gap_2()
+                                        .border_t_1()
+                                        .border_color(border_color)
+                                        .children(fields.iter().enumerate().map(
+                                            |(field_ix, field)| {
+                                                let editor = editors.get(field_ix);
+                                                let secret_label = if field.secret {
+                                                    " (secret)"
+                                                } else {
+                                                    ""
+                                                };
+                                                v_flex()
+                                                    .w_full()
+                                                    .gap_0p5()
+                                                    .child(
+                                                        h_flex()
+                                                            .gap_1()
+                                                            .child(
+                                                                Label::new(format!(
+                                                                    "{}{}",
+                                                                    field.label, secret_label,
+                                                                ))
+                                                                .size(LabelSize::XSmall)
+                                                                .color(Color::Muted)
+                                                                .buffer_font(cx),
+                                                            )
+                                                            .child(
+                                                                Label::new(format!(
+                                                                    "({})",
+                                                                    field.key
+                                                                ))
+                                                                .size(LabelSize::XSmall)
+                                                                .color(Color::Placeholder)
+                                                                .buffer_font(cx),
+                                                            ),
+                                                    )
+                                                    .when_some(editor, |this, editor| {
+                                                        this.child(editor.clone())
+                                                    })
+                                                    .into_any_element()
+                                            },
+                                        ))
+                                        .into_any()
+                                })
+                        } else {
+                            None
+                        };
+
                     v_flex()
                         .w_full()
                         .map(|this| {
                             if layout == ToolCallLayout::Floating {
-                                // Cap the content (e.g. a full plan awaiting
-                                // approval) so the floating row can never
-                                // consume the entire panel and squeeze the
-                                // conversation list to zero height, while the
-                                // permission buttons below stay visible.
                                 this.child(
                                     div()
                                         .id(("floating-confirmation-content", entry_ix))
@@ -7484,6 +7549,7 @@ impl ThreadView {
                                 this.child(confirmation_content)
                             }
                         })
+                        .when_some(form_fields, |this, fields| { this.child(fields) })
                         .child(self.render_permission_buttons(
                             self.thread.read(cx).session_id().clone(),
                             self.is_first_tool_call(active_session_id, &tool_call.id, cx),
@@ -8516,11 +8582,52 @@ impl ThreadView {
                         let option_id = option.option_id.clone();
                         let option_kind = option.kind;
                         let session_id = session_id.clone();
+                        let is_submit = option.option_id.0.as_ref() == "submit";
                         move |this, _, window, cx| {
+                            let mut outcome =
+                                SelectedPermissionOutcome::new(option_id.clone(), option_kind);
+                            if is_submit {
+                                if let Some(editors) =
+                                    this.credential_form_editors.get(&tool_call_id)
+                                {
+                                    let fields: Vec<FormField> = this
+                                        .thread
+                                        .read(cx)
+                                        .entries()
+                                        .iter()
+                                        .find_map(|entry| {
+                                            if let acp_thread::AgentThreadEntry::ToolCall(
+                                                tool_call,
+                                            ) = entry
+                                            {
+                                                if tool_call.id == tool_call_id {
+                                                    if let ToolCallStatus::WaitingForConfirmation {
+                                                        kind: AuthorizationKind::FormInput(fields),
+                                                        ..
+                                                    } = &tool_call.status
+                                                    {
+                                                        return Some(fields.clone());
+                                                    }
+                                                }
+                                            }
+                                            None
+                                        })
+                                        .unwrap_or_default();
+                                    let form_values: std::collections::HashMap<String, String> = editors
+                                        .iter()
+                                        .zip(fields.iter())
+                                        .map(|(editor, field)| {
+                                            let text = editor.read(cx).text(cx);
+                                            (field.key.clone(), text)
+                                        })
+                                        .collect();
+                                    outcome = outcome.with_form_values(form_values);
+                                }
+                            }
                             this.authorize_tool_call(
                                 session_id.clone(),
                                 tool_call_id.clone(),
-                                SelectedPermissionOutcome::new(option_id.clone(), option_kind),
+                                outcome,
                                 window,
                                 cx,
                             );
@@ -10597,6 +10704,44 @@ impl ThreadView {
 
 impl Render for ThreadView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Lazily create editors for credential form fields.
+        // Collect data first to avoid borrowing conflicts.
+        let form_tool_calls: Vec<(acp::ToolCallId, Vec<FormField>)> = self
+            .thread
+            .read(cx)
+            .entries()
+            .iter()
+            .filter_map(|entry| {
+                if let acp_thread::AgentThreadEntry::ToolCall(tool_call) = entry {
+                    if let ToolCallStatus::WaitingForConfirmation {
+                        kind: AuthorizationKind::FormInput(fields),
+                        ..
+                    } = &tool_call.status
+                    {
+                        if !self.credential_form_editors.contains_key(&tool_call.id) {
+                            return Some((tool_call.id.clone(), fields.clone()));
+                        }
+                    }
+                }
+                None
+            })
+            .collect();
+        for (tool_call_id, fields) in &form_tool_calls {
+            let editors: Vec<Entity<Editor>> = fields
+                .iter()
+                .map(|field| {
+                    let editor = cx.new(|cx| {
+                        let mut editor = Editor::single_line(window, cx);
+                        editor.set_placeholder_text(&field.description, window, cx);
+                        editor
+                    });
+                    editor
+                })
+                .collect();
+            self.credential_form_editors
+                .insert(tool_call_id.clone(), editors);
+        }
+
         let has_messages = self.list_state.item_count() > 0;
         let list_state = self.list_state.clone();
 
