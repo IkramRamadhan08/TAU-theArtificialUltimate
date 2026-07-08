@@ -1,7 +1,7 @@
-use anyhow::{Context as _, Result, bail};
+use anyhow::Result;
 use async_trait::async_trait;
 use collections::HashMap;
-use futures::StreamExt;
+
 use gpui::{App, AsyncApp, Entity, Task};
 use language::{
     Buffer, ContextProvider, LanguageName, LanguageRegistry, LocalFile as _, LspAdapter,
@@ -13,10 +13,9 @@ use project::lsp_store::language_server_settings;
 use semver::Version;
 use serde_json::{Value, json};
 use settings::SettingsLocation;
-use smol::fs::{self};
+
 use std::{
     borrow::Cow,
-    env::consts,
     ffi::OsString,
     future::Future,
     path::{Path, PathBuf},
@@ -25,7 +24,7 @@ use std::{
 };
 use task::{TaskTemplate, TaskTemplates, VariableName};
 use util::{
-    ResultExt, archive::extract_zip, fs::remove_matching, maybe, merge_json_value_into,
+    ResultExt, maybe, merge_json_value_into,
     paths::PathStyle, rel_path::RelPath,
 };
 
