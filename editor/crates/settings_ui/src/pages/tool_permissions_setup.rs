@@ -1432,6 +1432,8 @@ mod tests {
             // Browser tools - read-only, use local Chrome binary
             "browser_navigate",
             "browser_screenshot",
+            // Credential tool - does not call decide_permission_from_settings
+            "request_credential",
         ];
 
         let tool_info_ids: Vec<&str> = TOOLS.iter().map(|t| t.id).collect();

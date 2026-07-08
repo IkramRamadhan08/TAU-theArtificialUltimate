@@ -17,6 +17,7 @@ use crate::sandboxing::sandboxing_enabled;
 use crate::{AgentTool, ThreadEnvironment, ToolCallEventStream, ToolInput};
 
 const COMMAND_OUTPUT_LIMIT: u64 = 16 * 1024;
+const DEFAULT_TIMEOUT_MS: u64 = 180_000;
 
 /// Executes a shell one-liner and returns the combined output.
 ///
@@ -30,9 +31,16 @@ const COMMAND_OUTPUT_LIMIT: u64 = 16 * 1024;
 ///
 /// Do not pipe output to `head`, `tail`, or similar output-filtering commands just to reduce what you receive. Instead, use `head_lines` and/or `tail_lines`; this keeps the terminal output visible to the user in real time while limiting only the final output sent back to you. When both are specified, the first `head_lines` lines are returned, then a blank line, then the last `tail_lines` lines. Avoid requesting too many lines, or the response may waste tokens or exceed the context window.
 ///
-/// Do not use this tool for commands that run indefinitely, such as servers (like `npm run start`, `npm run dev`, `python -m http.server`, etc) or file watchers that don't terminate on their own.
+/// Every command has a default timeout of 180s. On timeout the process is kept alive:
+/// reconnect with the returned `terminal_id` and a longer `timeout_ms` to keep waiting.
+/// Add `cancel: true` to stop it.
 ///
-/// For potentially long-running commands, prefer specifying `timeout_ms` to bound runtime and prevent indefinite hangs.
+/// If the partial output shows the process will be very long, do NOT keep reconnecting
+/// — tell the user it is running in the background and share the `terminal_id`.
+///
+/// Do not use this tool for commands that run indefinitely, such as servers (like `npm run start`, `npm run dev`, `python -m http.server`, etc) or file watchers that don't terminate on their own. Use `systemctl`, `&` (background), or similar instead.
+///
+/// For potentially long-running commands, always estimate and set `timeout_ms` to avoid the default 180s cutoff.
 ///
 /// Remember that each invocation of this tool will spawn a new shell process, so you can't rely on any state from previous invocations.
 ///
@@ -50,15 +58,22 @@ pub struct TerminalToolInput {
     /// Working directory for the command. This must be one of the root directories of the project.
     pub cd: String,
     /// Optional maximum runtime (in milliseconds). If exceeded, the running terminal task is killed.
-    pub timeout_ms: Option<u64>,
     /// Return only the first N lines of terminal output to the model after the command finishes. Do not pipe output to `head`; use this parameter instead so the user can still see live output. Avoid requesting too many lines, or the response may waste tokens or exceed the context window.
     #[serde(default)]
     pub head_lines: Option<usize>,
     /// Return only the last N lines of terminal output to the model after the command finishes. Do not pipe output to `tail`; use this parameter instead so the user can still see live output. Avoid requesting too many lines, or the response may waste tokens or exceed the context window.
     #[serde(default)]
     pub tail_lines: Option<usize>,
+    /// Reconnect to an existing terminal session returned from a previous timeout.
+    /// When set, `command` and `cd` are ignored (the original command keeps running).
+    /// Set `cancel: true` to kill the terminal instead of waiting.
+    #[serde(default)]
+    pub terminal_id: Option<String>,
+    /// Set to `true` when reconnecting via `terminal_id` to kill the terminal
+    /// instead of continuing to wait. Ignored when `terminal_id` is not set.
+    #[serde(default)]
+    pub cancel: Option<bool>,
 }
-
 /// Executes a shell one-liner and returns the combined output.
 ///
 /// This tool spawns a process using the user's shell, reads from stdout and stderr (preserving the order of writes), and returns a string with the combined output result.
@@ -71,9 +86,16 @@ pub struct TerminalToolInput {
 ///
 /// Do not pipe output to `head`, `tail`, or similar output-filtering commands just to reduce what you receive. Instead, use `head_lines` and/or `tail_lines`; this keeps the terminal output visible to the user in real time while limiting only the final output sent back to you. When both are specified, the first `head_lines` lines are returned, then a blank line, then the last `tail_lines` lines. Avoid requesting too many lines, or the response may waste tokens or exceed the context window.
 ///
-/// Do not use this tool for commands that run indefinitely, such as servers (like `npm run start`, `npm run dev`, `python -m http.server`, etc) or file watchers that don't terminate on their own.
+/// Every command has a default timeout of 180s. On timeout the process is kept alive:
+/// reconnect with the returned `terminal_id` and a longer `timeout_ms` to keep waiting.
+/// Add `cancel: true` to stop it.
 ///
-/// For potentially long-running commands, prefer specifying `timeout_ms` to bound runtime and prevent indefinite hangs.
+/// If the partial output shows the process will be very long, do NOT keep reconnecting
+/// — tell the user it is running in the background and share the `terminal_id`.
+///
+/// Do not use this tool for commands that run indefinitely, such as servers (like `npm run start`, `npm run dev`, `python -m http.server`, etc) or file watchers that don't terminate on their own. Use `systemctl`, `&` (background), or similar instead.
+///
+/// For potentially long-running commands, always estimate and set `timeout_ms` to avoid the default 180s cutoff.
 ///
 /// Remember that each invocation of this tool will spawn a new shell process, so you can't rely on any state from previous invocations.
 ///
@@ -135,6 +157,15 @@ pub struct SandboxedTerminalToolInput {
     /// triggers a user approval prompt.
     #[serde(default)]
     pub unsandboxed: Option<bool>,
+    /// Reconnect to an existing terminal session returned from a previous timeout.
+    /// When set, `command` and `cd` are ignored (the original command keeps running).
+    /// Set `cancel: true` to kill the terminal instead of waiting.
+    #[serde(default)]
+    pub terminal_id: Option<String>,
+    /// Set to `true` when reconnecting via `terminal_id` to kill the terminal
+    /// instead of continuing to wait. Ignored when `terminal_id` is not set.
+    #[serde(default)]
+    pub cancel: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -151,6 +182,8 @@ struct TerminalToolRequest {
     timeout_ms: Option<u64>,
     selection: TerminalOutputSelection,
     sandbox: Option<TerminalSandboxInput>,
+    terminal_id: Option<String>,
+    cancel: bool,
 }
 
 impl From<TerminalToolInput> for TerminalToolRequest {
@@ -158,12 +191,14 @@ impl From<TerminalToolInput> for TerminalToolRequest {
         Self {
             command: input.command,
             cd: input.cd,
-            timeout_ms: input.timeout_ms,
+            timeout_ms: None,
             selection: TerminalOutputSelection {
                 head_lines: input.head_lines,
                 tail_lines: input.tail_lines,
             },
             sandbox: None,
+            terminal_id: input.terminal_id,
+            cancel: input.cancel.unwrap_or(false),
         }
     }
 }
@@ -184,6 +219,8 @@ impl From<SandboxedTerminalToolInput> for TerminalToolRequest {
                 allow_fs_write_all: input.allow_fs_write_all,
                 unsandboxed: input.unsandboxed,
             }),
+            terminal_id: input.terminal_id,
+            cancel: input.cancel.unwrap_or(false),
         }
     }
 }
@@ -308,6 +345,62 @@ async fn run_terminal_tool(
     cx: &mut AsyncApp,
 ) -> Result<String, String> {
     let selection = input.selection;
+
+    // --- Reconnect or cancel an existing terminal ---
+    if let Some(ref tid) = input.terminal_id {
+        let terminal_id = acp::TerminalId::new(tid.clone());
+
+        let terminal = environment
+            .find_terminal(terminal_id, cx)
+            .await
+            .map_err(|e| format!("Terminal `{tid}` not found: {e}"))?;
+
+        // Cancel: kill and return
+        if input.cancel {
+            terminal.kill(cx).map_err(|e| e.to_string())?;
+            return Ok(format!(
+                "Terminal `{tid}` was stopped. You can re-run the command if needed."
+            ));
+        }
+
+        // Reconnect: wait for more output (timeout without kill)
+        let effective_timeout =
+            Duration::from_millis(input.timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS));
+        let timeout_task = cx.background_executor().timer(effective_timeout);
+
+        let mut timed_out = false;
+        let mut user_stopped_via_signal = false;
+        let wait_for_exit = terminal.wait_for_exit(cx).map_err(|e| e.to_string())?;
+
+        futures::select! {
+            _ = wait_for_exit.clone().fuse() => {},
+            _ = timeout_task.fuse() => {
+                timed_out = true;
+                // Process stays alive — agent can reconnect again
+            }
+            _ = event_stream.cancelled_by_user().fuse() => {
+                user_stopped_via_signal = true;
+                terminal.kill(cx).map_err(|e| e.to_string())?;
+                wait_for_exit.await;
+            }
+        }
+
+        let user_stopped = user_stopped_via_signal || event_stream.was_cancelled_by_user();
+
+        let output = terminal.current_output(cx).map_err(|e| e.to_string())?;
+
+        return Ok(process_content(
+            output,
+            &input.command,
+            timed_out,
+            user_stopped,
+            selection,
+            Some(tid),
+            effective_timeout.as_secs(),
+        ));
+    }
+
+    // --- New terminal ---
     let sandbox_input = input.sandbox.clone().unwrap_or_default();
 
     let (working_dir, authorize, sandboxing) = cx.update(|cx| {
@@ -407,46 +500,31 @@ async fn run_terminal_tool(
         .await
         .map_err(|e| e.to_string())?;
 
-    let terminal_id = terminal.id(cx).map_err(|e| e.to_string())?;
+    let tid: acp::TerminalId = terminal.id(cx).map_err(|e| e.to_string())?;
+    let tid_str = tid.to_string();
     event_stream.update_fields(acp::ToolCallUpdateFields::new().content(vec![
-        acp::ToolCallContent::Terminal(acp::Terminal::new(terminal_id)),
+        acp::ToolCallContent::Terminal(acp::Terminal::new(tid)),
     ]));
 
-    let timeout = input.timeout_ms.map(Duration::from_millis);
+    let effective_timeout = Duration::from_millis(input.timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS));
+    let timeout_task = cx.background_executor().timer(effective_timeout);
 
     let mut timed_out = false;
     let mut user_stopped_via_signal = false;
     let wait_for_exit = terminal.wait_for_exit(cx).map_err(|e| e.to_string())?;
 
-    match timeout {
-        Some(timeout) => {
-            let timeout_task = cx.background_executor().timer(timeout);
-
-            futures::select! {
-                _ = wait_for_exit.clone().fuse() => {},
-                _ = timeout_task.fuse() => {
-                    timed_out = true;
-                    terminal.kill(cx).map_err(|e| e.to_string())?;
-                    wait_for_exit.await;
-                }
-                _ = event_stream.cancelled_by_user().fuse() => {
-                    user_stopped_via_signal = true;
-                    terminal.kill(cx).map_err(|e| e.to_string())?;
-                    wait_for_exit.await;
-                }
-            }
+    futures::select! {
+        _ = wait_for_exit.clone().fuse() => {},
+        _ = timeout_task.fuse() => {
+            timed_out = true;
+            // Process stays alive — agent can reconnect via terminal_id
         }
-        None => {
-            futures::select! {
-                _ = wait_for_exit.clone().fuse() => {},
-                _ = event_stream.cancelled_by_user().fuse() => {
-                    user_stopped_via_signal = true;
-                    terminal.kill(cx).map_err(|e| e.to_string())?;
-                    wait_for_exit.await;
-                }
-            }
+        _ = event_stream.cancelled_by_user().fuse() => {
+            user_stopped_via_signal = true;
+            terminal.kill(cx).map_err(|e| e.to_string())?;
+            wait_for_exit.await;
         }
-    };
+    }
 
     let user_stopped_via_signal = user_stopped_via_signal || event_stream.was_cancelled_by_user();
     let user_stopped_via_terminal = terminal.was_stopped_by_user(cx).unwrap_or(false);
@@ -454,12 +532,15 @@ async fn run_terminal_tool(
 
     let output = terminal.current_output(cx).map_err(|e| e.to_string())?;
 
+    let elapsed = effective_timeout.as_secs();
     Ok(process_content(
         output,
         &input.command,
         timed_out,
         user_stopped,
         selection,
+        Some(&tid_str),
+        elapsed,
     ))
 }
 
@@ -593,6 +674,8 @@ fn process_content(
     timed_out: bool,
     user_stopped: bool,
     selection: TerminalOutputSelection,
+    terminal_id: Option<&str>,
+    timeout_secs: u64,
 ) -> String {
     let content = output.output.trim();
     let content = select_terminal_output_lines(content, selection);
@@ -622,12 +705,28 @@ fn process_content(
             )
         }
     } else if timed_out {
+        let tid_msg = match terminal_id {
+            Some(tid) => format!(
+                "\n\nThe terminal session is still running. To wait longer, run this tool again with \
+                 `terminal_id: \"{tid}\"` and a larger `timeout_ms` (e.g. {}s). \
+                 To stop it, add `cancel: true`. You can also report progress to the user \
+                 and ask if they want to wait or cancel.",
+                timeout_secs * 2,
+            ),
+            None => String::new(),
+        };
         if is_empty {
-            format!("Command \"{command}\" timed out. No output was captured.")
+            format!(
+                "Command \"{command}\" timed out ({}s). No output was captured.{tid_msg}",
+                timeout_secs.max(DEFAULT_TIMEOUT_MS / 1000),
+            )
         } else {
             format!(
-                "Command \"{command}\" timed out. Output captured before timeout:\n\n{}",
-                content
+                "Command \"{command}\" timed out ({}s). Output captured before timeout:\n\n{}\n\n\
+                 Review the partial output above. If the process was still making progress, \
+                 reconnect with a longer `timeout_ms`.{tid_msg}",
+                timeout_secs.max(DEFAULT_TIMEOUT_MS / 1000),
+                content,
             )
         }
     } else {
@@ -743,6 +842,8 @@ mod tests {
             false,
             true,
             TerminalOutputSelection::default(),
+            None,
+            0,
         );
 
         assert!(
@@ -1080,11 +1181,14 @@ mod tests {
 
         let result = process_content(
             output,
-            "cargo build",
+            "false",
             false,
-            true,
+            false,
             TerminalOutputSelection::default(),
+            None,
+            0,
         );
+
 
         assert!(
             result.contains("user stopped"),
@@ -1108,6 +1212,8 @@ mod tests {
             true,
             false,
             TerminalOutputSelection::default(),
+            None,
+            0,
         );
 
         assert!(
@@ -1132,6 +1238,8 @@ mod tests {
             true,
             false,
             TerminalOutputSelection::default(),
+            None,
+            0,
         );
 
         assert!(
@@ -1157,6 +1265,8 @@ mod tests {
             false,
             false,
             TerminalOutputSelection::default(),
+            None,
+            0,
         );
 
         assert!(
@@ -1182,6 +1292,8 @@ mod tests {
             false,
             false,
             TerminalOutputSelection::default(),
+            None,
+            0,
         );
 
         assert!(
@@ -1202,6 +1314,8 @@ mod tests {
             false,
             false,
             TerminalOutputSelection::default(),
+            None,
+            0,
         );
 
         assert!(
@@ -1227,6 +1341,8 @@ mod tests {
             false,
             false,
             TerminalOutputSelection::default(),
+            None,
+            0,
         );
 
         assert!(
@@ -1246,6 +1362,8 @@ mod tests {
             false,
             false,
             TerminalOutputSelection::default(),
+            None,
+            0,
         );
 
         assert!(
@@ -1270,6 +1388,8 @@ mod tests {
             false,
             false,
             TerminalOutputSelection::default(),
+            None,
+            0,
         );
 
         assert!(

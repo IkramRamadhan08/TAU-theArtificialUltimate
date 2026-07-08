@@ -4,6 +4,7 @@ mod context_server_registry;
 mod copy_path_tool;
 mod create_directory_tool;
 mod create_thread_tool;
+mod credential_store;
 mod delete_path_tool;
 mod diagnostics_tool;
 mod edit_file_tool;
@@ -22,6 +23,7 @@ mod list_directory_tool;
 mod move_path_tool;
 mod read_file_tool;
 mod rename_tool;
+mod request_credential_tool;
 mod search_semantic_tool;
 mod skill_tool;
 mod spawn_agent_tool;
@@ -71,6 +73,7 @@ pub use context_server_registry::*;
 pub use copy_path_tool::*;
 pub use create_directory_tool::*;
 pub use create_thread_tool::*;
+pub use credential_store::*;
 pub use delete_path_tool::*;
 pub use diagnostics_tool::*;
 pub use edit_file_tool::*;
@@ -86,6 +89,7 @@ pub use list_directory_tool::*;
 pub use move_path_tool::*;
 pub use read_file_tool::*;
 pub use rename_tool::*;
+pub use request_credential_tool::*;
 pub use search_semantic_tool::*;
 pub use skill_tool::*;
 pub use spawn_agent_tool::*;
@@ -204,6 +208,7 @@ tools! {
     MovePathTool,
     ReadFileTool,
     RenameTool,
+    RequestCredentialTool,
     SearchSemanticTool,
     SkillTool,
     SpawnAgentTool,

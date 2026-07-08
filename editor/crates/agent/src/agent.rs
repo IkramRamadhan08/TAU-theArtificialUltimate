@@ -166,6 +166,8 @@ impl From<&Skill> for NativeAvailableSkill {
 
 pub const COMPACT_COMMAND_NAME: &str = "compact";
 pub const PERMISSION_COMMAND_NAME: &str = "permission";
+pub const FULL_ACCESS_COMMAND_NAME: &str = "full-access";
+pub const VERIFY_COMMAND_NAME: &str = "verify";
 pub const HELP_COMMAND_NAME: &str = "help";
 pub const CLEAR_COMMAND_NAME: &str = "clear";
 pub const MODEL_COMMAND_NAME: &str = "model";
@@ -1521,6 +1523,21 @@ impl NativeAgent {
         .meta(acp_thread::meta_with_command_category(
             acp_thread::CommandCategory::Native,
         ));
+        let full_access_command = acp::AvailableCommand::new(
+            FULL_ACCESS_COMMAND_NAME,
+            "Grant full access: agent executes all actions automatically",
+        )
+        .meta(acp_thread::meta_with_command_category(
+            acp_thread::CommandCategory::Native,
+        ));
+        let verify_command = acp::AvailableCommand::new(
+            VERIFY_COMMAND_NAME,
+            "Require verification: agent asks before each action",
+        )
+        .meta(acp_thread::meta_with_command_category(
+            acp_thread::CommandCategory::Native,
+        ));
+
         let help_command = acp::AvailableCommand::new(
             HELP_COMMAND_NAME,
             "Show available slash commands and their usage",
@@ -1564,6 +1581,8 @@ impl NativeAgent {
         let native_command_names: &[&str] = &[
             COMPACT_COMMAND_NAME,
             PERMISSION_COMMAND_NAME,
+            FULL_ACCESS_COMMAND_NAME,
+            VERIFY_COMMAND_NAME,
             HELP_COMMAND_NAME,
             CLEAR_COMMAND_NAME,
             MODEL_COMMAND_NAME,
@@ -1611,6 +1630,8 @@ impl NativeAgent {
 
         std::iter::once(compact_command)
             .chain(std::iter::once(permission_command))
+            .chain(std::iter::once(full_access_command))
+            .chain(std::iter::once(verify_command))
             .chain(std::iter::once(help_command))
             .chain(std::iter::once(clear_command))
             .chain(std::iter::once(model_command))
@@ -2922,6 +2943,18 @@ impl acp_thread::AgentConnection for NativeAgentConnection {
                 });
             }
 
+            if parsed_command.is_unqualified(FULL_ACCESS_COMMAND_NAME) {
+                return self.0.update(cx, |agent, cx| {
+                    agent.send_permission_command(id, session_id, "full access", cx)
+                });
+            }
+
+            if parsed_command.is_unqualified(VERIFY_COMMAND_NAME) {
+                return self.0.update(cx, |agent, cx| {
+                    agent.send_permission_command(id, session_id, "verify", cx)
+                });
+            }
+
             if parsed_command.is_unqualified(HELP_COMMAND_NAME) {
                 return self.0.update(cx, |agent, cx| {
                     agent.send_help_command(id, session_id, cx)
@@ -3471,6 +3504,27 @@ impl ThreadEnvironment for NativeThreadEnvironment {
 
             Ok(Rc::new(handle) as _)
         })
+    }
+
+    fn find_terminal(
+        &self,
+        terminal_id: acp::TerminalId,
+        cx: &mut AsyncApp,
+    ) -> Task<Result<Rc<dyn TerminalHandle>>> {
+        let result = self
+            .acp_thread
+            .read_with(cx, |thread, _cx| thread.terminal(terminal_id));
+        match result {
+            Ok(Ok(terminal)) => {
+                let handle = AcpTerminalHandle {
+                    terminal,
+                    _drop_tx: None,
+                };
+                Task::ready(Ok(Rc::new(handle) as _))
+            }
+            Ok(Err(err)) => Task::ready(Err(err)),
+            Err(err) => Task::ready(Err(err)),
+        }
     }
 
     fn create_subagent(&self, label: String, cx: &mut App) -> Result<Rc<dyn SubagentHandle>> {

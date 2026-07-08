@@ -23,6 +23,7 @@ use language_model::LanguageModelToolUseId;
 use settings::{
     Settings, SettingsStore, ToolPermissionMode, update_settings_file,
 };
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -675,6 +676,81 @@ impl ToolCallEventStream {
         self.sandbox_grants
             .borrow()
             .effective_with_persistent(request, persistent)
+    }
+
+    /// Prompts the user with a form to fill in (e.g., credential fields).
+    /// Returns the filled values keyed by field name.
+    ///
+    /// The tool call shows the `title` and optional `message` as instructions,
+    /// then renders form inputs for each field. On submit, the tool unblocks
+    /// and receives the filled values.
+    pub fn request_form_data(
+        &self,
+        title: Option<String>,
+        message: Option<String>,
+        fields: Vec<acp_thread::FormField>,
+        cx: &mut App,
+    ) -> Task<Result<HashMap<String, String>>> {
+        let stream = self.stream.clone();
+        let tool_use_id = self.tool_use_id.clone();
+        cx.spawn(async move |_cx| {
+            let mut content = vec![];
+            if let Some(message) = &message {
+                content.push(acp::ToolCallContent::from(message.clone()));
+            }
+
+            let fields_content: Vec<acp::ToolCallContent> = fields
+                .iter()
+                .map(|f| {
+                    let label = if f.secret {
+                        format!("🔑 {} ({})", f.label, f.key)
+                    } else {
+                        format!("📋 {} ({})", f.label, f.key)
+                    };
+                    acp::ToolCallContent::from(format!("**{}**\n{}", label, f.description))
+                })
+                .collect();
+            content.extend(fields_content);
+
+            let mut fields_update = acp::ToolCallUpdateFields::new();
+            if let Some(title) = title {
+                fields_update = fields_update.title(title);
+            }
+            fields_update = fields_update.content(content);
+
+            let (response_tx, response_rx) = oneshot::channel();
+            if let Err(error) = stream.0.unbounded_send(Ok(
+                ThreadEvent::ToolCallAuthorization(ToolCallAuthorization {
+                    tool_call: acp::ToolCallUpdate::new(tool_use_id.to_string(), fields_update),
+                    options: acp_thread::PermissionOptions::Flat(vec![
+                        acp::PermissionOption::new(
+                            acp::PermissionOptionId::new("submit"),
+                            "Submit",
+                            acp::PermissionOptionKind::AllowOnce,
+                        ),
+                        acp::PermissionOption::new(
+                            acp::PermissionOptionId::new("cancel"),
+                            "Cancel",
+                            acp::PermissionOptionKind::RejectOnce,
+                        ),
+                    ]),
+                    response: response_tx,
+                    context: None,
+                    kind: acp_thread::AuthorizationKind::FormInput(fields),
+                }),
+            )) {
+                log::error!("Failed to send form data request: {error}");
+                return Err(anyhow!("Failed to send form data request: {error}"));
+            }
+
+            let outcome = response_rx
+                .await
+                .map_err(|_| anyhow!("form channel closed"))?;
+            match outcome.option_id.0.as_ref() {
+                "submit" => Ok(outcome.form_values.unwrap_or_default()),
+                _ => Err(anyhow!("form was cancelled")),
+            }
+        })
     }
 
     /// Prompts the user to choose between an explicit set of actions and

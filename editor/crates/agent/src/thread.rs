@@ -1,12 +1,12 @@
 use crate::{
     ApplyCodeActionTool, BrowserNavigateTool, BrowserScreenshotTool, CodeActionStore,
-    ContextServerRegistry, CopyPathTool, CreateDirectoryTool, CreateThreadTool, DbLanguageModel,
-    DbThread, DeletePathTool, DiagnosticsTool, EditFileTool, FetchTool, FindPathTool,
-    FindReferencesTool, GitBranchTool, GitCommitTool, GitLogTool,
+    ContextServerRegistry, CopyPathTool, CreateDirectoryTool, CreateThreadTool, CredentialStore,
+    DbLanguageModel, DbThread, DeletePathTool, DiagnosticsTool, EditFileTool, FetchTool,
+    FindPathTool, FindReferencesTool, GitBranchTool, GitCommitTool, GitLogTool,
     GitPushTool, GitStatusTool, GetCodeActionsTool, GoToDefinitionTool, GrepTool,
     ListAgentsAndModelsTool, ListDirectoryTool, MovePathTool, ProjectSnapshot, ReadFileTool,
-    RenameTool, SandboxedTerminalTool, SearchSemanticTool, SpawnAgentTool, SystemPromptTemplate,
-    Template, Templates, TerminalTool, WebSearchTool, WriteFileTool,
+    RenameTool, RequestCredentialTool, SandboxedTerminalTool, SearchSemanticTool, SpawnAgentTool,
+    SystemPromptTemplate, Template, Templates, TerminalTool, WebSearchTool, WriteFileTool,
 };
 use acp_thread::UserMessageId;
 use action_log::ActionLog;
@@ -18,6 +18,7 @@ use agent_settings::{
     AgentProfileId, AgentSettings, COMPACTION_PROMPT,
     SUMMARIZE_THREAD_DETAILED_PROMPT,
 };
+use paths;
 use anyhow::{Context as _, Result, anyhow};
 use chrono::{DateTime, Local, Utc};
 use client::UserStore;
@@ -979,6 +980,12 @@ impl Thread {
         // `Thread::enabled_tools`.
         self.add_tool(CreateThreadTool::new(environment.clone()));
         self.add_tool(ListAgentsAndModelsTool::new(environment));
+        {
+            let config_dir = paths::config_dir().clone();
+            let fs = self.project.read(cx).fs();
+            let store = CredentialStore::new(fs.clone(), config_dir);
+            self.add_tool(RequestCredentialTool::new(store));
+        }
     }
 
     pub fn add_tool<T: AgentTool>(&mut self, tool: T) {

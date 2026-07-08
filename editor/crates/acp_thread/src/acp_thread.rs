@@ -725,11 +725,24 @@ pub enum SelectedPermissionParams {
     Terminal { patterns: Vec<String> },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FormField {
+    /// The field key (e.g., "GOOGLE_CLIENT_ID")
+    pub key: String,
+    /// Human-readable label for the input (e.g., "Client ID")
+    pub label: String,
+    /// Longer description / paste instructions
+    pub description: String,
+    /// If true, the input is masked (password-style)
+    pub secret: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct SelectedPermissionOutcome {
     pub option_id: acp::PermissionOptionId,
     pub option_kind: acp::PermissionOptionKind,
     pub params: Option<SelectedPermissionParams>,
+    pub form_values: Option<HashMap<String, String>>,
 }
 
 impl SelectedPermissionOutcome {
@@ -738,6 +751,7 @@ impl SelectedPermissionOutcome {
             option_id,
             option_kind,
             params: None,
+            form_values: None,
         }
     }
 
@@ -745,11 +759,22 @@ impl SelectedPermissionOutcome {
         self.params = params;
         self
     }
+
+    pub fn with_form_values(mut self, values: HashMap<String, String>) -> Self {
+        self.form_values = Some(values);
+        self
+    }
 }
 
 impl From<SelectedPermissionOutcome> for acp::SelectedPermissionOutcome {
     fn from(value: SelectedPermissionOutcome) -> Self {
         Self::new(value.option_id)
+    }
+}
+
+impl SelectedPermissionOutcome {
+    pub fn form_value(&self, key: &str) -> Option<&String> {
+        self.form_values.as_ref().and_then(|v| v.get(key))
     }
 }
 
@@ -769,7 +794,7 @@ impl From<RequestPermissionOutcome> for acp::RequestPermissionOutcome {
 }
 
 /// What a `WaitingForConfirmation` prompt represents semantically.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AuthorizationKind {
     /// The user is granting or denying permission for the tool call to
     /// proceed. The selected `PermissionOptionKind` determines whether the
@@ -782,6 +807,10 @@ pub enum AuthorizationKind {
     /// selected `PermissionOptionKind`; the caller interprets the chosen
     /// `option_id` to decide what to do.
     ActionChoice,
+    /// The user is filling in a form (e.g., credential fields). The tool
+    /// call transitions to `InProgress` on submit, and `form_values` on
+    /// the outcome carries the filled data.
+    FormInput(Vec<FormField>),
 }
 
 #[derive(Debug)]
@@ -2574,7 +2603,7 @@ impl AcpThread {
         let new_status =
             match &call.status {
                 ToolCallStatus::WaitingForConfirmation {
-                    kind: AuthorizationKind::ActionChoice,
+                    kind: AuthorizationKind::ActionChoice | AuthorizationKind::FormInput(_),
                     ..
                 } => ToolCallStatus::InProgress,
                 ToolCallStatus::WaitingForConfirmation { current_status, .. } => {

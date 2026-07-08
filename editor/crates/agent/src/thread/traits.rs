@@ -35,6 +35,18 @@ pub trait ThreadEnvironment {
         cx: &mut AsyncApp,
     ) -> Task<Result<Rc<dyn TerminalHandle>>>;
 
+    /// Look up an existing terminal by ID (returned from a previous timeout).
+    /// The returned handle does NOT kill the terminal on drop.
+    fn find_terminal(
+        &self,
+        _terminal_id: acp::TerminalId,
+        _cx: &mut AsyncApp,
+    ) -> Task<Result<Rc<dyn TerminalHandle>>> {
+        Task::ready(Err(anyhow::anyhow!(
+            "Reconnecting to terminals is not supported in this environment"
+        )))
+    }
+
     fn create_subagent(&self, label: String, cx: &mut App) -> Result<Rc<dyn SubagentHandle>>;
 
     fn resume_subagent(
