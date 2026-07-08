@@ -66,7 +66,6 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, node: NodeRuntime
     let go_lsp_adapter = Arc::new(go::GoLspAdapter);
     let json_context_provider = Arc::new(JsonTaskProvider);
     let json_lsp_adapter = Arc::new(json::JsonLspAdapter::new(languages.clone(), node.clone()));
-    let node_version_lsp_adapter = Arc::new(json::NodeVersionAdapter);
     let php_lsp_adapter = Arc::new(php::PhpLspAdapter::new(node.clone()));
     let py_lsp_adapter = Arc::new(python::PyLspAdapter::new());
     let ty_lsp_adapter = Arc::new(python::TyLspAdapter::new(fs.clone()));
@@ -136,7 +135,7 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, node: NodeRuntime
         },
         LanguageInfo {
             name: "json",
-            adapters: vec![json_lsp_adapter.clone(), node_version_lsp_adapter],
+            adapters: vec![json_lsp_adapter.clone()],
             context: Some(json_context_provider.clone()),
             ..Default::default()
         },
