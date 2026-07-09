@@ -8616,9 +8616,9 @@ impl ThreadView {
                                     let form_values: std::collections::HashMap<String, String> = editors
                                         .iter()
                                         .zip(fields.iter())
-                                        .map(|(editor, field)| {
+                                        .filter_map(|(editor, field)| {
                                             let text = editor.read(cx).text(cx);
-                                            (field.key.clone(), text)
+                                            if text.is_empty() { None } else { Some((field.key.clone(), text)) }
                                         })
                                         .collect();
                                     outcome = outcome.with_form_values(form_values);
