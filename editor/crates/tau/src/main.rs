@@ -257,6 +257,24 @@ fn main() {
         return;
     }
 
+    // Compute version info early — needed for --version which must run before
+    // daemonization (otherwise stdout gets piped to /dev/null on Unix).
+    let build_id = option_env!("TAU_BUILD_ID");
+    let app_commit_sha =
+        option_env!("TAU_COMMIT_SHA").map(|commit_sha| AppCommitSha::new(commit_sha.to_string()));
+    let app_version = AppVersion::load(env!("CARGO_PKG_VERSION"), build_id, app_commit_sha.clone());
+
+    if args.version {
+        println!("TAU {}", app_version);
+        if let Some(sha) = &app_commit_sha {
+            println!("Commit: {}", sha.short());
+        }
+        if let Some(bid) = build_id {
+            println!("Build: {}", bid);
+        }
+        return;
+    }
+
     // On Unix, daemonize by default: re-exec self with --foreground so the
     // parent can exit immediately and return the terminal to the user.
     // Also kill the parent shell so the terminal emulator closes.
@@ -309,22 +327,6 @@ fn main() {
         };
     }
     ztracing::init();
-
-    let build_id = option_env!("TAU_BUILD_ID");
-    let app_commit_sha =
-        option_env!("TAU_COMMIT_SHA").map(|commit_sha| AppCommitSha::new(commit_sha.to_string()));
-    let app_version = AppVersion::load(env!("CARGO_PKG_VERSION"), build_id, app_commit_sha.clone());
-
-    if args.version {
-        println!("TAU {}", app_version);
-        if let Some(sha) = &app_commit_sha {
-            println!("Commit: {}", sha.short());
-        }
-        if let Some(bid) = build_id {
-            println!("Build: {}", bid);
-        }
-        return;
-    }
 
     if args.system_specs {
         let system_specs = system_specs::SystemSpecs::new_stateless(

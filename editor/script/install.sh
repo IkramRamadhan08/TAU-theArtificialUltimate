@@ -193,6 +193,15 @@ else
   echo "$MSG_BUILD_WAIT"
   cargo build --release --bin tau --jobs "$(nproc 2>/dev/null || echo 4)"
 
+  # Strip debug symbols to reduce binary size
+  echo "  Stripping debug symbols..."
+  if command -v llvm-objcopy &>/dev/null; then
+    llvm-objcopy --strip-all "target/release/tau" 2>/dev/null || \
+    llvm-objcopy --strip-debug "target/release/tau"
+  elif command -v strip &>/dev/null; then
+    strip --strip-all "target/release/tau"
+  fi
+
   if [[ "$OS" == "linux" ]]; then
     mkdir -p "$TAU_APP_DIR/libexec"
     cp "target/release/tau" "$TAU_APP_DIR/libexec/tau-editor"
