@@ -13,12 +13,6 @@ case "$LANG_CODE" in
     MSG_ARCH="Arsitektur tidak didukung"
     MSG_OS="Sistem operasi tidak didukung"
     MSG_DOWNLOAD="Mengunduh TAU untuk"
-    MSG_BUILD="Tidak ada binary siap pakai. Membangun dari sumber..."
-    MSG_RUST_REQUIRED="Rust diperlukan untuk membangun TAU dari sumber."
-    MSG_RUST_INSTALL="Pasang dari: https://rustup.rs"
-    MSG_RUN_AGAIN="Jalankan script ini lagi setelah Rust terpasang."
-    MSG_BUILD_WAIT="Membangun TAU (ini akan memakan waktu)..."
-    MSG_DEPS_INSTALL="Memasang dependensi sistem..."
     MSG_DESKTOP_ASK="Tampilkan TAU di menu aplikasi dan desktop?"
     MSG_DESKTOP_YES="y"
     MSG_DESKTOP_NO="n"
@@ -43,12 +37,6 @@ case "$LANG_CODE" in
     MSG_ARCH="Unsupported architecture"
     MSG_OS="Unsupported OS"
     MSG_DOWNLOAD="Downloading TAU for"
-    MSG_BUILD="No pre-built binary. Building from source..."
-    MSG_RUST_REQUIRED="Rust is required to build TAU from source."
-    MSG_RUST_INSTALL="Install from: https://rustup.rs"
-    MSG_RUN_AGAIN="Run this script again after Rust is installed."
-    MSG_BUILD_WAIT="Building TAU (this will take a while)..."
-    MSG_DEPS_INSTALL="Installing system dependencies..."
     MSG_DESKTOP_ASK="Add TAU to application menu and desktop?"
     MSG_DESKTOP_YES="y"
     MSG_DESKTOP_NO="n"
@@ -170,47 +158,10 @@ if curl -4 -fsSL --connect-timeout 15 --max-time 30 -I "$DOWNLOAD_URL" 2>/dev/nu
     rm -rf /tmp/tau.zip /tmp/tau-install
   fi
 else
-  echo "$MSG_BUILD"
-  if ! command -v cargo &>/dev/null; then
-    echo "$MSG_RUST_REQUIRED"
-    echo "$MSG_RUST_INSTALL"
-    echo ""
-    echo "$MSG_RUN_AGAIN"
-    exit 1
-  fi
-
-  echo "$MSG_DEPS_INSTALL"
-  if [[ "$OS" == "darwin" ]]; then
-    if command -v brew &>/dev/null; then
-      brew install fontconfig 2>/dev/null || true
-    fi
-  fi
-
-  TMP_DIR="$(mktemp -d)"
-  git clone --depth 1 "https://github.com/$REPO.git" "$TMP_DIR"
-  cd "$TMP_DIR/editor"
-
-  echo "$MSG_BUILD_WAIT"
-  cargo build --release --bin tau --jobs "$(nproc 2>/dev/null || echo 4)"
-
-  # Strip debug symbols to reduce binary size
-  echo "  Stripping debug symbols..."
-  if command -v llvm-objcopy &>/dev/null; then
-    llvm-objcopy --strip-all "target/release/tau" 2>/dev/null || \
-    llvm-objcopy --strip-debug "target/release/tau"
-  elif command -v strip &>/dev/null; then
-    strip --strip-all "target/release/tau"
-  fi
-
-  if [[ "$OS" == "linux" ]]; then
-    mkdir -p "$TAU_APP_DIR/libexec"
-    cp "target/release/tau" "$TAU_APP_DIR/libexec/tau-editor"
-    ln -sf "$TAU_APP_DIR/libexec/tau-editor" "$INSTALL_DIR/tau"
-  else
-    cp "target/release/tau" "$INSTALL_DIR/tau"
-  fi
-  RELEASE_VERSION="source"
-  rm -rf "$TMP_DIR"
+  echo "  $MSG_VERIFY_FAIL"
+  echo "  Tidak ada binary yang tersedia untuk platform ini."
+  echo "  Install dari: https://github.com/$REPO/releases"
+  exit 1
 fi
 
 # ---------- Verify binary ----------
