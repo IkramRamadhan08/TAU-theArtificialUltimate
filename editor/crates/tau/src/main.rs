@@ -159,7 +159,30 @@ fn fail_to_open_window(e: anyhow::Error, _cx: &mut App) {
     eprintln!(
         "TAU failed to open a window: {e:?}. See https://tau.ai/docs for troubleshooting steps."
     );
-    #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+
+    #[cfg(target_os = "windows")]
+    {
+        let message = format!(
+            "TAU failed to open a window: {e:?}\n\nSee https://tau.ai/docs for troubleshooting steps."
+        );
+        let title = "TAU Error";
+        unsafe {
+            use windows::Win32::UI::WindowsAndMessaging::{
+                MessageBoxW, MB_ICONERROR, MB_OK,
+            };
+            let wide_message: Vec<u16> = message.encode_utf16().chain(std::iter::once(0)).collect();
+            let wide_title: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
+            MessageBoxW(
+                None,
+                windows::core::PCWSTR::from_raw(wide_message.as_ptr()),
+                windows::core::PCWSTR::from_raw(wide_title.as_ptr()),
+                MB_OK | MB_ICONERROR,
+            );
+        }
+        process::exit(1);
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "freebsd", target_os = "windows")))]
     {
         process::exit(1);
     }
@@ -397,6 +420,20 @@ fn main() {
     };
     if failed_single_instance_check {
         println!("tau is already running");
+        #[cfg(target_os = "windows")]
+        unsafe {
+            use windows::Win32::UI::WindowsAndMessaging::{
+                MessageBoxW, MB_ICONINFORMATION, MB_OK,
+            };
+            let message: Vec<u16> = "tau is already running\0".encode_utf16().collect();
+            let title: Vec<u16> = "TAU\0".encode_utf16().collect();
+            MessageBoxW(
+                None,
+                windows::core::PCWSTR::from_raw(message.as_ptr()),
+                windows::core::PCWSTR::from_raw(title.as_ptr()),
+                MB_OK | MB_ICONINFORMATION,
+            );
+        }
         return;
     }
 
