@@ -103,15 +103,17 @@ curl -fsSL https://raw.githubusercontent.com/IkramRamadhan08/TAU-theArtificialUl
 powershell -c "& { $(Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/IkramRamadhan08/TAU-theArtificialUltimate/main/editor/script/install.ps1' -UseBasicParsing).Content | Invoke-Expression }"
 ```
 
-The installer:
+**What the installer does:**
 
-- Detects your OS and architecture
-- Downloads the latest pre-built binary (or builds from source if unavailable)
-- Asks about creating a desktop shortcut
-- Adds TAU to your `PATH`
-- On Linux, installs system dependencies automatically
+1. Detects your OS and architecture (x86_64 / ARM64)
+2. Downloads the latest pre-built binary from GitHub Releases
+3. Installs to `~/.local/bin` (Linux/macOS) or `%LOCALAPPDATA%\TAU` (Windows)
+4. Adds TAU to your `PATH`
+5. On Linux, installs system dependencies automatically (X11, Wayland, audio libs)
+6. Creates desktop shortcut and Start Menu entry (Windows)
+7. Registers file associations and `tau://` URI handler (Windows)
 
-After installation, type **`tau`** in your terminal.
+**After installation, type `tau` in your terminal or click the desktop shortcut.**
 
 ### Uninstall
 

@@ -21,5 +21,5 @@ fi
 snap remove tau || true
 mkdir -p snap
 rm -rf snap/unpacked
-unsquashfs -dest snap/unpacked "zed_$1_amd64.snap"
+unsquashfs -dest snap/unpacked "tau_$1_amd64.snap"
 snap try --classic snap/unpacked

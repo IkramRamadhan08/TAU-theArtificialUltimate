@@ -1,5 +1,6 @@
 param(
-    [switch]$Desktop = $false,
+    [switch]$NoDesktop,
+    [switch]$NoStartMenu,
     [switch]$Help
 )
 
@@ -7,9 +8,9 @@ $REPO = "IkramRamadhan08/TAU-theArtificialUltimate"
 $VERSION = "latest"
 
 function Write-Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
-function Write-OK($msg) { Write-Host "  ✓ $msg" -ForegroundColor Green }
+function Write-OK($msg) { Write-Host "  OK: $msg" -ForegroundColor Green }
 function Write-Info($msg) { Write-Host "  $msg" -ForegroundColor Gray }
-function Write-Error($msg) { Write-Host "  ✗ $msg" -ForegroundColor Red }
+function Write-Error($msg) { Write-Host "  ERROR: $msg" -ForegroundColor Red }
 
 if ($Help) {
     Write-Host @"
@@ -20,11 +21,12 @@ Usage:
   powershell -ExecutionPolicy Bypass -File install.ps1
 
 Options:
-  -Desktop   Create desktop shortcut
-  -Help      Show this help
+  -NoDesktop     Skip creating desktop shortcut
+  -NoStartMenu   Skip creating Start Menu shortcut
+  -Help          Show this help
 
 One-liner:
-  powershell -c "& { $(Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/$REPO/main/install.ps1' -UseBasicParsing).Content | Invoke-Expression }"
+  powershell -c "& { $(Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/$REPO/main/editor/script/install.ps1' -UseBasicParsing).Content | Invoke-Expression }"
 
 "@
     exit 0
@@ -37,6 +39,7 @@ $ARCH = $env:PROCESSOR_ARCHITECTURE
 if ($ARCH -eq "AMD64") {
     $ASSET = "tau-x86_64-windows.zip"
 } elseif ($ARCH -eq "ARM64") {
+    Write-Info "ARM64 detected, attempting ARM64 build..."
     $ASSET = "tau-aarch64-windows.zip"
 } else {
     Write-Error "Unsupported architecture: $ARCH"
@@ -56,8 +59,22 @@ try {
     Invoke-WebRequest -Uri $DOWNLOAD_URL -OutFile $TEMP_ZIP -UseBasicParsing -TimeoutSec 600
     Write-OK "Downloaded ($([math]::Round((Get-Item $TEMP_ZIP).Length / 1MB, 1)) MB)"
 } catch {
-    Write-Error "Download failed: $_"
-    exit 1
+    # If ARM64 build not found, fallback to x86_64
+    if ($ARCH -eq "ARM64") {
+        Write-Info "ARM64 build not available, falling back to x86_64..."
+        $ASSET = "tau-x86_64-windows.zip"
+        $DOWNLOAD_URL = "https://github.com/$REPO/releases/$VERSION/download/$ASSET"
+        try {
+            Invoke-WebRequest -Uri $DOWNLOAD_URL -OutFile $TEMP_ZIP -UseBasicParsing -TimeoutSec 600
+            Write-OK "Downloaded x86_64 fallback ($([math]::Round((Get-Item $TEMP_ZIP).Length / 1MB, 1)) MB)"
+        } catch {
+            Write-Error "Download failed: $_"
+            exit 1
+        }
+    } else {
+        Write-Error "Download failed: $_"
+        exit 1
+    }
 }
 
 # ----- Extract -----
@@ -121,8 +138,25 @@ if ($CURRENT_PATH -notlike "*$INSTALL_DIR*") {
 # Also set for current session
 $env:Path = "$env:Path;$INSTALL_DIR"
 
-# ----- Desktop shortcut (optional) -----
-if ($Desktop) {
+# ----- Start Menu shortcut (default) -----
+if (-not $NoStartMenu) {
+    Write-Step "Creating Start Menu shortcut..."
+    $WScriptShell = New-Object -ComObject WScript.Shell
+    $START_MENU = [Environment]::GetFolderPath("Programs")
+    $SHORTCUT_DIR = "$START_MENU\TAU"
+    if (-not (Test-Path $SHORTCUT_DIR)) {
+        New-Item -ItemType Directory -Path $SHORTCUT_DIR -Force | Out-Null
+    }
+    $Shortcut = $WScriptShell.CreateShortcut("$SHORTCUT_DIR\TAU.lnk")
+    $Shortcut.TargetPath = $BINARY_PATH
+    $Shortcut.WorkingDirectory = $INSTALL_DIR
+    $Shortcut.Description = "TAU - The Artificial Ultimate AI Code Editor"
+    $Shortcut.Save()
+    Write-OK "Start Menu shortcut created"
+}
+
+# ----- Desktop shortcut (default) -----
+if (-not $NoDesktop) {
     Write-Step "Creating desktop shortcut..."
     $WScriptShell = New-Object -ComObject WScript.Shell
     $DESKTOP = [Environment]::GetFolderPath("Desktop")
@@ -134,12 +168,94 @@ if ($Desktop) {
     Write-OK "Desktop shortcut created"
 }
 
+# ----- Register URI handler -----
+Write-Step "Registering tau:// URI handler..."
+try {
+    $REG_BASE = "HKCU:\Software\Classes\tau"
+    if (-not (Test-Path $REG_BASE)) {
+        New-Item -Path $REG_BASE -Force | Out-Null
+    }
+    Set-ItemProperty -Path $REG_BASE -Name "(Default)" -Value "URL:TAU Protocol"
+    Set-ItemProperty -Path $REG_BASE -Name "URL Protocol" -Value ""
+    Set-ItemProperty -Path $REG_BASE -Name "AppUserModelID" -Value "ai.tau.TAU"
+    $ICON_PATH = "$BINARY_PATH,0"
+    $CMD = "`"$BINARY_PATH`" `"%1`""
+    New-Item -Path "$REG_BASE\DefaultIcon" -Force | Out-Null
+    Set-ItemProperty -Path "$REG_BASE\DefaultIcon" -Name "(Default)" -Value $ICON_PATH
+    New-Item -Path "$REG_BASE\shell\open\command" -Force | Out-Null
+    Set-ItemProperty -Path "$REG_BASE\shell\open\command" -Name "(Default)" -Value $CMD
+    Write-OK "tau:// URI handler registered"
+} catch {
+    Write-Error "Failed to register URI handler: $_"
+}
+
+# ----- Register file associations -----
+Write-Step "Registering file associations..."
+$EXTENSIONS = @(
+    ".py", ".js", ".ts", ".tsx", ".jsx", ".rs", ".go", ".java",
+    ".c", ".cpp", ".h", ".hpp", ".cs", ".rb", ".php", ".swift",
+    ".kt", ".scala", ".html", ".css", ".scss", ".less", ".json",
+    ".yaml", ".yml", ".toml", ".xml", ".md", ".txt", ".sh",
+    ".bash", ".zsh", ".fish", ".ps1", ".bat", ".cmd", ".sql",
+    ".r", ".lua", ".zig", ".nim", ".ex", ".exs", ".hs", ".ml",
+    ".fs", ".vb", ".pl", ".pm", ".dart", ".vue", ".svelte"
+)
+
+$REG_VALUE = "TAU.Editor"
+
+foreach ($ext in $EXTENSIONS) {
+    try {
+        $extKey = "HKCU:\Software\Classes\$ext"
+        if (-not (Test-Path $extKey)) {
+            New-Item -Path $extKey -Force | Out-Null
+        }
+        $openWithKey = "$extKey\OpenWithProgids"
+        if (-not (Test-Path $openWithKey)) {
+            New-Item -Path $openWithKey -Force | Out-Null
+        }
+        Set-ItemProperty -Path $openWithKey -Name "$REG_VALUE" -Value "" -Type String
+    } catch {
+        # Skip failed extensions silently
+    }
+}
+
+# Create ProgID
+try {
+    $progIdKey = "HKCU:\Software\Classes\$REG_VALUE"
+    if (-not (Test-Path $progIdKey)) {
+        New-Item -Path $progIdKey -Force | Out-Null
+    }
+    Set-ItemProperty -Path $progIdKey -Name "(Default)" -Value "TAU Source File"
+    Set-ItemProperty -Path $progIdKey -Name "AppUserModelID" -Value "ai.tau.TAU"
+    $defaultIconKey = "$progIdKey\DefaultIcon"
+    if (-not (Test-Path $defaultIconKey)) {
+        New-Item -Path $defaultIconKey -Force | Out-Null
+    }
+    Set-ItemProperty -Path $defaultIconKey -Name "(Default)" -Value "`"$BINARY_PATH`",0"
+    $shellOpenKey = "$progIdKey\shell\open"
+    if (-not (Test-Path $shellOpenKey)) {
+        New-Item -Path $shellOpenKey -Force | Out-Null
+    }
+    Set-ItemProperty -Path $shellOpenKey -Name "Icon" -Value "`"$BINARY_PATH`""
+    $commandKey = "$progIdKey\shell\open\command"
+    if (-not (Test-Path $commandKey)) {
+        New-Item -Path $commandKey -Force | Out-Null
+    }
+    Set-ItemProperty -Path $commandKey -Name "(Default)" -Value "`"$BINARY_PATH`" `"%1`""
+    Write-OK "File associations registered"
+} catch {
+    Write-Error "Failed to register file associations: $_"
+}
+
 # ----- Done -----
 Write-Host ""
-Write-Host "=== TAU installed! ===" -ForegroundColor Green
+Write-Host "=== TAU installed successfully! ===" -ForegroundColor Green
 Write-Host ""
-Write-Host "  Run 'tau' from PowerShell or Command Prompt." -ForegroundColor White
-Write-Host "  The terminal will close automatically and TAU will appear." -ForegroundColor Gray
+Write-Host "  You can now:" -ForegroundColor White
+Write-Host "    - Open TAU from Start Menu" -ForegroundColor White
+Write-Host "    - Double-click TAU shortcut on Desktop" -ForegroundColor White
+Write-Host "    - Run 'tau' from PowerShell or Command Prompt" -ForegroundColor White
+Write-Host "    - Right-click any code file and select 'Open with TAU'" -ForegroundColor White
 Write-Host ""
-Write-Host "  To pin to taskbar: right-click tau.exe in $INSTALL_DIR and select 'Pin to taskbar'" -ForegroundColor Gray
+Write-Host "  To pin to taskbar: right-click TAU in Start Menu > Pin to taskbar" -ForegroundColor Gray
 Write-Host ""

@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check-linux:
+    name: Check (Linux)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: editor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: "1.95.0"
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxkbcommon-x11-dev libxcb-cursor-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libxkbcommon-dev libfontconfig-dev libwayland-dev wayland-protocols \
+            libx11-dev libx11-xcb-dev libasound2-dev libfreetype-dev \
+            libglib2.0-dev libpango1.0-dev libatk1.0-dev libgdk-pixbuf-2.0-dev \
+            libgtk-3-dev libharfbuzz-dev
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: linux-cargo-${{ hashFiles('editor/Cargo.lock') }}
+          restore-keys: linux-cargo-
+      - name: Check
+        run: cargo check --release --bin tau
+
+  check-macos:
+    name: Check (macOS)
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: editor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: "1.95.0"
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: macos-cargo-${{ hashFiles('editor/Cargo.lock') }}
+          restore-keys: macos-cargo-
+      - name: Check
+        run: cargo check --release --bin tau
+
+  check-windows:
+    name: Check (Windows)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: editor
+    steps:
+      - name: Enable long paths
+        working-directory: .
+        run: git config --global core.longpaths true
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: "1.95.0"
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: windows-cargo-${{ hashFiles('editor/Cargo.lock') }}
+          restore-keys: windows-cargo-
+      - name: Check
+        run: cargo check --release --bin tau
+        env:
+          RUSTFLAGS: "-Ctarget-feature=+crt-static"

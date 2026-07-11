@@ -4,20 +4,20 @@ base: core24
 version: "$RELEASE_VERSION"
 summary: Local-first agentic coding IDE
 description: |
-  TAU is a local-first, agentic coding IDE forked from Tau and wired toward
-  the TAU Rust agent runtime.
+  TAU is a local-first, agentic coding IDE forked from Zed with built-in AI agent runtime.
+  All AI features use your own LLM provider API keys. No cloud dependency. No telemetry.
 grade: stable
 confinement: classic
 compression: lzo
-website: https://github.com/eightarch/tau
-source-code: https://github.com/eightarch/tau
-issues: https://github.com/eightarch/tau/issues
-contact: https://github.com/eightarch/tau/issues
+website: https://github.com/IkramRamadhan08/TAU-theArtificialUltimate
+source-code: https://github.com/IkramRamadhan08/TAU-theArtificialUltimate
+issues: https://github.com/IkramRamadhan08/TAU-theArtificialUltimate/issues
+contact: https://github.com/IkramRamadhan08/TAU-theArtificialUltimate/issues
 
 parts:
   tau:
     plugin: dump
-    source: "https://github.com/eightarch/tau/releases/download/v$RELEASE_VERSION/tau-linux-x86_64.tar.gz"
+    source: "https://github.com/IkramRamadhan08/TAU-theArtificialUltimate/releases/download/v$RELEASE_VERSION/tau-x86_64-linux.tar.xz"
 
     organize:
       # These renames seem to not be necessary, but it's tidier.

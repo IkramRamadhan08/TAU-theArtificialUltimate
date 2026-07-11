@@ -66,8 +66,8 @@ OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 case "$OS" in
   linux)
     case "$ARCH" in
-      x86_64) ASSET="tau-x86_64-linux.tar.gz" ;;
-      aarch64|arm64) ASSET="tau-aarch64-linux.tar.gz" ;;
+      x86_64) ASSET="tau-x86_64-linux.tar.xz" ;;
+      aarch64|arm64) ASSET="tau-aarch64-linux.tar.xz" ;;
       *) echo "$MSG_ARCH: $ARCH"; exit 1 ;;
     esac
     ;;
@@ -106,11 +106,11 @@ mkdir -p "$INSTALL_DIR" "$ICON_DIR" "$APP_DIR"
 # ---------- Install runtime deps ----------
 if [[ "$OS" == "linux" ]]; then
   if command -v apt &>/dev/null; then
-    sudo apt install -y libxkbcommon-x11-0 libxcb-cursor0 2>/dev/null || true
+    sudo apt install -y libxkbcommon-x11-0 libxcb-cursor0 xz-utils 2>/dev/null || true
   elif command -v pacman &>/dev/null; then
-    sudo pacman -S --noconfirm libxkbcommon libxcb wayland fontconfig libva mesa alsa-lib 2>/dev/null || true
+    sudo pacman -S --noconfirm libxkbcommon libxcb wayland fontconfig libva mesa alsa-lib xz 2>/dev/null || true
   elif command -v dnf &>/dev/null; then
-    sudo dnf install -y libxkbcommon libxcb wayland fontconfig libva mesa-libGL alsa-lib 2>/dev/null || true
+    sudo dnf install -y libxkbcommon libxcb wayland fontconfig libva mesa-libGL alsa-lib xz 2>/dev/null || true
   fi
 fi
 
@@ -118,7 +118,17 @@ fi
 TAU_APP_DIR="${INSTALL_DIR}/../tau.app"
 RELEASE_VERSION=""
 
-if curl -4 -fsSL --connect-timeout 15 --max-time 30 -I "$DOWNLOAD_URL" 2>/dev/null; then
+# Try IPv4 first, fallback to IPv6
+CURL_OPTS="--progress-bar --connect-timeout 15 --max-time 600"
+if curl -4 -fsSL --connect-timeout 5 --max-time 5 -I "$DOWNLOAD_URL" 2>/dev/null; then
+  CURL_OPTS="-4 $CURL_OPTS"
+elif curl -6 -fsSL --connect-timeout 5 --max-time 5 -I "$DOWNLOAD_URL" 2>/dev/null; then
+  CURL_OPTS="-6 $CURL_OPTS"
+else
+  CURL_OPTS="-4 $CURL_OPTS"
+fi
+
+if curl $CURL_OPTS -fsSL -I "$DOWNLOAD_URL" 2>/dev/null; then
   echo "$MSG_DOWNLOAD $OS ($ARCH)..."
 
   # Get version from redirect URL
@@ -129,11 +139,11 @@ if curl -4 -fsSL --connect-timeout 15 --max-time 30 -I "$DOWNLOAD_URL" 2>/dev/nu
 
   if [[ "$OS" == "linux" ]]; then
     mkdir -p "$TAU_APP_DIR"
-    curl -4 -fsSL --max-time 600 "$DOWNLOAD_URL" | tar xz -C "$(dirname "$TAU_APP_DIR")"
+    curl $CURL_OPTS -fsSL "$DOWNLOAD_URL" | tar xJ -C "$(dirname "$TAU_APP_DIR")"
     chmod +x "$TAU_APP_DIR/libexec/tau-editor" 2>/dev/null || true
     ln -sf "$TAU_APP_DIR/libexec/tau-editor" "$INSTALL_DIR/tau"
   elif [[ "$OS" == "darwin" ]]; then
-    curl -4 -fsSL --max-time 600 -o /tmp/tau.tar.gz "$DOWNLOAD_URL"
+    curl $CURL_OPTS -fsSL -o /tmp/tau.tar.gz "$DOWNLOAD_URL"
     tar xzf /tmp/tau.tar.gz -C /tmp
     BINARY=$(ls /tmp/tau-*-macos 2>/dev/null | head -1)
     if [[ -n "$BINARY" ]]; then
@@ -145,7 +155,7 @@ if curl -4 -fsSL --connect-timeout 15 --max-time 30 -I "$DOWNLOAD_URL" 2>/dev/nu
     fi
     rm -f /tmp/tau.tar.gz /tmp/tau-*-macos
   elif [[ "$OS" == "windows" ]]; then
-    curl -4 -fsSL --max-time 600 "$DOWNLOAD_URL" -o /tmp/tau.zip
+    curl $CURL_OPTS -fsSL -o /tmp/tau.zip "$DOWNLOAD_URL"
     unzip -o /tmp/tau.zip -d /tmp/tau-install
     BINARY=$(ls /tmp/tau-install/*.exe 2>/dev/null | head -1)
     if [[ -n "$BINARY" ]]; then

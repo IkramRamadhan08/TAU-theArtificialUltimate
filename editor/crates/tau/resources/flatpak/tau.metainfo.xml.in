@@ -11,14 +11,15 @@
     </developer>
     <description>
         <p>
-            TAU is a local-first, agentic coding IDE forked from Tau and wired toward the TAU Rust agent runtime.
+            TAU is a local-first, agentic coding IDE forked from Zed with built-in AI agent runtime.
+            All AI features use your own LLM provider API keys. No cloud dependency. No telemetry.
         </p>
         <p>Features:</p>
         <ul>
             <li>Performance: Efficiently uses every CPU core and your GPU for instant startup, quick file loading, and responsive keystrokes.</li>
             <li>Language-aware: Maintains a syntax tree for precise highlighting, and auto-indent, with LSP support for autocompletion and refactoring.</li>
-            <li>Agent runtime: Connects the editor shell to the local TAU ACP adapter.</li>
-            <li>AI integration: Supports configurable local and third-party model providers.</li>
+            <li>Agent runtime: Write code, run commands, edit files, and build projects from natural language.</li>
+            <li>AI integration: Supports Ollama, LM Studio, Mistral, OpenAI, Anthropic, Google, and more.</li>
         </ul>
     </description>
 
@@ -34,12 +35,12 @@
         <content_attribute id="social-audio">intense</content_attribute>
     </content_rating>
 
-    <url type="homepage">https://github.com/eightarch/tau</url>
-    <url type="bugtracker">https://github.com/eightarch/tau/issues</url>
-    <url type="help">https://github.com/eightarch/tau</url>
-    <url type="contact">https://github.com/eightarch/tau/issues</url>
-    <url type="vcs-browser">https://github.com/eightarch/tau</url>
-    <url type="contribute">https://github.com/eightarch/tau</url>
+    <url type="homepage">https://github.com/IkramRamadhan08/TAU-theArtificialUltimate</url>
+    <url type="bugtracker">https://github.com/IkramRamadhan08/TAU-theArtificialUltimate/issues</url>
+    <url type="help">https://github.com/IkramRamadhan08/TAU-theArtificialUltimate</url>
+    <url type="contact">https://github.com/IkramRamadhan08/TAU-theArtificialUltimate/issues</url>
+    <url type="vcs-browser">https://github.com/IkramRamadhan08/TAU-theArtificialUltimate</url>
+    <url type="contribute">https://github.com/IkramRamadhan08/TAU-theArtificialUltimate</url>
 
     <supports>
         <internet>offline-only</internet>
@@ -53,23 +54,7 @@
     <screenshots>
         <screenshot type="default">
             <caption>TAU with a large project open, showing language server and git support</caption>
-            <image>https://raw.githubusercontent.com/eightarch/tau/main/assets/flatpak/flatpak-1.png</image>
-        </screenshot>
-        <screenshot>
-            <caption>TAU with a file open and agent tools available in the sidebar</caption>
-            <image>https://raw.githubusercontent.com/eightarch/tau/main/assets/flatpak/flatpak-2.png</image>
-        </screenshot>
-        <screenshot>
-            <caption>Example TAU workspace</caption>
-            <image>https://raw.githubusercontent.com/eightarch/tau/main/assets/flatpak/flatpak-3.png</image>
-        </screenshot>
-        <screenshot>
-            <caption>TAU extension list</caption>
-            <image>https://raw.githubusercontent.com/eightarch/tau/main/assets/flatpak/flatpak-4.png</image>
-        </screenshot>
-        <screenshot>
-            <caption>Theme switcher UI and example theme</caption>
-            <image>https://raw.githubusercontent.com/eightarch/tau/main/assets/flatpak/flatpak-5.png</image>
+            <image>https://raw.githubusercontent.com/IkramRamadhan08/TAU-theArtificialUltimate/main/editor/assets/images/IDElook.png</image>
         </screenshot>
     </screenshots>
 

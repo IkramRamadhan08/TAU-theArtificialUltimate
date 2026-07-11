@@ -14,6 +14,7 @@ on:
 
 jobs:
   build-linux:
+    name: Build (Linux x86_64)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -32,6 +33,15 @@ jobs:
             libx11-dev libx11-xcb-dev libasound2-dev libfreetype-dev \
             libglib2.0-dev libpango1.0-dev libatk1.0-dev libgdk-pixbuf-2.0-dev \
             libgtk-3-dev libharfbuzz-dev
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: linux-release-${{ hashFiles('editor/Cargo.lock') }}
+          restore-keys: linux-release-
       - name: Set release channel
         run: echo "stable" > crates/tau/RELEASE_CHANNEL
       - name: Build release
@@ -41,14 +51,16 @@ jobs:
         run: |
           mkdir -p dist/tau.app/libexec
           cp editor/target/release/tau dist/tau.app/libexec/tau-editor
-          tar czf tau-x86_64-linux.tar.gz -C dist tau.app
-      - name: Upload
-        uses: softprops/action-gh-release@v2
+          tar cJf tau-x86_64-linux.tar.xz -C dist tau.app
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: tau-x86_64-linux.tar.gz
-          make_latest: true
+          name: linux-x86_64
+          path: tau-x86_64-linux.tar.xz
+          retention-days: 1
 
   build-macos:
+    name: Build (macOS ARM64)
     runs-on: macos-latest
     defaults:
       run:
@@ -58,6 +70,15 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: "1.95.0"
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: macos-release-${{ hashFiles('editor/Cargo.lock') }}
+          restore-keys: macos-release-
       - name: Set release channel
         run: echo "stable" > crates/tau/RELEASE_CHANNEL
       - name: Build release
@@ -68,12 +89,15 @@ jobs:
           cp editor/target/release/tau tau-aarch64-macos
           chmod +x tau-aarch64-macos
           tar czf tau-aarch64-macos.tar.gz tau-aarch64-macos
-      - name: Upload
-        uses: softprops/action-gh-release@v2
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: tau-aarch64-macos.tar.gz
+          name: macos-arm64
+          path: tau-aarch64-macos.tar.gz
+          retention-days: 1
 
   build-windows:
+    name: Build (Windows x86_64)
     runs-on: windows-latest
     defaults:
       run:
@@ -86,6 +110,15 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: "1.95.0"
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: windows-release-${{ hashFiles('editor/Cargo.lock') }}
+          restore-keys: windows-release-
       - name: Set release channel
         shell: bash
         run: echo "stable" > crates/tau/RELEASE_CHANNEL
@@ -98,8 +131,72 @@ jobs:
         run: |
           copy editor\target\release\tau.exe tau-x86_64-windows.exe
           Compress-Archive -Path tau-x86_64-windows.exe -DestinationPath tau-x86_64-windows.zip
-      - name: Upload
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86_64
+          path: tau-x86_64-windows.zip
+          retention-days: 1
+
+  release:
+    name: Create Release
+    needs: [build-linux, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          # Get previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          
+          if [ -n "$PREV_TAG" ]; then
+            echo "## What's Changed" > release_notes.md
+            echo "" >> release_notes.md
+            git log --pretty=format:"- %s (%h)" "$PREV_TAG"..HEAD >> release_notes.md
+            echo "" >> release_notes.md
+            echo "" >> release_notes.md
+          else
+            echo "## Initial Release" > release_notes.md
+            echo "" >> release_notes.md
+          fi
+          
+          echo "## Install" >> release_notes.md
+          echo "" >> release_notes.md
+          echo '### Linux / macOS' >> release_notes.md
+          echo '```bash' >> release_notes.md
+          echo 'curl -fsSL https://raw.githubusercontent.com/IkramRamadhan08/TAU-theArtificialUltimate/main/editor/script/install.sh | bash' >> release_notes.md
+          echo '```' >> release_notes.md
+          echo "" >> release_notes.md
+          echo '### Windows (PowerShell)' >> release_notes.md
+          echo '```powershell' >> release_notes.md
+          echo "powershell -c \"& { \$(Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/IkramRamadhan08/TAU-theArtificialUltimate/main/editor/script/install.ps1' -UseBasicParsing).Content | Invoke-Expression }\"" >> release_notes.md
+          echo '```' >> release_notes.md
+          echo "" >> release_notes.md
+          echo "## Binaries" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "| Platform | File |" >> release_notes.md
+          echo "|----------|------|" >> release_notes.md
+          echo "| Linux x86_64 | \`tau-x86_64-linux.tar.xz\` |" >> release_notes.md
+          echo "| macOS ARM64 | \`tau-aarch64-macos.tar.gz\` |" >> release_notes.md
+          echo "| Windows x86_64 | \`tau-x86_64-windows.zip\` |" >> release_notes.md
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: tau-x86_64-windows.zip
-          make_latest: true
+          name: TAU ${{ github.ref_name }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/linux-x86_64/tau-x86_64-linux.tar.xz
+            artifacts/macos-arm64/tau-aarch64-macos.tar.gz
+            artifacts/windows-x86_64/tau-x86_64-windows.zip
