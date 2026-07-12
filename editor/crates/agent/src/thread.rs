@@ -1453,9 +1453,26 @@ impl Thread {
     ) -> Result<()> {
         let mut attempt = 0;
         let mut intent = CompletionIntent::UserPrompt;
+        let mut iteration_count: u32 = 0;
         // Set when a refusal fallback occurs so subsequent iterations use the fallback model.
         let mut refusal_fallback_model: Option<Arc<dyn LanguageModel>> = None;
         loop {
+            iteration_count += 1;
+            if iteration_count > MAX_TOOL_CALL_ITERATIONS {
+                log::warn!(
+                    "Agent reached max tool call iterations ({}), stopping turn",
+                    MAX_TOOL_CALL_ITERATIONS
+                );
+                this.update(cx, |this, cx| {
+                    this.messages.push(Arc::new(Message::User(UserMessage {
+                        id: UserMessageId::new(),
+                        content: Arc::from([UserMessageContent::Text(
+                            "[System] Maximum tool call iterations reached. Please summarize your progress and stop.".into()
+                        )]),
+                    })));
+                })?;
+                return Ok(());
+            }
             match Self::perform_compaction_if_needed(
                 this,
                 event_stream,
@@ -2141,7 +2158,8 @@ impl Thread {
         let output_text = tool_result.text_contents();
 
         // Output verification: check for hidden failures in Ok results
-        let suspicious_patterns = ["failed", "error", "timed out", "denied", "not found"];
+        // Only flag patterns that indicate actual failures, not benign mentions
+        let suspicious_patterns = ["error:", "failed to", "timed out", "access denied"];
         let has_hidden_failure = !is_error
             && !output_text.is_empty()
             && suspicious_patterns

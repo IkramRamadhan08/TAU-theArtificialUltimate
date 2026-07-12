@@ -186,17 +186,27 @@ impl AgentTool for SkillTool {
                     .iter()
                     .find(|s| s.name == input.name && !s.disable_model_invocation)
                 else {
+                    let available: Vec<&str> = snapshot
+                        .iter()
+                        .filter(|s| !s.disable_model_invocation)
+                        .map(|s| s.name.as_str())
+                        .collect();
+                    let mut error_msg = format!(
+                        "Skill '{}' not found. Available skills: {}",
+                        input.name,
+                        if available.is_empty() {
+                            "(none - no skills loaded)".to_string()
+                        } else {
+                            available.join(", ")
+                        }
+                    );
+                    if available.len() < snapshot.len() {
+                        error_msg.push_str(
+                            "\nNote: Some skills may not be available due to catalog size limits or trust settings."
+                        );
+                    }
                     return Err(SkillToolOutput::Error {
-                        error: format!(
-                            "Skill '{}' not found. Available skills: {}",
-                            input.name,
-                            snapshot
-                                .iter()
-                                .filter(|s| !s.disable_model_invocation)
-                                .map(|s| s.name.as_str())
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        ),
+                        error: error_msg,
                     });
                 };
                 let path_string = skill.skill_file_path.to_string_lossy().into_owned();
