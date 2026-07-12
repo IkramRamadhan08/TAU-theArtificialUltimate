@@ -13,9 +13,6 @@ case "$LANG_CODE" in
     MSG_ARCH="Arsitektur tidak didukung"
     MSG_OS="Sistem operasi tidak didukung"
     MSG_DOWNLOAD="Mengunduh TAU untuk"
-    MSG_DESKTOP_ASK="Tampilkan TAU di menu aplikasi dan desktop?"
-    MSG_DESKTOP_YES="y"
-    MSG_DESKTOP_NO="n"
     MSG_DESKTOP_INSTALL="Memasang ikon dan pintasan desktop..."
     MSG_DESKTOP_DONE="Ikon dan pintasan desktop terpasang"
     MSG_ICON_INSTALL="Memasang ikon..."
@@ -23,10 +20,7 @@ case "$LANG_CODE" in
     MSG_SUCCESS="TAU berhasil dipasang!"
     MSG_LAUNCH_DESKTOP="Klik ikon TAU di menu aplikasi atau desktop."
     MSG_LAUNCH_TERMINAL="Ketik 'tau' di terminal untuk menjalankan."
-    MSG_LAUNCH_WINDOWS="Jalankan 'tau' dari Command Prompt atau PowerShell."
     MSG_DESKTOP_NOTE="Terminal akan tertutup otomatis dan TAU akan muncul."
-    MSG_CHOICE="Pilihan"
-    MSG_INVALID="Pilihan tidak valid. Gunakan"
     MSG_ICON_FAIL="Peringatan: gagal mengunduh ikon"
     MSG_VERIFY="Memverifikasi pemasangan..."
     MSG_VERIFY_OK="TAU siap digunakan!"
@@ -37,9 +31,6 @@ case "$LANG_CODE" in
     MSG_ARCH="Unsupported architecture"
     MSG_OS="Unsupported OS"
     MSG_DOWNLOAD="Downloading TAU for"
-    MSG_DESKTOP_ASK="Add TAU to application menu and desktop?"
-    MSG_DESKTOP_YES="y"
-    MSG_DESKTOP_NO="n"
     MSG_DESKTOP_INSTALL="Installing desktop icon and shortcut..."
     MSG_DESKTOP_DONE="Desktop icon and shortcut installed"
     MSG_ICON_INSTALL="Installing icon..."
@@ -47,10 +38,7 @@ case "$LANG_CODE" in
     MSG_SUCCESS="TAU installed successfully!"
     MSG_LAUNCH_DESKTOP="Click the TAU icon in your app menu or desktop."
     MSG_LAUNCH_TERMINAL="Type 'tau' in a terminal to launch."
-    MSG_LAUNCH_WINDOWS="Run 'tau' from Command Prompt or PowerShell."
     MSG_DESKTOP_NOTE="The terminal will close automatically and TAU will appear."
-    MSG_CHOICE="Choice"
-    MSG_INVALID="Invalid choice. Use"
     MSG_ICON_FAIL="Warning: could not download icon"
     MSG_VERIFY="Verifying installation..."
     MSG_VERIFY_OK="TAU is ready to use!"
@@ -75,9 +63,9 @@ case "$OS" in
     case "$ARCH" in
       arm64|aarch64) ASSET="tau-aarch64-macos.tar.gz" ;;
       x86_64)
-        echo "  Intel Mac (x86_64) binary not available. Building from source instead..."
-        echo "  (You can also use Rosetta 2 with the ARM64 build.)"
-        OS="darwin"
+        echo "  Intel Mac detected. Using ARM64 build via Rosetta 2."
+        echo "  (For native performance, use an ARM64 Mac.)"
+        ASSET="tau-aarch64-macos.tar.gz"
         ;;
       *) echo "$MSG_ARCH: $ARCH"; exit 1 ;;
     esac
@@ -120,9 +108,9 @@ RELEASE_VERSION=""
 
 # Try IPv4 first, fallback to IPv6
 CURL_OPTS="--progress-bar --connect-timeout 15 --max-time 600"
-if curl -4 -fsSL --connect-timeout 5 --max-time 5 -I "$DOWNLOAD_URL" 2>/dev/null; then
+if curl -4 -fsSL --connect-timeout 5 --max-time 5 -o /dev/null -w '' "https://github.com" 2>/dev/null; then
   CURL_OPTS="-4 $CURL_OPTS"
-elif curl -6 -fsSL --connect-timeout 5 --max-time 5 -I "$DOWNLOAD_URL" 2>/dev/null; then
+elif curl -6 -fsSL --connect-timeout 5 --max-time 5 -o /dev/null -w '' "https://github.com" 2>/dev/null; then
   CURL_OPTS="-6 $CURL_OPTS"
 else
   CURL_OPTS="-4 $CURL_OPTS"
@@ -183,24 +171,13 @@ else
   echo "  $INSTALL_DIR/tau"
 fi
 
-# ---------- Desktop shortcut (default yes if interactive + display) ----------
+# ---------- Desktop shortcut (always create if display available) ----------
 HAS_DISPLAY=false
 if [[ -n "$DISPLAY" || -n "$WAYLAND_DISPLAY" ]]; then
   HAS_DISPLAY=true
 fi
 
-DESKTOP_CHOICE=""
-if [ -t 0 ] && $HAS_DISPLAY; then
-  echo ""
-  echo -n "$MSG_DESKTOP_ASK (Y/n): "
-  read -r DESKTOP_CHOICE
-  DESKTOP_CHOICE="${DESKTOP_CHOICE:-y}"
-elif $HAS_DISPLAY; then
-  # Non-interactive but display available: default yes
-  DESKTOP_CHOICE="y"
-fi
-
-if [[ "$DESKTOP_CHOICE" == "y" || "$DESKTOP_CHOICE" == "Y" ]]; then
+if $HAS_DISPLAY; then
   echo "  $MSG_DESKTOP_INSTALL"
 
   ICON_URL="$RAW_BASE/editor/crates/tau/resources/tau-icon.svg"
@@ -251,7 +228,7 @@ DESKTOP
 fi
 
 # ---------- macOS icon ----------
-if [[ "$OS" == "darwin" ]] && [[ "$DESKTOP_CHOICE" == "y" || "$DESKTOP_CHOICE" == "Y" ]]; then
+if [[ "$OS" == "darwin" ]] && $HAS_DISPLAY; then
   ICON_URL="$RAW_BASE/editor/crates/tau/resources/tau-icon.svg"
   mkdir -p "$HOME/.local/share/icons"
   curl -4 -fsSL --max-time 15 "$ICON_URL" -o "$HOME/.local/share/icons/tau.svg" 2>/dev/null || true
@@ -265,11 +242,21 @@ case "$SHELL" in
   */fish) SHELL_CONFIG="$HOME/.config/fish/config.fish" ;;
 esac
 
+# Check if ~/.local/bin is already in PATH (via any method)
+ALREADY_IN_PATH=false
+if [[ ":$PATH:" == *":$INSTALL_DIR:"* ]]; then
+  ALREADY_IN_PATH=true
+fi
+
 if [[ -n "$SHELL_CONFIG" ]] && ! grep -q "$INSTALL_DIR" "$SHELL_CONFIG" 2>/dev/null; then
-  echo "" >> "$SHELL_CONFIG"
-  echo "# TAU Editor" >> "$SHELL_CONFIG"
-  echo "export PATH=\"\$PATH:$INSTALL_DIR\"" >> "$SHELL_CONFIG"
-  echo "  $MSG_PATH_ADD $SHELL_CONFIG"
+  if $ALREADY_IN_PATH; then
+    echo "  $INSTALL_DIR already in PATH (via system config)"
+  else
+    echo "" >> "$SHELL_CONFIG"
+    echo "# TAU Editor" >> "$SHELL_CONFIG"
+    echo "export PATH=\"\$PATH:$INSTALL_DIR\"" >> "$SHELL_CONFIG"
+    echo "  $MSG_PATH_ADD $SHELL_CONFIG"
+  fi
 fi
 
 # ---------- Export PATH for CURRENT session ----------
@@ -283,7 +270,7 @@ if [[ -n "$RELEASE_VERSION" ]]; then
 fi
 echo ""
 
-if [[ "$DESKTOP_CHOICE" == "y" || "$DESKTOP_CHOICE" == "Y" ]]; then
+if $HAS_DISPLAY; then
   echo "  $MSG_LAUNCH_DESKTOP"
 else
   echo "  $MSG_LAUNCH_TERMINAL"

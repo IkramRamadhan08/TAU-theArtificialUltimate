@@ -44,6 +44,9 @@ pub struct CredentialField {
     /// If true, the input is masked (for secrets/passwords).
     #[serde(default)]
     pub secret: bool,
+    /// Example value showing the user what to paste.
+    #[serde(default)]
+    pub example: Option<String>,
 }
 
 impl From<CredentialField> for acp_thread::FormField {
@@ -53,6 +56,7 @@ impl From<CredentialField> for acp_thread::FormField {
             label: f.label,
             description: f.description,
             secret: f.secret,
+            example: f.example,
         }
     }
 }
@@ -72,23 +76,12 @@ impl From<RequestCredentialToolOutput> for language_model::LanguageModelToolResu
     fn from(output: RequestCredentialToolOutput) -> Self {
         language_model::LanguageModelToolResultContent::Text(
             format!(
-                "Credentials for service `{}` (source: {})\n\nValues:\n{}\n\n{}",
+                "Credentials for service `{}` (source: {})\n\n\
+                 Values were securely stored and returned to the agent. \
+                 The agent should use the returned values directly without \
+                 logging them in chat or any output.\n\n{}",
                 output.source,
                 output.source,
-                output
-                    .values
-                    .iter()
-                    .map(|(k, v)| if k.to_lowercase().contains("secret")
-                        || k.to_lowercase().contains("token")
-                        || k.to_lowercase().contains("key")
-                        || k.to_lowercase().contains("password")
-                    {
-                        format!("  {}: <redacted>", k)
-                    } else {
-                        format!("  {}: {}", k, v)
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n"),
                 output.summary,
             )
             .into(),

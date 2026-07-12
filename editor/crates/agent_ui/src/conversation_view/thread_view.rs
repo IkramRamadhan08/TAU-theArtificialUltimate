@@ -633,8 +633,9 @@ pub struct ThreadView {
     /// re-show.
     dismissed_skill_loading_issues: HashSet<SkillLoadingIssue>,
     /// Per-tool-call editors for credential form fields.
+    /// Each tool call has a single multi-line editor for pasting credentials.
     pub(crate) credential_form_editors:
-        HashMap<acp::ToolCallId, Vec<Entity<Editor>>>,
+        HashMap<acp::ToolCallId, Entity<Editor>>,
 }
 impl Focusable for ThreadView {
     fn focus_handle(&self, cx: &App) -> FocusHandle {
@@ -7479,55 +7480,85 @@ impl ThreadView {
                         if let AuthorizationKind::FormInput(fields) = kind {
                             self.credential_form_editors
                                 .get(&tool_call.id)
-                                .map(|editors| {
+                                .map(|editor| {
                                     let border_color = self.tool_card_border_color(cx);
+
+                                    let example_text = fields
+                                        .iter()
+                                        .map(|f| {
+                                            if let Some(example) = &f.example {
+                                                format!("{}={}", f.key, example)
+                                            } else {
+                                                format!("{}=", f.key)
+                                            }
+                                        })
+                                        .collect::<Vec<_>>()
+                                        .join("\n");
 
                                     v_flex()
                                         .w_full()
                                         .px_2()
                                         .py_1()
-                                        .gap_2()
+                                        .gap_3()
                                         .border_t_1()
                                         .border_color(border_color)
-                                        .children(fields.iter().enumerate().map(
-                                            |(field_ix, field)| {
-                                                let editor = editors.get(field_ix);
-                                                let secret_label = if field.secret {
-                                                    " (secret)"
-                                                } else {
-                                                    ""
-                                                };
-                                                v_flex()
-                                                    .w_full()
-                                                    .gap_0p5()
-                                                    .child(
-                                                        h_flex()
-                                                            .gap_1()
-                                                            .child(
-                                                                Label::new(format!(
-                                                                    "{}{}",
-                                                                    field.label, secret_label,
-                                                                ))
-                                                                .size(LabelSize::XSmall)
-                                                                .color(Color::Muted)
-                                                                .buffer_font(cx),
-                                                            )
-                                                            .child(
-                                                                Label::new(format!(
-                                                                    "({})",
-                                                                    field.key
-                                                                ))
+                                        .child(
+                                            v_flex()
+                                                .w_full()
+                                                .gap_1()
+                                                .children(fields.iter().map(|field| {
+                                                    v_flex()
+                                                        .w_full()
+                                                        .gap_1()
+                                                        .child(
+                                                            h_flex()
+                                                                .gap_1p5()
+                                                                .items_center()
+                                                                .child(
+                                                                    Icon::new(IconName::LockOutlined)
+                                                                        .size(IconSize::XSmall)
+                                                                        .color(Color::Muted),
+                                                                )
+                                                                .child(
+                                                                    Label::new(field.label.clone())
+                                                                        .size(LabelSize::Small)
+                                                                        .color(Color::Muted)
+                                                                        .buffer_font(cx),
+                                                                ),
+                                                        )
+                                                        .child(
+                                                            Label::new(field.description.clone())
                                                                 .size(LabelSize::XSmall)
                                                                 .color(Color::Placeholder)
                                                                 .buffer_font(cx),
-                                                            ),
-                                                    )
-                                                    .when_some(editor, |this, editor| {
-                                                        this.child(editor.clone())
-                                                    })
-                                                    .into_any_element()
-                                            },
-                                        ))
+                                                        )
+                                                        .into_any_element()
+                                                })),
+                                        )
+                                        .child(
+                                            div()
+                                                .w_full()
+                                                .bg(cx.theme().colors().editor_background)
+                                                .rounded_md()
+                                                .p_2()
+                                                .child(
+                                                    v_flex()
+                                                        .gap_1()
+                                                        .child(
+                                                            Label::new("Paste in KEY=VALUE format:")
+                                                                .size(LabelSize::XSmall)
+                                                                .color(Color::Placeholder)
+                                                                .buffer_font(cx),
+                                                        )
+                                                        .child(
+                                                            Label::new(example_text)
+                                                                .size(LabelSize::XSmall)
+                                                                .color(Color::Placeholder)
+                                                                .buffer_font(cx),
+                                                        ),
+                                                ),
+                                        )
+                                        .child(editor.clone())
                                         .into_any()
                                 })
                         } else {
@@ -8587,7 +8618,7 @@ impl ThreadView {
                             let mut outcome =
                                 SelectedPermissionOutcome::new(option_id.clone(), option_kind);
                             if is_submit {
-                                if let Some(editors) =
+                                if let Some(editor) =
                                     this.credential_form_editors.get(&tool_call_id)
                                 {
                                     let fields: Vec<FormField> = this
@@ -8613,14 +8644,8 @@ impl ThreadView {
                                             None
                                         })
                                         .unwrap_or_default();
-                                    let form_values: std::collections::HashMap<String, String> = editors
-                                        .iter()
-                                        .zip(fields.iter())
-                                        .filter_map(|(editor, field)| {
-                                            let text = editor.read(cx).text(cx);
-                                            if text.is_empty() { None } else { Some((field.key.clone(), text)) }
-                                        })
-                                        .collect();
+                                    let text = editor.read(cx).text(cx);
+                                    let form_values = Self::parse_credential_text(&text, &fields);
                                     outcome = outcome.with_form_values(form_values);
                                 }
                             }
@@ -8675,6 +8700,54 @@ impl ThreadView {
             .child(bar(3, "w_3_5"))
             .child(bar(4, "w_2_5"))
             .into_any_element()
+    }
+
+    fn parse_credential_text(
+        text: &str,
+        fields: &[FormField],
+    ) -> std::collections::HashMap<String, String> {
+        let mut result = std::collections::HashMap::new();
+
+        for line in text.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            if let Some((key, value)) = line.split_once('=') {
+                let key = key.trim().to_string();
+                let value = value.trim();
+                let value = value
+                    .strip_prefix('"')
+                    .and_then(|v| v.strip_suffix('"'))
+                    .or_else(|| value.strip_prefix('\'').and_then(|v| v.strip_suffix('\'')))
+                    .unwrap_or(value)
+                    .to_string();
+                if !value.is_empty() {
+                    result.insert(key, value);
+                }
+            }
+        }
+
+        if result.is_empty() && !text.trim().is_empty() {
+            let values: Vec<&str> = text
+                .lines()
+                .map(|l| {
+                    let l = l.trim();
+                    let l = l
+                        .strip_prefix('"')
+                        .and_then(|v| v.strip_suffix('"'))
+                        .or_else(|| l.strip_prefix('\'').and_then(|v| v.strip_suffix('\'')))
+                        .unwrap_or(l);
+                    l
+                })
+                .filter(|l| !l.is_empty())
+                .collect();
+            for (value, field) in values.iter().zip(fields.iter()) {
+                result.insert(field.key.clone(), value.to_string());
+            }
+        }
+
+        result
     }
 
     fn render_tool_call_label(
@@ -10727,19 +10800,24 @@ impl Render for ThreadView {
             })
             .collect();
         for (tool_call_id, fields) in &form_tool_calls {
-            let editors: Vec<Entity<Editor>> = fields
-                .iter()
-                .map(|field| {
-                    let editor = cx.new(|cx| {
-                        let mut editor = Editor::single_line(window, cx);
-                        editor.set_placeholder_text(&field.description, window, cx);
-                        editor
-                    });
-                    editor
-                })
-                .collect();
+            let editor = cx.new(|cx| {
+                let mut editor = Editor::multi_line(window, cx);
+                let example_lines: Vec<String> = fields
+                    .iter()
+                    .map(|f| {
+                        if let Some(example) = &f.example {
+                            format!("{}={}", f.key, example)
+                        } else {
+                            format!("{}=", f.key)
+                        }
+                    })
+                    .collect();
+                let placeholder = example_lines.join("\n");
+                editor.set_placeholder_text(&placeholder, window, cx);
+                editor
+            });
             self.credential_form_editors
-                .insert(tool_call_id.clone(), editors);
+                .insert(tool_call_id.clone(), editor);
         }
 
         let has_messages = self.list_state.item_count() > 0;

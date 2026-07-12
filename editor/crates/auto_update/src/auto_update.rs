@@ -542,7 +542,7 @@ impl AutoUpdater {
         })?;
 
         let ext = match os {
-            "linux" => "tar.gz",
+            "linux" => "tar.xz",
             "macos" => "tar.gz",
             "windows" => "zip",
             other => anyhow::bail!("unsupported OS for auto-update: {}", other),
@@ -780,7 +780,7 @@ impl AutoUpdater {
     async fn target_path(installer_dir: &InstallerDir) -> Result<PathBuf> {
         let filename = match OS {
             "macos" => "tau.tar.gz",
-            "linux" => "tau.tar.gz",
+            "linux" => "tau.tar.xz",
             "windows" => "tau.zip",
             unsupported_os => anyhow::bail!("not supported: {unsupported_os}"),
         };
@@ -875,7 +875,7 @@ async fn download_release(
 
 async fn install_release_linux(
     temp_dir: &InstallerDir,
-    downloaded_tar_gz: &Path,
+    downloaded_tar_xz: &Path,
     channel: &str,
     running_app_path: PathBuf,
 ) -> Result<Option<PathBuf>> {
@@ -887,8 +887,8 @@ async fn install_release_linux(
         .context("failed to create directory into which to extract update")?;
 
     let mut cmd = new_command("tar");
-    cmd.arg("-xzf")
-        .arg(&downloaded_tar_gz)
+    cmd.arg("-xJf")
+        .arg(&downloaded_tar_xz)
         .arg("-C")
         .arg(&extracted);
     let output = cmd
@@ -899,7 +899,7 @@ async fn install_release_linux(
     anyhow::ensure!(
         output.status.success(),
         "failed to extract {:?} to {:?}: {:?}",
-        downloaded_tar_gz,
+        downloaded_tar_xz,
         extracted,
         String::from_utf8_lossy(&output.stderr)
     );
@@ -1094,16 +1094,25 @@ pub async fn finalize_auto_update_on_quit() {
 
     // The installer will create a flag file after it finishes updating
     let flag_file = installer_path.join("versions.txt");
-    if flag_file.exists()
-        && let Some(helper) = installer_path
+    if flag_file.exists() {
+        let helper = installer_path
             .parent()
-            .map(|p| p.join("tools").join("auto_update_helper.exe"))
-    {
-        let mut command = util::command::new_command(helper);
-        command.arg("--launch");
-        command.arg("false");
-        if let Ok(mut cmd) = command.spawn() {
-            _ = cmd.status().await;
+            .map(|p| p.join("tools").join("auto_update_helper.exe"));
+
+        match helper {
+            Some(helper_path) if helper_path.exists() => {
+                let mut command = util::command::new_command(helper_path);
+                command.arg("--launch");
+                command.arg("false");
+                if let Ok(mut cmd) = command.spawn() {
+                    _ = cmd.status().await;
+                }
+            }
+            _ => {
+                log::warn!(
+                    "auto-update helper not found; update will take effect on next manual install"
+                );
+            }
         }
     }
 }

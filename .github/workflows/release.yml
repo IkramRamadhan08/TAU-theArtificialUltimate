@@ -39,7 +39,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
+            editor/target
           key: linux-release-${{ hashFiles('editor/Cargo.lock') }}
           restore-keys: linux-release-
       - name: Set release channel

@@ -62,6 +62,7 @@ try {
     # If ARM64 build not found, fallback to x86_64
     if ($ARCH -eq "ARM64") {
         Write-Info "ARM64 build not available, falling back to x86_64..."
+        Write-Info "Note: x86_64 build will run under emulation (reduced performance)."
         $ASSET = "tau-x86_64-windows.zip"
         $DOWNLOAD_URL = "https://github.com/$REPO/releases/$VERSION/download/$ASSET"
         try {

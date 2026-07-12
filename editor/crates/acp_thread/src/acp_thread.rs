@@ -735,6 +735,8 @@ pub struct FormField {
     pub description: String,
     /// If true, the input is masked (password-style)
     pub secret: bool,
+    /// Example value showing the user what to paste
+    pub example: Option<String>,
 }
 
 #[derive(Debug, Clone)]
