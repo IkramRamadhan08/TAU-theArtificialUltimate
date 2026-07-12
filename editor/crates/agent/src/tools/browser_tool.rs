@@ -173,7 +173,7 @@ impl AgentTool for BrowserNavigateTool {
                 input.url.clone()
             };
 
-            match run_chrome_dump_dom(chrome, &url).await {
+            match run_chrome_dump_dom(&chrome, &url).await {
                 Ok((title, content)) => Ok(BrowserToolOutput::Success {
                     title,
                     content,
@@ -300,7 +300,7 @@ impl AgentTool for BrowserScreenshotTool {
                 input.url.clone()
             };
 
-            match run_chrome_screenshot(chrome, &url).await {
+            match run_chrome_screenshot(&chrome, &url).await {
                 Ok(base64_data) => Ok(BrowserScreenshotOutput::Success {
                     screenshot_base64: base64_data,
                 }),
