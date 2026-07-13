@@ -158,6 +158,9 @@ pub struct Thread {
     /// and cool down for 60 seconds, preventing wasted API calls when a
     /// provider is unresponsive.
     circuit_breakers: HashMap<LanguageModelProviderId, crate::circuit_breaker::CircuitBreaker>,
+    /// Cached system prompt to avoid re-rendering on every request.
+    /// Invalidated when any input parameter changes.
+    system_prompt_cache: SystemPromptCache,
 }
 
 impl Thread {
@@ -290,6 +293,7 @@ impl Thread {
             sandbox_grants: Rc::new(RefCell::new(ThreadSandboxGrants::default())),
             require_verification: false,
             circuit_breakers: HashMap::default(),
+            system_prompt_cache: SystemPromptCache::default(),
         }
     }
 
@@ -1463,14 +1467,8 @@ impl Thread {
                     "Agent reached max tool call iterations ({}), stopping turn",
                     MAX_TOOL_CALL_ITERATIONS
                 );
-                this.update(cx, |this, _cx| {
-                    this.messages.push(Arc::new(Message::User(UserMessage {
-                        id: UserMessageId::new(),
-                        content: Arc::from([UserMessageContent::Text(
-                            "[System] Maximum tool call iterations reached. Please summarize your progress and stop.".into()
-                        )]),
-                    })));
-                })?;
+                // Notify the UI that the turn ended due to max iterations
+                event_stream.send_stop(acp::StopReason::EndTurn);
                 return Ok(());
             }
             match Self::perform_compaction_if_needed(
@@ -1573,6 +1571,14 @@ impl Thread {
                         running_turn.pending_verification.clear();
                     }
                 }
+
+                // Update system prompt cache before building request
+                let available_tools: Vec<_> = this
+                    .running_turn
+                    .as_ref()
+                    .map(|turn| turn.tools.keys().cloned().collect())
+                    .unwrap_or_default();
+                this.update_system_prompt_cache(available_tools, cx);
 
                 let request = this.build_completion_request(intent, cx)?;
                 this.current_request_token_usage = TokenUsage::default();
@@ -3169,20 +3175,40 @@ impl Thread {
         log::trace!("Building request messages from {} thread messages", end_ix);
 
         let user_agents_md = UserAgentsMd::global(cx).and_then(|s| s.content().cloned());
-        let system_prompt = SystemPromptTemplate {
-            project: self.project_context.read(cx),
-            available_tools,
-            model_name: self.model.as_ref().map(|m| m.name().0.to_string()),
-            date: Local::now().format("%Y-%m-%d").to_string(),
-            user_agents_md,
-            sandboxing: crate::sandboxing::sandboxing_enabled(cx),
-            require_verification: self.require_verification,
-        }
-        .render(&self.templates)
-        .unwrap_or_else(|e| {
-            log::error!("Failed to render system prompt: {}", e);
-            "You are TAU, an AI coding assistant. The system prompt failed to render.".to_string()
-        });
+        let model_name = self.model.as_ref().map(|m| m.name().0.to_string());
+        let date = Local::now().format("%Y-%m-%d").to_string();
+        let sandboxing = crate::sandboxing::sandboxing_enabled(cx);
+        let require_verification = self.require_verification;
+
+        // Use cached system prompt if inputs haven't changed
+        let system_prompt = if self.system_prompt_cache.is_valid(
+            &available_tools,
+            &model_name,
+            &date,
+            &user_agents_md,
+            sandboxing,
+            require_verification,
+        ) {
+            self.system_prompt_cache.system_prompt.clone().unwrap_or_default()
+        } else {
+            let prompt = SystemPromptTemplate {
+                project: self.project_context.read(cx),
+                available_tools: available_tools.clone(),
+                model_name: model_name.clone(),
+                date: date.clone(),
+                user_agents_md: user_agents_md.clone(),
+                sandboxing,
+                require_verification,
+            }
+            .render(&self.templates)
+            .unwrap_or_else(|e| {
+                log::error!("Failed to render system prompt: {}", e);
+                "You are TAU, an AI coding assistant. The system prompt failed to render.".to_string()
+            });
+            // Cache will be updated on the next mutable access
+            prompt
+        };
+
         let mut messages = vec![LanguageModelRequestMessage {
             role: Role::System,
             content: vec![system_prompt.into()],
@@ -3196,6 +3222,53 @@ impl Thread {
         }
 
         messages
+    }
+
+    /// Updates the system prompt cache. Should be called when the thread
+    /// is about to make a request and any inputs may have changed.
+    fn update_system_prompt_cache(
+        &mut self,
+        available_tools: Vec<SharedString>,
+        cx: &App,
+    ) {
+        let user_agents_md = UserAgentsMd::global(cx).and_then(|s| s.content().cloned());
+        let model_name = self.model.as_ref().map(|m| m.name().0.to_string());
+        let date = Local::now().format("%Y-%m-%d").to_string();
+        let sandboxing = crate::sandboxing::sandboxing_enabled(cx);
+        let require_verification = self.require_verification;
+
+        if !self.system_prompt_cache.is_valid(
+            &available_tools,
+            &model_name,
+            &date,
+            &user_agents_md,
+            sandboxing,
+            require_verification,
+        ) {
+            let prompt = SystemPromptTemplate {
+                project: self.project_context.read(cx),
+                available_tools: available_tools.clone(),
+                model_name: model_name.clone(),
+                date: date.clone(),
+                user_agents_md: user_agents_md.clone(),
+                sandboxing,
+                require_verification,
+            }
+            .render(&self.templates)
+            .unwrap_or_else(|e| {
+                log::error!("Failed to render system prompt: {}", e);
+                "You are TAU, an AI coding assistant. The system prompt failed to render.".to_string()
+            });
+            self.system_prompt_cache.update(
+                prompt,
+                available_tools,
+                model_name,
+                date,
+                user_agents_md,
+                sandboxing,
+                require_verification,
+            );
+        }
     }
 
     fn extend_request_history_until(
