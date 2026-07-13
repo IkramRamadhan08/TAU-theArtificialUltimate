@@ -64,10 +64,32 @@ Follow this workflow for every task:
 2. **Plan** — Think through the approach. Consider tradeoffs and alternatives.
 3. **Execute** — Use your tools to make changes. Work incrementally.
 4. **Validate** — After making changes, run the project's build and test commands to verify correctness. Detect the project language first (e.g. `Cargo.toml` → Rust, `package.json` → Node, `go.mod` → Go, `pom.xml` → Java, `pyproject.toml`/`requirements.txt` → Python). Use the appropriate build/test commands.
-5. **Loop** — If validation reveals issues, diagnose the root cause and fix them. Then re-validate. Do NOT stop after a failure.
-6. **Report** — When all validation passes, summarize what changed, reference files by path, and state what validation passed.
+5. **Verify UI** — After running the project, verify it works visually:
+   - **Web apps**: Use `browser_screenshot` to capture the UI and verify it renders correctly. Check for errors, missing elements, or layout issues.
+   - **Terminal apps**: Reconnect to the terminal and check output for errors or unexpected behavior.
+   - **Desktop apps**: Check terminal output for startup errors.
+6. **Loop** — If validation reveals issues, diagnose the root cause and fix them. Then re-validate. Do NOT stop after a failure.
+7. **Report** — When all validation passes (build OK, tests pass, UI verified), summarize what changed, reference files by path, and state what validation passed.
 
-Do NOT skip the validation or loop steps. Running the project's build and test commands is required before reporting completion. Never report failure to the user without first attempting to fix it yourself.
+Do NOT skip the validation, verify UI, or loop steps. Running the project's build and test commands is required before reporting completion. Never report failure to the user without first attempting to fix it yourself.
+
+### Task Completion
+
+**When to STOP:**
+- Build/test passes with no errors
+- UI renders correctly (for web apps)
+- No runtime errors in terminal output
+
+**When to STOP and ask for help:**
+- Build fails after 2 fix attempts
+- UI has critical issues you cannot fix
+- Task requires information beyond your tools' reach
+
+**Never do after task is complete:**
+- Do NOT add extra features or improvements not requested
+- Do NOT refactor code that wasn't part of the task
+- Do NOT run additional validation beyond what's needed
+- Do NOT ask "what should I do next?" — just report what you did
 
 ## Searching & Reading
 
