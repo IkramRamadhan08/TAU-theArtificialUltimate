@@ -1463,7 +1463,7 @@ impl Thread {
                     "Agent reached max tool call iterations ({}), stopping turn",
                     MAX_TOOL_CALL_ITERATIONS
                 );
-                this.update(cx, |this, cx| {
+                this.update(cx, |this, _cx| {
                     this.messages.push(Arc::new(Message::User(UserMessage {
                         id: UserMessageId::new(),
                         content: Arc::from([UserMessageContent::Text(
