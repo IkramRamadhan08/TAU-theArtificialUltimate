@@ -93,6 +93,56 @@ pub use compaction::*;
 pub use tool_infra::*;
 pub use event_stream::*;
 
+#[derive(Clone, Debug, Default)]
+struct SystemPromptCache {
+    system_prompt: Option<String>,
+    available_tools: Vec<SharedString>,
+    model_name: Option<String>,
+    date: String,
+    user_agents_md: Option<SharedString>,
+    sandboxing: bool,
+    require_verification: bool,
+}
+
+impl SystemPromptCache {
+    fn is_valid(
+        &self,
+        available_tools: &[SharedString],
+        model_name: &Option<String>,
+        date: &str,
+        user_agents_md: &Option<SharedString>,
+        sandboxing: bool,
+        require_verification: bool,
+    ) -> bool {
+        self.system_prompt.is_some()
+            && self.available_tools == available_tools
+            && self.model_name == *model_name
+            && self.date == date
+            && self.user_agents_md == *user_agents_md
+            && self.sandboxing == sandboxing
+            && self.require_verification == require_verification
+    }
+
+    fn update(
+        &mut self,
+        system_prompt: String,
+        available_tools: Vec<SharedString>,
+        model_name: Option<String>,
+        date: String,
+        user_agents_md: Option<SharedString>,
+        sandboxing: bool,
+        require_verification: bool,
+    ) {
+        self.system_prompt = Some(system_prompt);
+        self.available_tools = available_tools;
+        self.model_name = model_name;
+        self.date = date;
+        self.user_agents_md = user_agents_md;
+        self.sandboxing = sandboxing;
+        self.require_verification = require_verification;
+    }
+}
+
 pub struct Thread {
     id: acp::SessionId,
     prompt_id: PromptId,
@@ -688,6 +738,7 @@ impl Thread {
             sandbox_grants: Rc::new(RefCell::new(ThreadSandboxGrants::default())),
             require_verification: false,
             circuit_breakers: HashMap::default(),
+            system_prompt_cache: SystemPromptCache::default(),
         }
     }
 
@@ -2178,6 +2229,8 @@ impl Thread {
                 .iter()
                 .any(|p| check_text.to_lowercase().contains(p));
 
+        let is_canceled = Self::is_canceled_tool_result(&tool_result);
+
         event_stream.update_tool_call_fields(
             &tool_result.tool_use_id,
             acp::ToolCallUpdateFields::new()
@@ -2239,7 +2292,7 @@ impl Thread {
                         }
                     }
                 }
-                if (is_error || has_hidden_failure) && !Self::is_canceled_tool_result(&tool_result) {
+                if (is_error || has_hidden_failure) && !is_canceled {
                     running_turn.pending_verification.push(tool_name);
                 }
             }
