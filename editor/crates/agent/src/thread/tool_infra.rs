@@ -219,13 +219,13 @@ pub struct AgentToolOutput {
 impl From<anyhow::Error> for AgentToolOutput {
     fn from(error: anyhow::Error) -> Self {
         let msg = error.to_string().to_lowercase();
-        let tool_error = if msg.contains("timed out") || msg.contains("timeout") {
+        let tool_error = if msg.contains("timed out") || msg.contains("timeout") || msg.contains("deadline exceeded") {
             ToolError::TimeoutError(error.to_string())
-        } else if msg.contains("permission") || msg.contains("denied") || msg.contains("unauthorized") {
+        } else if msg.contains("permission denied") || msg.contains("access denied") || msg.contains("unauthorized") || msg.contains("forbidden") {
             ToolError::PermissionDenied(error.to_string())
-        } else if msg.contains("not found") || msg.contains("no such") {
+        } else if msg.contains("not found") || msg.contains("no such file") || msg.contains("does not exist") {
             ToolError::ToolNotFound(error.to_string())
-        } else if msg.contains("validation") || msg.contains("invalid") || msg.contains("malformed") {
+        } else if msg.contains("validation error") || msg.contains("invalid input") || msg.contains("malformed") || msg.contains("parse error") {
             ToolError::ValidationError(error.to_string())
         } else {
             ToolError::ExecutionError(error.to_string())

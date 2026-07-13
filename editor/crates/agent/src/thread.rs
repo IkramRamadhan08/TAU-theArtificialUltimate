@@ -1946,7 +1946,7 @@ impl Thread {
                         this.flush_pending_message(cx);
                         this.pending_message = Some(AgentMessage {
                             content: vec![AgentMessageContent::Text(
-                                "## Verification Required\n\nBefore concluding, you must verify your changes work:\n1. Run `cargo check` (or the project's build command) to confirm compilation.\n2. Run `cargo test` (or the project's test command) to confirm tests pass.\n3. Report what you ran and the results.\n\nDo NOT skip this step.".into()
+                                "## Verification Required\n\nBefore concluding, you must verify your changes work:\n1. Run the project's build command to confirm compilation.\n2. Run the project's test command to confirm tests pass.\n3. Report what you ran and the results.\n\nDo NOT skip this step.".into()
                             )],
                             ..Default::default()
                         });
@@ -2159,12 +2159,18 @@ impl Thread {
 
         // Output verification: check for hidden failures in Ok results
         // Only flag patterns that indicate actual failures, not benign mentions
-        let suspicious_patterns = ["error:", "failed to", "timed out", "access denied"];
+        // Check only the last 500 chars to avoid false positives in verbose output
+        let check_text = if output_text.len() > 500 {
+            &output_text[output_text.len() - 500..]
+        } else {
+            &output_text
+        };
+        let suspicious_patterns = ["error:", "error\n", "failed to", "timed out", "access denied"];
         let has_hidden_failure = !is_error
             && !output_text.is_empty()
             && suspicious_patterns
                 .iter()
-                .any(|p| output_text.to_lowercase().contains(p));
+                .any(|p| check_text.to_lowercase().contains(p));
 
         event_stream.update_tool_call_fields(
             &tool_result.tool_use_id,
@@ -2227,7 +2233,7 @@ impl Thread {
                         }
                     }
                 }
-                if is_error || has_hidden_failure {
+                if (is_error || has_hidden_failure) && !Self::is_canceled_tool_result(&tool_result) {
                     running_turn.pending_verification.push(tool_name);
                 }
             }
@@ -3091,6 +3097,8 @@ impl Thread {
     }
 
     pub(crate) fn register_running_subagent(&mut self, subagent: WeakEntity<Thread>) {
+        // Clean up dead references before adding new one
+        self.running_subagents.retain(|s| s.upgrade().is_some());
         self.running_subagents.push(subagent);
     }
 
@@ -3171,8 +3179,10 @@ impl Thread {
             require_verification: self.require_verification,
         }
         .render(&self.templates)
-        .context("failed to build system prompt")
-        .expect("Invalid template");
+        .unwrap_or_else(|e| {
+            log::error!("Failed to render system prompt: {}", e);
+            "You are TAU, an AI coding assistant. The system prompt failed to render.".to_string()
+        });
         let mut messages = vec![LanguageModelRequestMessage {
             role: Role::System,
             content: vec![system_prompt.into()],

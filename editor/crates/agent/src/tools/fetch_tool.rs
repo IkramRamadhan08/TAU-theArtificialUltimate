@@ -48,11 +48,24 @@ impl FetchTool {
         let mut response = http_client.get(&url, AsyncBody::default(), true).await?;
 
         let mut body = Vec::new();
-        response
-            .body_mut()
-            .read_to_end(&mut body)
-            .await
-            .context("error reading response body")?;
+        let mut total_size = 0usize;
+        let max_size = 10 * 1024 * 1024; // 10MB limit
+        let mut buffer = [0u8; 8192];
+        loop {
+            let bytes_read = response
+                .body_mut()
+                .read(&mut buffer)
+                .await
+                .context("error reading response body")?;
+            if bytes_read == 0 {
+                break;
+            }
+            total_size += bytes_read;
+            if total_size > max_size {
+                bail!("Response too large ({}MB limit exceeded)", max_size / (1024 * 1024));
+            }
+            body.extend_from_slice(&buffer[..bytes_read]);
+        }
 
         if response.status().is_client_error() {
             let text = String::from_utf8_lossy(body.as_slice());
