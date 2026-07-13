@@ -306,21 +306,11 @@ impl BrowserSession {
     }
 
     pub fn is_alive(&self) -> bool {
-        #[cfg(target_os = "linux")]
-        {
-            self.child.id() != 0
-        }
-        #[cfg(not(target_os = "linux"))]
-        {
-            self.child.id().is_some()
-        }
+        self.child.id() != 0
     }
 
     pub fn close(&mut self) {
-        #[cfg(target_os = "linux")]
         let alive = self.child.id() != 0;
-        #[cfg(not(target_os = "linux"))]
-        let alive = self.child.id().is_some();
 
         if alive {
             if let Ok(client) = self.client.get_mut() {
@@ -333,10 +323,7 @@ impl BrowserSession {
 
 impl Drop for BrowserSession {
     fn drop(&mut self) {
-        #[cfg(target_os = "linux")]
         let alive = self.child.id() != 0;
-        #[cfg(not(target_os = "linux"))]
-        let alive = self.child.id().is_some();
 
         if alive {
             let _ = self.child.kill();
