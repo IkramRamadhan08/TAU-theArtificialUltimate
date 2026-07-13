@@ -1,27 +1,38 @@
+use std::io::Cursor;
 use std::sync::Arc;
+use std::sync::OnceLock;
 
 use crate::{AgentTool, ToolCallEventStream, ToolInput};
 use agent_client_protocol::schema as acp;
 use anyhow::Result;
+use base64::Engine;
 use gpui::{App, Task};
-use language_model::LanguageModelToolResultContent;
+use html_to_markdown::convert_html_to_markdown;
+use language_model::{LanguageModelImage, LanguageModelToolResultContent};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use smol::process::Command;
+use std::time::Duration;
 use ui::SharedString;
 
+const CHROME_TIMEOUT: Duration = Duration::from_secs(30);
+const WINDOW_SIZE: &str = "1280,720";
+
+static CACHED_CHROME_PATH: OnceLock<Option<String>> = OnceLock::new();
+
 fn find_chrome() -> Option<String> {
-    // Check common Chrome/Chromium paths per platform
+    CACHED_CHROME_PATH
+        .get_or_init(|| find_chrome_inner())
+        .clone()
+}
+
+fn find_chrome_inner() -> Option<String> {
     let candidates: Vec<String> = if cfg!(target_os = "macos") {
         vec![
-            // Google Chrome
             "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome".into(),
-            // Chromium
             "/Applications/Chromium.app/Contents/MacOS/Chromium".into(),
-            // Chrome Canary
             "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary".into(),
-            // Brave
             "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser".into(),
-            // Edge
             "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge".into(),
         ]
     } else if cfg!(target_os = "windows") {
@@ -29,50 +40,36 @@ fn find_chrome() -> Option<String> {
         let program_files = std::env::var("PROGRAMFILES").unwrap_or_default();
         let program_files_x86 = std::env::var("PROGRAMFILES(X86)").unwrap_or_default();
         vec![
-            // Google Chrome
             format!("{}\\Google\\Chrome\\Application\\chrome.exe", local_app_data),
             format!("{}\\Google\\Chrome\\Application\\chrome.exe", program_files),
             format!("{}\\Google\\Chrome\\Application\\chrome.exe", program_files_x86),
-            // Edge
             format!("{}\\Microsoft\\Edge\\Application\\msedge.exe", program_files),
             format!("{}\\Microsoft\\Edge\\Application\\msedge.exe", program_files_x86),
-            // Brave
             format!("{}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe", local_app_data),
         ]
     } else {
-        // Linux / FreeBSD
         vec![
-            // Google Chrome
             "/usr/bin/google-chrome".into(),
             "/usr/bin/google-chrome-stable".into(),
             "/usr/bin/google-chrome-beta".into(),
             "/usr/bin/google-chrome-dev".into(),
-            // Chromium
             "/usr/bin/chromium".into(),
             "/usr/bin/chromium-browser".into(),
-            // Snap
             "/snap/bin/chromium".into(),
-            // Flatpak
             "/usr/bin/org.chromium.Chromium".into(),
-            // Brave
             "/usr/bin/brave-browser".into(),
             "/usr/bin/brave-browser-stable".into(),
-            // Edge
             "/usr/bin/microsoft-edge".into(),
             "/usr/bin/microsoft-edge-stable".into(),
-            // Vendor-bundled Chrome (TAU agent-browser)
-            "/home/eightarch/.agent-browser/browsers/chrome-149.0.7827.115/chrome".into(),
         ]
     };
 
-    // Find first existing path
     for path in &candidates {
         if std::path::Path::new(path).exists() {
             return Some(path.clone());
         }
     }
 
-    // Fallback: try `which` / `where` to find chrome or chromium in PATH
     let which_cmd = if cfg!(target_os = "windows") { "where" } else { "which" };
     for name in &["google-chrome", "chromium", "chromium-browser", "chrome", "brave-browser", "microsoft-edge"] {
         if let Ok(output) = std::process::Command::new(which_cmd).arg(name).output() {
@@ -88,7 +85,40 @@ fn find_chrome() -> Option<String> {
     None
 }
 
-/// Navigate to a URL and return the rendered page content as text.
+fn validate_url(url: &str) -> Result<String> {
+    let normalized = if !url.starts_with("http://") && !url.starts_with("https://") {
+        format!("https://{}", url)
+    } else {
+        url.to_string()
+    };
+
+    if normalized.starts_with("file://")
+        || normalized.starts_with("chrome://")
+        || normalized.starts_with("chrome-extension://")
+        || normalized.starts_with("data:")
+        || normalized.starts_with("javascript:")
+    {
+        anyhow::bail!(
+            "URL scheme not allowed: {}. Only http:// and https:// URLs are supported.",
+            normalized.split(':').next().unwrap_or("unknown")
+        );
+    }
+
+    Ok(normalized)
+}
+
+fn extract_title(html: &str) -> String {
+    let lower = html.to_lowercase();
+    if let Some(start) = lower.find("<title>") {
+        let after = &html[start + 7..];
+        if let Some(end) = after.find("</title>").or_else(|| after.find("</TITLE>")) {
+            return after[..end].trim().to_string();
+        }
+    }
+    String::new()
+}
+
+/// Navigate to a URL and return the rendered page content as markdown.
 /// JavaScript is executed, so you get the full dynamic page content.
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct BrowserNavigateToolInput {
@@ -167,11 +197,9 @@ impl AgentTool for BrowserNavigateTool {
                 error: "No Chrome/Chromium browser found. Install Google Chrome, Chromium, or Brave:\n  - Linux: sudo apt install chromium-browser\n  - macOS: brew install --cask chromium\n  - Windows: https://www.google.com/chrome/".into(),
             })?;
 
-            let url = if !input.url.starts_with("http://") && !input.url.starts_with("https://") {
-                format!("https://{}", input.url)
-            } else {
-                input.url.clone()
-            };
+            let url = validate_url(&input.url).map_err(|e| BrowserToolOutput::Error {
+                error: e.to_string(),
+            })?;
 
             match run_chrome_dump_dom(&chrome, &url).await {
                 Ok((title, content)) => Ok(BrowserToolOutput::Success {
@@ -188,41 +216,53 @@ impl AgentTool for BrowserNavigateTool {
 }
 
 async fn run_chrome_dump_dom(chrome: &str, url: &str) -> Result<(String, String)> {
-    let output = std::process::Command::new(chrome)
-        .arg("--headless")
+    let mut child = Command::new(chrome)
+        .arg("--headless=new")
         .arg("--disable-gpu")
         .arg("--no-sandbox")
         .arg("--disable-dev-shm-usage")
+        .arg("--disable-extensions")
+        .arg("--window-size")
+        .arg(WINDOW_SIZE)
         .arg("--dump-dom")
         .arg(url)
-        .output()?;
+        .stdout(smol::process::Stdio::piped())
+        .stderr(smol::process::Stdio::piped())
+        .spawn()?;
+
+    let output = smol::future::or(
+        child.output(),
+        async {
+            smol::Timer::after(CHROME_TIMEOUT).await;
+            Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                format!("Chrome timed out after {}s", CHROME_TIMEOUT.as_secs()),
+            ))
+        },
+    )
+    .await?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         anyhow::bail!("Chrome exited with error: {}", stderr.trim());
     }
 
-    let content = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if content.is_empty() {
+    let html = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if html.is_empty() {
         anyhow::bail!("Chrome returned empty page content");
     }
 
-    let title = extract_title(&content);
+    let title = extract_title(&html);
+
+    let content = match convert_html_to_markdown(Cursor::new(&html), &mut []) {
+        Ok(md) => md,
+        Err(_) => html,
+    };
 
     Ok((title, content))
 }
 
-fn extract_title(html: &str) -> String {
-    if let Some(start) = html.find("<title>") {
-        let after = &html[start + 7..];
-        if let Some(end) = after.find("</title>") {
-            return after[..end].to_string();
-        }
-    }
-    String::new()
-}
-
-/// Take a screenshot of a URL and return it as base64-encoded PNG.
+/// Take a screenshot of a URL and return it as a PNG image.
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct BrowserScreenshotToolInput {
     /// The URL to take a screenshot of
@@ -233,7 +273,6 @@ pub struct BrowserScreenshotToolInput {
 #[serde(untagged)]
 pub enum BrowserScreenshotOutput {
     Success {
-        /// base64-encoded PNG image data
         screenshot_base64: String,
     },
     Error {
@@ -245,7 +284,9 @@ impl From<BrowserScreenshotOutput> for LanguageModelToolResultContent {
     fn from(value: BrowserScreenshotOutput) -> Self {
         match value {
             BrowserScreenshotOutput::Success { screenshot_base64 } => {
-                format!("data:image/png;base64,{}", screenshot_base64).into()
+                LanguageModelToolResultContent::Image(LanguageModelImage {
+                    source: screenshot_base64.into(),
+                })
             }
             BrowserScreenshotOutput::Error { error } => error.into(),
         }
@@ -294,11 +335,9 @@ impl AgentTool for BrowserScreenshotTool {
                 error: "No Chrome/Chromium browser found. Install Google Chrome, Chromium, or Brave:\n  - Linux: sudo apt install chromium-browser\n  - macOS: brew install --cask chromium\n  - Windows: https://www.google.com/chrome/".into(),
             })?;
 
-            let url = if !input.url.starts_with("http://") && !input.url.starts_with("https://") {
-                format!("https://{}", input.url)
-            } else {
-                input.url.clone()
-            };
+            let url = validate_url(&input.url).map_err(|e| BrowserScreenshotOutput::Error {
+                error: e.to_string(),
+            })?;
 
             match run_chrome_screenshot(&chrome, &url).await {
                 Ok(base64_data) => Ok(BrowserScreenshotOutput::Success {
@@ -316,15 +355,31 @@ async fn run_chrome_screenshot(chrome: &str, url: &str) -> Result<String> {
     let temp_dir = tempfile::tempdir()?;
     let screenshot_path = temp_dir.path().join("screenshot.png");
 
-    let output = std::process::Command::new(chrome)
-        .arg("--headless")
+    let mut child = Command::new(chrome)
+        .arg("--headless=new")
         .arg("--disable-gpu")
         .arg("--no-sandbox")
         .arg("--disable-dev-shm-usage")
-        .arg("--screenshot")
+        .arg("--disable-extensions")
+        .arg("--window-size")
+        .arg(WINDOW_SIZE)
         .arg(format!("--screenshot={}", screenshot_path.display()))
         .arg(url)
-        .output()?;
+        .stdout(smol::process::Stdio::piped())
+        .stderr(smol::process::Stdio::piped())
+        .spawn()?;
+
+    let output = smol::future::or(
+        child.output(),
+        async {
+            smol::Timer::after(CHROME_TIMEOUT).await;
+            Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                format!("Chrome timed out after {}s", CHROME_TIMEOUT.as_secs()),
+            ))
+        },
+    )
+    .await?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -332,30 +387,5 @@ async fn run_chrome_screenshot(chrome: &str, url: &str) -> Result<String> {
     }
 
     let image_data = std::fs::read(&screenshot_path)?;
-
-    Ok(encode_base64(&image_data))
-}
-
-fn encode_base64(data: &[u8]) -> String {
-    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut result = String::new();
-    for chunk in data.chunks(3) {
-        let b0 = chunk[0] as u32;
-        let b1 = chunk.get(1).copied().unwrap_or(0) as u32;
-        let b2 = chunk.get(2).copied().unwrap_or(0) as u32;
-        let combined = (b0 << 16) | (b1 << 8) | b2;
-        result.push(CHARS[((combined >> 18) & 0x3F) as usize] as char);
-        result.push(CHARS[((combined >> 12) & 0x3F) as usize] as char);
-        if chunk.len() > 1 {
-            result.push(CHARS[((combined >> 6) & 0x3F) as usize] as char);
-        } else {
-            result.push('=');
-        }
-        if chunk.len() > 2 {
-            result.push(CHARS[(combined & 0x3F) as usize] as char);
-        } else {
-            result.push('=');
-        }
-    }
-    result
+    Ok(base64::engine::general_purpose::STANDARD.encode(&image_data))
 }
