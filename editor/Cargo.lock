@@ -315,6 +315,7 @@ dependencies = [
  "theme",
  "theme_settings",
  "thiserror 2.0.18",
+ "tungstenite",
  "ui",
  "unindent",
  "url",

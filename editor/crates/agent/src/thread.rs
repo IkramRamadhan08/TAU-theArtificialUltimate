@@ -1,9 +1,10 @@
 use crate::{
-    ApplyCodeActionTool, BrowserNavigateTool, BrowserScreenshotTool, CodeActionStore,
-    ContextServerRegistry, CopyPathTool, CreateDirectoryTool, CreateThreadTool, CredentialStore,
-    DbLanguageModel, DbThread, DeletePathTool, DiagnosticsTool, EditFileTool, FetchTool,
-    FindPathTool, FindReferencesTool, GitBranchTool, GitCommitTool, GitLogTool,
-    GitPushTool, GitStatusTool, GetCodeActionsTool, GoToDefinitionTool, GrepTool,
+    ApplyCodeActionTool, BrowserClickTool, BrowserCloseTool, BrowserFillTool, BrowserNavigateTool,
+    BrowserPressKeyTool, BrowserScreenshotTool, BrowserScrollTool, BrowserTypeTool,
+    BrowserWaitTool, CodeActionStore, ContextServerRegistry, CopyPathTool, CreateDirectoryTool,
+    CreateThreadTool, CredentialStore, DbLanguageModel, DbThread, DeletePathTool, DiagnosticsTool,
+    EditFileTool, FetchTool, FindPathTool, FindReferencesTool, GitBranchTool, GitCommitTool,
+    GitLogTool, GitPushTool, GitStatusTool, GetCodeActionsTool, GoToDefinitionTool, GrepTool,
     ListAgentsAndModelsTool, ListDirectoryTool, MovePathTool, ProjectSnapshot, ReadFileTool,
     RenameTool, RequestCredentialTool, SandboxedTerminalTool, SearchSemanticTool, SpawnAgentTool,
     SystemPromptTemplate, Template, Templates, TerminalTool, WebSearchTool, WriteFileTool,
@@ -999,6 +1000,13 @@ impl Thread {
         self.add_tool(WebSearchTool);
         self.add_tool(BrowserNavigateTool);
         self.add_tool(BrowserScreenshotTool);
+        self.add_tool(BrowserClickTool);
+        self.add_tool(BrowserTypeTool);
+        self.add_tool(BrowserFillTool);
+        self.add_tool(BrowserScrollTool);
+        self.add_tool(BrowserPressKeyTool);
+        self.add_tool(BrowserWaitTool);
+        self.add_tool(BrowserCloseTool);
 
         self.add_tool(DiagnosticsTool::new(self.project.clone()));
         self.add_tool(GitStatusTool::new(self.project.clone()));
@@ -3246,10 +3254,10 @@ impl Thread {
         } else {
             let prompt = SystemPromptTemplate {
                 project: self.project_context.read(cx),
-                available_tools: available_tools.clone(),
-                model_name: model_name.clone(),
-                date: date.clone(),
-                user_agents_md: user_agents_md.clone(),
+                available_tools,
+                model_name,
+                date,
+                user_agents_md,
                 sandboxing,
                 require_verification,
             }

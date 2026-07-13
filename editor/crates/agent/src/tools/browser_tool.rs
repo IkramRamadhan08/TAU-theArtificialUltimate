@@ -1,32 +1,47 @@
-use std::io::Cursor;
 use std::sync::Arc;
 use std::sync::OnceLock;
 
 use crate::{AgentTool, ToolCallEventStream, ToolInput};
 use agent_client_protocol::schema as acp;
 use anyhow::Result;
-use base64::Engine;
 use gpui::{App, Task};
 use html_to_markdown::convert_html_to_markdown;
 use language_model::{LanguageModelImage, LanguageModelToolResultContent};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use smol::process::Command;
-use std::time::Duration;
 use ui::SharedString;
 
-const CHROME_TIMEOUT: Duration = Duration::from_secs(30);
-const WINDOW_SIZE: &str = "1280,720";
+use super::browser_session::BrowserSession;
 
-static CACHED_CHROME_PATH: OnceLock<Option<String>> = OnceLock::new();
-
-fn find_chrome() -> Option<String> {
-    CACHED_CHROME_PATH
-        .get_or_init(|| find_chrome_inner())
-        .clone()
+fn global_session() -> &'static std::sync::Mutex<Option<BrowserSession>> {
+    static SESSION: OnceLock<std::sync::Mutex<Option<BrowserSession>>> = OnceLock::new();
+    SESSION.get_or_init(|| std::sync::Mutex::new(None))
 }
 
-fn find_chrome_inner() -> Option<String> {
+fn with_session<R>(chrome_path: &str, f: impl FnOnce(&mut BrowserSession) -> Result<R>) -> Result<R> {
+    let mut guard = global_session().lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+
+    if guard.is_none() || !guard.as_ref().unwrap().is_alive() {
+        if let Some(mut old) = guard.take() {
+            old.close();
+        }
+        let session = BrowserSession::launch(chrome_path)?;
+        *guard = Some(session);
+    }
+
+    f(guard.as_mut().unwrap())
+}
+
+fn close_session_sync() {
+    if let Ok(mut guard) = global_session().lock() {
+        if let Some(mut session) = guard.take() {
+            session.close();
+        }
+    }
+}
+
+#[allow(clippy::disallowed_methods, reason = "Browser tool uses blocking command execution for Chrome detection")]
+fn find_chrome() -> Option<String> {
     let candidates: Vec<String> = if cfg!(target_os = "macos") {
         vec![
             "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome".into(),
@@ -107,22 +122,16 @@ fn validate_url(url: &str) -> Result<String> {
     Ok(normalized)
 }
 
-fn extract_title(html: &str) -> String {
-    let lower = html.to_lowercase();
-    if let Some(start) = lower.find("<title>") {
-        let after = &html[start + 7..];
-        if let Some(end) = after.find("</title>").or_else(|| after.find("</TITLE>")) {
-            return after[..end].trim().to_string();
-        }
-    }
-    String::new()
+fn chrome_error() -> String {
+    "No Chrome/Chromium browser found. Install Google Chrome, Chromium, or Brave:\n  - Linux: sudo apt install chromium-browser\n  - macOS: brew install --cask chromium\n  - Windows: https://www.google.com/chrome/".into()
 }
 
-/// Navigate to a URL and return the rendered page content as markdown.
-/// JavaScript is executed, so you get the full dynamic page content.
+// ============================================================================
+// browser_navigate
+// ============================================================================
+
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct BrowserNavigateToolInput {
-    /// The URL to navigate to (e.g. https://example.com)
     pub url: String,
 }
 
@@ -186,86 +195,44 @@ impl AgentTool for BrowserNavigateTool {
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
         cx.spawn(async move |_cx| {
-            let input = input
-                .recv()
-                .await
-                .map_err(|e| BrowserToolOutput::Error {
-                    error: e.to_string(),
-                })?;
+            let input = input.recv().await.map_err(|e| BrowserToolOutput::Error {
+                error: e.to_string(),
+            })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserToolOutput::Error {
-                error: "No Chrome/Chromium browser found. Install Google Chrome, Chromium, or Brave:\n  - Linux: sudo apt install chromium-browser\n  - macOS: brew install --cask chromium\n  - Windows: https://www.google.com/chrome/".into(),
+                error: chrome_error(),
             })?;
 
             let url = validate_url(&input.url).map_err(|e| BrowserToolOutput::Error {
                 error: e.to_string(),
             })?;
 
-            match run_chrome_dump_dom(&chrome, &url).await {
-                Ok((title, content)) => Ok(BrowserToolOutput::Success {
+            with_session(&chrome, |session| {
+                session.navigate(&url)?;
+                let title = session.get_page_title().unwrap_or_default();
+                let dom = session.get_dom().unwrap_or_default();
+                let content = match convert_html_to_markdown(std::io::Cursor::new(&dom), &mut []) {
+                    Ok(md) => md,
+                    Err(_) => dom,
+                };
+                let current_url = session.get_page_url().unwrap_or(url);
+                Ok(BrowserToolOutput::Success {
                     title,
                     content,
-                    url,
-                }),
-                Err(e) => Err(BrowserToolOutput::Error {
-                    error: e.to_string(),
-                }),
-            }
+                    url: current_url,
+                })
+            })
+            .map_err(|e| BrowserToolOutput::Error { error: e.to_string() })
         })
     }
 }
 
-async fn run_chrome_dump_dom(chrome: &str, url: &str) -> Result<(String, String)> {
-    let mut child = Command::new(chrome)
-        .arg("--headless=new")
-        .arg("--disable-gpu")
-        .arg("--no-sandbox")
-        .arg("--disable-dev-shm-usage")
-        .arg("--disable-extensions")
-        .arg("--window-size")
-        .arg(WINDOW_SIZE)
-        .arg("--dump-dom")
-        .arg(url)
-        .stdout(smol::process::Stdio::piped())
-        .stderr(smol::process::Stdio::piped())
-        .spawn()?;
+// ============================================================================
+// browser_screenshot
+// ============================================================================
 
-    let output = smol::future::or(
-        child.output(),
-        async {
-            smol::Timer::after(CHROME_TIMEOUT).await;
-            Err(std::io::Error::new(
-                std::io::ErrorKind::TimedOut,
-                format!("Chrome timed out after {}s", CHROME_TIMEOUT.as_secs()),
-            ))
-        },
-    )
-    .await?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("Chrome exited with error: {}", stderr.trim());
-    }
-
-    let html = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if html.is_empty() {
-        anyhow::bail!("Chrome returned empty page content");
-    }
-
-    let title = extract_title(&html);
-
-    let content = match convert_html_to_markdown(Cursor::new(&html), &mut []) {
-        Ok(md) => md,
-        Err(_) => html,
-    };
-
-    Ok((title, content))
-}
-
-/// Take a screenshot of a URL and return it as a PNG image.
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct BrowserScreenshotToolInput {
-    /// The URL to take a screenshot of
     pub url: String,
 }
 
@@ -324,68 +291,530 @@ impl AgentTool for BrowserScreenshotTool {
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
         cx.spawn(async move |_cx| {
-            let input = input
-                .recv()
-                .await
-                .map_err(|e| BrowserScreenshotOutput::Error {
-                    error: e.to_string(),
-                })?;
+            let input = input.recv().await.map_err(|e| BrowserScreenshotOutput::Error {
+                error: e.to_string(),
+            })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserScreenshotOutput::Error {
-                error: "No Chrome/Chromium browser found. Install Google Chrome, Chromium, or Brave:\n  - Linux: sudo apt install chromium-browser\n  - macOS: brew install --cask chromium\n  - Windows: https://www.google.com/chrome/".into(),
+                error: chrome_error(),
             })?;
 
             let url = validate_url(&input.url).map_err(|e| BrowserScreenshotOutput::Error {
                 error: e.to_string(),
             })?;
 
-            match run_chrome_screenshot(&chrome, &url).await {
-                Ok(base64_data) => Ok(BrowserScreenshotOutput::Success {
-                    screenshot_base64: base64_data,
-                }),
-                Err(e) => Err(BrowserScreenshotOutput::Error {
-                    error: e.to_string(),
-                }),
-            }
+            with_session(&chrome, |session| {
+                session.navigate(&url)?;
+                let base64 = session.screenshot()?;
+                Ok(BrowserScreenshotOutput::Success {
+                    screenshot_base64: base64,
+                })
+            })
+            .map_err(|e| BrowserScreenshotOutput::Error { error: e.to_string() })
         })
     }
 }
 
-async fn run_chrome_screenshot(chrome: &str, url: &str) -> Result<String> {
-    let temp_dir = tempfile::tempdir()?;
-    let screenshot_path = temp_dir.path().join("screenshot.png");
+// ============================================================================
+// browser_click
+// ============================================================================
 
-    let mut child = Command::new(chrome)
-        .arg("--headless=new")
-        .arg("--disable-gpu")
-        .arg("--no-sandbox")
-        .arg("--disable-dev-shm-usage")
-        .arg("--disable-extensions")
-        .arg("--window-size")
-        .arg(WINDOW_SIZE)
-        .arg(format!("--screenshot={}", screenshot_path.display()))
-        .arg(url)
-        .stdout(smol::process::Stdio::piped())
-        .stderr(smol::process::Stdio::piped())
-        .spawn()?;
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct BrowserClickToolInput {
+    pub selector: String,
+}
 
-    let output = smol::future::or(
-        child.output(),
-        async {
-            smol::Timer::after(CHROME_TIMEOUT).await;
-            Err(std::io::Error::new(
-                std::io::ErrorKind::TimedOut,
-                format!("Chrome timed out after {}s", CHROME_TIMEOUT.as_secs()),
-            ))
-        },
-    )
-    .await?;
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum BrowserClickOutput {
+    Success { success: bool },
+    Error { error: String },
+}
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("Chrome screenshot failed: {}", stderr.trim());
+impl From<BrowserClickOutput> for LanguageModelToolResultContent {
+    fn from(value: BrowserClickOutput) -> Self {
+        match value {
+            BrowserClickOutput::Success { .. } => "Element clicked successfully".into(),
+            BrowserClickOutput::Error { error } => error.into(),
+        }
+    }
+}
+
+pub struct BrowserClickTool;
+
+impl AgentTool for BrowserClickTool {
+    type Input = BrowserClickToolInput;
+    type Output = BrowserClickOutput;
+
+    const NAME: &'static str = "browser_click";
+
+    fn kind() -> acp::ToolKind {
+        acp::ToolKind::Fetch
     }
 
-    let image_data = std::fs::read(&screenshot_path)?;
-    Ok(base64::engine::general_purpose::STANDARD.encode(&image_data))
+    fn initial_title(
+        &self,
+        _input: Result<Self::Input, serde_json::Value>,
+        _cx: &mut App,
+    ) -> SharedString {
+        "Clicking element".into()
+    }
+
+    fn supports_provider(_provider: &language_model::LanguageModelProviderId) -> bool {
+        true
+    }
+
+    fn run(
+        self: Arc<Self>,
+        input: ToolInput<Self::Input>,
+        _event_stream: ToolCallEventStream,
+        cx: &mut App,
+    ) -> Task<Result<Self::Output, Self::Output>> {
+        cx.spawn(async move |_cx| {
+            let input = input.recv().await.map_err(|e| BrowserClickOutput::Error {
+                error: e.to_string(),
+            })?;
+
+            let chrome = find_chrome().ok_or_else(|| BrowserClickOutput::Error {
+                error: chrome_error(),
+            })?;
+
+            with_session(&chrome, |session| {
+                session.click(&input.selector)?;
+                Ok(BrowserClickOutput::Success { success: true })
+            })
+            .map_err(|e| BrowserClickOutput::Error { error: e.to_string() })
+        })
+    }
+}
+
+// ============================================================================
+// browser_type
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct BrowserTypeToolInput {
+    pub selector: String,
+    pub text: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum BrowserTypeOutput {
+    Success { success: bool },
+    Error { error: String },
+}
+
+impl From<BrowserTypeOutput> for LanguageModelToolResultContent {
+    fn from(value: BrowserTypeOutput) -> Self {
+        match value {
+            BrowserTypeOutput::Success { .. } => "Text typed successfully".into(),
+            BrowserTypeOutput::Error { error } => error.into(),
+        }
+    }
+}
+
+pub struct BrowserTypeTool;
+
+impl AgentTool for BrowserTypeTool {
+    type Input = BrowserTypeToolInput;
+    type Output = BrowserTypeOutput;
+
+    const NAME: &'static str = "browser_type";
+
+    fn kind() -> acp::ToolKind {
+        acp::ToolKind::Fetch
+    }
+
+    fn initial_title(
+        &self,
+        _input: Result<Self::Input, serde_json::Value>,
+        _cx: &mut App,
+    ) -> SharedString {
+        "Typing text".into()
+    }
+
+    fn supports_provider(_provider: &language_model::LanguageModelProviderId) -> bool {
+        true
+    }
+
+    fn run(
+        self: Arc<Self>,
+        input: ToolInput<Self::Input>,
+        _event_stream: ToolCallEventStream,
+        cx: &mut App,
+    ) -> Task<Result<Self::Output, Self::Output>> {
+        cx.spawn(async move |_cx| {
+            let input = input.recv().await.map_err(|e| BrowserTypeOutput::Error {
+                error: e.to_string(),
+            })?;
+
+            let chrome = find_chrome().ok_or_else(|| BrowserTypeOutput::Error {
+                error: chrome_error(),
+            })?;
+
+            with_session(&chrome, |session| {
+                session.type_text(&input.selector, &input.text)?;
+                Ok(BrowserTypeOutput::Success { success: true })
+            })
+            .map_err(|e| BrowserTypeOutput::Error { error: e.to_string() })
+        })
+    }
+}
+
+// ============================================================================
+// browser_fill
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct BrowserFillToolInput {
+    pub selector: String,
+    pub value: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum BrowserFillOutput {
+    Success { success: bool },
+    Error { error: String },
+}
+
+impl From<BrowserFillOutput> for LanguageModelToolResultContent {
+    fn from(value: BrowserFillOutput) -> Self {
+        match value {
+            BrowserFillOutput::Success { .. } => "Field filled successfully".into(),
+            BrowserFillOutput::Error { error } => error.into(),
+        }
+    }
+}
+
+pub struct BrowserFillTool;
+
+impl AgentTool for BrowserFillTool {
+    type Input = BrowserFillToolInput;
+    type Output = BrowserFillOutput;
+
+    const NAME: &'static str = "browser_fill";
+
+    fn kind() -> acp::ToolKind {
+        acp::ToolKind::Fetch
+    }
+
+    fn initial_title(
+        &self,
+        _input: Result<Self::Input, serde_json::Value>,
+        _cx: &mut App,
+    ) -> SharedString {
+        "Filling form field".into()
+    }
+
+    fn supports_provider(_provider: &language_model::LanguageModelProviderId) -> bool {
+        true
+    }
+
+    fn run(
+        self: Arc<Self>,
+        input: ToolInput<Self::Input>,
+        _event_stream: ToolCallEventStream,
+        cx: &mut App,
+    ) -> Task<Result<Self::Output, Self::Output>> {
+        cx.spawn(async move |_cx| {
+            let input = input.recv().await.map_err(|e| BrowserFillOutput::Error {
+                error: e.to_string(),
+            })?;
+
+            let chrome = find_chrome().ok_or_else(|| BrowserFillOutput::Error {
+                error: chrome_error(),
+            })?;
+
+            with_session(&chrome, |session| {
+                session.fill(&input.selector, &input.value)?;
+                Ok(BrowserFillOutput::Success { success: true })
+            })
+            .map_err(|e| BrowserFillOutput::Error { error: e.to_string() })
+        })
+    }
+}
+
+// ============================================================================
+// browser_scroll
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct BrowserScrollToolInput {
+    pub delta_x: i64,
+    pub delta_y: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum BrowserScrollOutput {
+    Success { success: bool },
+    Error { error: String },
+}
+
+impl From<BrowserScrollOutput> for LanguageModelToolResultContent {
+    fn from(value: BrowserScrollOutput) -> Self {
+        match value {
+            BrowserScrollOutput::Success { .. } => "Page scrolled successfully".into(),
+            BrowserScrollOutput::Error { error } => error.into(),
+        }
+    }
+}
+
+pub struct BrowserScrollTool;
+
+impl AgentTool for BrowserScrollTool {
+    type Input = BrowserScrollToolInput;
+    type Output = BrowserScrollOutput;
+
+    const NAME: &'static str = "browser_scroll";
+
+    fn kind() -> acp::ToolKind {
+        acp::ToolKind::Fetch
+    }
+
+    fn initial_title(
+        &self,
+        _input: Result<Self::Input, serde_json::Value>,
+        _cx: &mut App,
+    ) -> SharedString {
+        "Scrolling page".into()
+    }
+
+    fn supports_provider(_provider: &language_model::LanguageModelProviderId) -> bool {
+        true
+    }
+
+    fn run(
+        self: Arc<Self>,
+        input: ToolInput<Self::Input>,
+        _event_stream: ToolCallEventStream,
+        cx: &mut App,
+    ) -> Task<Result<Self::Output, Self::Output>> {
+        cx.spawn(async move |_cx| {
+            let input = input.recv().await.map_err(|e| BrowserScrollOutput::Error {
+                error: e.to_string(),
+            })?;
+
+            let chrome = find_chrome().ok_or_else(|| BrowserScrollOutput::Error {
+                error: chrome_error(),
+            })?;
+
+            with_session(&chrome, |session| {
+                session.scroll(input.delta_x, input.delta_y)?;
+                Ok(BrowserScrollOutput::Success { success: true })
+            })
+            .map_err(|e| BrowserScrollOutput::Error { error: e.to_string() })
+        })
+    }
+}
+
+// ============================================================================
+// browser_press_key
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct BrowserPressKeyToolInput {
+    pub key: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum BrowserPressKeyOutput {
+    Success { success: bool },
+    Error { error: String },
+}
+
+impl From<BrowserPressKeyOutput> for LanguageModelToolResultContent {
+    fn from(value: BrowserPressKeyOutput) -> Self {
+        match value {
+            BrowserPressKeyOutput::Success { .. } => "Key pressed successfully".into(),
+            BrowserPressKeyOutput::Error { error } => error.into(),
+        }
+    }
+}
+
+pub struct BrowserPressKeyTool;
+
+impl AgentTool for BrowserPressKeyTool {
+    type Input = BrowserPressKeyToolInput;
+    type Output = BrowserPressKeyOutput;
+
+    const NAME: &'static str = "browser_press_key";
+
+    fn kind() -> acp::ToolKind {
+        acp::ToolKind::Fetch
+    }
+
+    fn initial_title(
+        &self,
+        _input: Result<Self::Input, serde_json::Value>,
+        _cx: &mut App,
+    ) -> SharedString {
+        "Pressing key".into()
+    }
+
+    fn supports_provider(_provider: &language_model::LanguageModelProviderId) -> bool {
+        true
+    }
+
+    fn run(
+        self: Arc<Self>,
+        input: ToolInput<Self::Input>,
+        _event_stream: ToolCallEventStream,
+        cx: &mut App,
+    ) -> Task<Result<Self::Output, Self::Output>> {
+        cx.spawn(async move |_cx| {
+            let input = input.recv().await.map_err(|e| BrowserPressKeyOutput::Error {
+                error: e.to_string(),
+            })?;
+
+            let chrome = find_chrome().ok_or_else(|| BrowserPressKeyOutput::Error {
+                error: chrome_error(),
+            })?;
+
+            with_session(&chrome, |session| {
+                session.press_key(&input.key)?;
+                Ok(BrowserPressKeyOutput::Success { success: true })
+            })
+            .map_err(|e| BrowserPressKeyOutput::Error { error: e.to_string() })
+        })
+    }
+}
+
+// ============================================================================
+// browser_wait
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct BrowserWaitToolInput {
+    pub selector: String,
+    pub timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum BrowserWaitOutput {
+    Success { found: bool },
+    Error { error: String },
+}
+
+impl From<BrowserWaitOutput> for LanguageModelToolResultContent {
+    fn from(value: BrowserWaitOutput) -> Self {
+        match value {
+            BrowserWaitOutput::Success { .. } => "Element found".into(),
+            BrowserWaitOutput::Error { error } => error.into(),
+        }
+    }
+}
+
+pub struct BrowserWaitTool;
+
+impl AgentTool for BrowserWaitTool {
+    type Input = BrowserWaitToolInput;
+    type Output = BrowserWaitOutput;
+
+    const NAME: &'static str = "browser_wait";
+
+    fn kind() -> acp::ToolKind {
+        acp::ToolKind::Fetch
+    }
+
+    fn initial_title(
+        &self,
+        _input: Result<Self::Input, serde_json::Value>,
+        _cx: &mut App,
+    ) -> SharedString {
+        "Waiting for element".into()
+    }
+
+    fn supports_provider(_provider: &language_model::LanguageModelProviderId) -> bool {
+        true
+    }
+
+    fn run(
+        self: Arc<Self>,
+        input: ToolInput<Self::Input>,
+        _event_stream: ToolCallEventStream,
+        cx: &mut App,
+    ) -> Task<Result<Self::Output, Self::Output>> {
+        cx.spawn(async move |_cx| {
+            let input = input.recv().await.map_err(|e| BrowserWaitOutput::Error {
+                error: e.to_string(),
+            })?;
+
+            let chrome = find_chrome().ok_or_else(|| BrowserWaitOutput::Error {
+                error: chrome_error(),
+            })?;
+
+            let timeout = input.timeout_ms.unwrap_or(10000);
+
+            with_session(&chrome, |session| {
+                session.wait_for_element(&input.selector, timeout)?;
+                Ok(BrowserWaitOutput::Success { found: true })
+            })
+            .map_err(|e| BrowserWaitOutput::Error { error: e.to_string() })
+        })
+    }
+}
+
+// ============================================================================
+// browser_close
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct BrowserCloseToolInput {}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum BrowserCloseOutput {
+    Success { success: bool },
+    Error { error: String },
+}
+
+impl From<BrowserCloseOutput> for LanguageModelToolResultContent {
+    fn from(value: BrowserCloseOutput) -> Self {
+        match value {
+            BrowserCloseOutput::Success { .. } => "Browser closed".into(),
+            BrowserCloseOutput::Error { error } => error.into(),
+        }
+    }
+}
+
+pub struct BrowserCloseTool;
+
+impl AgentTool for BrowserCloseTool {
+    type Input = BrowserCloseToolInput;
+    type Output = BrowserCloseOutput;
+
+    const NAME: &'static str = "browser_close";
+
+    fn kind() -> acp::ToolKind {
+        acp::ToolKind::Fetch
+    }
+
+    fn initial_title(
+        &self,
+        _input: Result<Self::Input, serde_json::Value>,
+        _cx: &mut App,
+    ) -> SharedString {
+        "Closing browser".into()
+    }
+
+    fn supports_provider(_provider: &language_model::LanguageModelProviderId) -> bool {
+        true
+    }
+
+    fn run(
+        self: Arc<Self>,
+        _input: ToolInput<Self::Input>,
+        _event_stream: ToolCallEventStream,
+        cx: &mut App,
+    ) -> Task<Result<Self::Output, Self::Output>> {
+        cx.spawn(async move |_cx| {
+            close_session_sync();
+            Ok(BrowserCloseOutput::Success { success: true })
+        })
+    }
 }

@@ -1,4 +1,6 @@
 mod apply_code_action_tool;
+#[allow(clippy::disallowed_methods, reason = "Browser session uses blocking I/O intentionally for CDP communication")]
+mod browser_session;
 mod browser_tool;
 mod context_server_registry;
 mod copy_path_tool;
