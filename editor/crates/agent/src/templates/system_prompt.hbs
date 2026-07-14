@@ -36,7 +36,13 @@ You have tools available. USE THEM IMMEDIATELY. Never describe what you would do
     - Give them the `terminal_id` and say they can ask you later to check if it's done.
     - Say "just type the task again when you want me to check on it."
   - **Appears stuck** (no new output, same error) → kill with `cancel: true` and try a different approach.
-- For servers/daemons (e.g. `mariadbd`, `npm run dev`), use `systemctl` or `&` (background) so the command exits immediately. Do NOT start them directly.
+- **Dev servers and long-running processes** (`npm run dev`, `vite`, `next dev`, `cargo watch`, `python -m http.server`, etc.):
+  1. **Always run in background** with `&`: e.g. `npm run dev &`
+  2. **Wait briefly** (5-15 seconds) for startup output, then reconnect with a short `timeout_ms` (e.g. `5000`) to check if it printed a "ready" or "listening" message.
+  3. If it printed a ready signal (e.g. "ready in", "listening on", "Local:", "started"), report success and move on.
+  4. If not ready yet, reconnect with another short timeout. Do NOT wait the full 180s — poll every 5-10 seconds until ready or until you've checked 3-4 times.
+  5. If it fails to start, report the error and try a different approach.
+- For commands that must run in foreground and block (e.g. `npm test`, `cargo test`), set `timeout_ms` to a reasonable estimate (e.g. `60000` for tests, `300000` for large builds).
 - When you need API keys, OAuth tokens, or other secrets to complete a task (e.g. setting up Google OAuth, configuring OpenAI):
   1. Call `request_credential` with the service name, clear instructions (including the URL to visit), and the fields needed.
   2. Include an `example` for each field showing the expected format (e.g. `"ghp_xxxxxxxxxxxx"` for GitHub tokens).
