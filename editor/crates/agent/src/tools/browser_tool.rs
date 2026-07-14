@@ -18,26 +18,45 @@ fn global_session() -> &'static std::sync::Mutex<Option<BrowserSession>> {
     SESSION.get_or_init(|| std::sync::Mutex::new(None))
 }
 
-fn with_session<R>(chrome_path: &str, f: impl FnOnce(&mut BrowserSession) -> Result<R>) -> Result<R> {
-    let mut guard = global_session().lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+fn with_session<R>(chrome_path: &str, f: impl FnOnce(&mut BrowserSession) -> Result<R> + Send + 'static) -> Result<R>
+where
+    R: Send + 'static,
+{
+    let chrome = chrome_path.to_string();
+    let (tx, rx) = async_channel::bounded(1);
 
-    if guard.is_none() || !guard.as_ref().unwrap().is_alive() {
-        if let Some(mut old) = guard.take() {
-            old.close();
-        }
-        let session = BrowserSession::launch(chrome_path)?;
-        *guard = Some(session);
-    }
+    std::thread::spawn(move || {
+        let result = (|| -> Result<R> {
+            let mut guard = global_session().lock().map_err(|e| anyhow::anyhow!("{}", e))?;
 
-    f(guard.as_mut().unwrap())
+            if guard.is_none() || !guard.as_ref().unwrap().is_alive() {
+                if let Some(mut old) = guard.take() {
+                    old.close();
+                }
+                let session = BrowserSession::launch(&chrome)?;
+                *guard = Some(session);
+            }
+
+            f(guard.as_mut().unwrap())
+        })();
+
+        let _ = tx.send_blocking(result);
+    });
+
+    rx.recv_blocking().map_err(|e| anyhow::anyhow!("{}", e))?
 }
 
 fn close_session_sync() {
-    if let Ok(mut guard) = global_session().lock() {
-        if let Some(mut session) = guard.take() {
-            session.close();
+    let (tx, rx) = async_channel::bounded(1);
+    std::thread::spawn(move || {
+        if let Ok(mut guard) = global_session().lock() {
+            if let Some(mut session) = guard.take() {
+                session.close();
+            }
         }
-    }
+        let _ = tx.send_blocking(());
+    });
+    let _ = rx.recv_blocking();
 }
 
 #[allow(clippy::disallowed_methods, reason = "Browser tool uses blocking command execution for Chrome detection")]
@@ -207,7 +226,7 @@ impl AgentTool for BrowserNavigateTool {
                 error: e.to_string(),
             })?;
 
-            with_session(&chrome, |session| {
+            with_session(&chrome, move |session| {
                 session.navigate(&url)?;
                 let title = session.get_page_title().unwrap_or_default();
                 let dom = session.get_dom().unwrap_or_default();
@@ -303,7 +322,7 @@ impl AgentTool for BrowserScreenshotTool {
                 error: e.to_string(),
             })?;
 
-            with_session(&chrome, |session| {
+            with_session(&chrome, move |session| {
                 session.navigate(&url)?;
                 let base64 = session.screenshot()?;
                 Ok(BrowserScreenshotOutput::Success {
@@ -379,8 +398,10 @@ impl AgentTool for BrowserClickTool {
                 error: chrome_error(),
             })?;
 
-            with_session(&chrome, |session| {
-                session.click(&input.selector)?;
+            let selector = input.selector;
+
+            with_session(&chrome, move |session| {
+                session.click(&selector)?;
                 Ok(BrowserClickOutput::Success { success: true })
             })
             .map_err(|e| BrowserClickOutput::Error { error: e.to_string() })
@@ -453,8 +474,11 @@ impl AgentTool for BrowserTypeTool {
                 error: chrome_error(),
             })?;
 
-            with_session(&chrome, |session| {
-                session.type_text(&input.selector, &input.text)?;
+            let selector = input.selector;
+            let text = input.text;
+
+            with_session(&chrome, move |session| {
+                session.type_text(&selector, &text)?;
                 Ok(BrowserTypeOutput::Success { success: true })
             })
             .map_err(|e| BrowserTypeOutput::Error { error: e.to_string() })
@@ -527,8 +551,11 @@ impl AgentTool for BrowserFillTool {
                 error: chrome_error(),
             })?;
 
-            with_session(&chrome, |session| {
-                session.fill(&input.selector, &input.value)?;
+            let selector = input.selector;
+            let value = input.value;
+
+            with_session(&chrome, move |session| {
+                session.fill(&selector, &value)?;
                 Ok(BrowserFillOutput::Success { success: true })
             })
             .map_err(|e| BrowserFillOutput::Error { error: e.to_string() })
@@ -601,8 +628,11 @@ impl AgentTool for BrowserScrollTool {
                 error: chrome_error(),
             })?;
 
-            with_session(&chrome, |session| {
-                session.scroll(input.delta_x, input.delta_y)?;
+            let delta_x = input.delta_x;
+            let delta_y = input.delta_y;
+
+            with_session(&chrome, move |session| {
+                session.scroll(delta_x, delta_y)?;
                 Ok(BrowserScrollOutput::Success { success: true })
             })
             .map_err(|e| BrowserScrollOutput::Error { error: e.to_string() })
@@ -674,8 +704,10 @@ impl AgentTool for BrowserPressKeyTool {
                 error: chrome_error(),
             })?;
 
-            with_session(&chrome, |session| {
-                session.press_key(&input.key)?;
+            let key = input.key;
+
+            with_session(&chrome, move |session| {
+                session.press_key(&key)?;
                 Ok(BrowserPressKeyOutput::Success { success: true })
             })
             .map_err(|e| BrowserPressKeyOutput::Error { error: e.to_string() })
@@ -749,9 +781,10 @@ impl AgentTool for BrowserWaitTool {
             })?;
 
             let timeout = input.timeout_ms.unwrap_or(10000);
+            let selector = input.selector;
 
-            with_session(&chrome, |session| {
-                session.wait_for_element(&input.selector, timeout)?;
+            with_session(&chrome, move |session| {
+                session.wait_for_element(&selector, timeout)?;
                 Ok(BrowserWaitOutput::Success { found: true })
             })
             .map_err(|e| BrowserWaitOutput::Error { error: e.to_string() })
