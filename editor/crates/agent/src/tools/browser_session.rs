@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::process::{Child, Command, Stdio};
@@ -8,6 +9,24 @@ use std::time::Duration;
 
 use tungstenite::WebSocket;
 use tungstenite::protocol::Message as WsMessage;
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AccessibilityNode {
+    pub backend_dom_node_id: Option<u64>,
+    pub child_nodes: Vec<AccessibilityNode>,
+    pub chrome_role: Option<String>,
+    pub class_name: Option<String>,
+    pub name: Option<String>,
+    pub role: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TabInfo {
+    pub target_id: String,
+    pub title: String,
+    pub url: String,
+    pub is_attached: bool,
+}
 
 pub struct CdpClient {
     ws: WebSocket<tungstenite::stream::MaybeTlsStream<TcpStream>>,
@@ -305,6 +324,211 @@ impl BrowserSession {
         Ok(url)
     }
 
+    pub fn get_accessibility_tree(&self) -> Result<Vec<AccessibilityNode>> {
+        let result = self.send_command("Accessibility.getFullAXTree", json!({}))?;
+
+        let nodes = result
+            .get("nodes")
+            .and_then(|v| v.as_array())
+            .context("No accessibility nodes returned")?;
+
+        let mut parsed = Vec::new();
+        let mut nodes_by_id: HashMap<u64, Value> = HashMap::new();
+
+        for node in nodes {
+            if let Some(node_id) = node.get("nodeId").and_then(|v| v.as_u64()) {
+                nodes_by_id.insert(node_id, node.clone());
+            }
+        }
+
+        let root_id = result
+            .get("root")
+            .and_then(|v| v.get("nodeId"))
+            .and_then(|v| v.as_u64());
+
+        if let Some(root_id) = root_id {
+            if nodes_by_id.contains_key(&root_id) {
+                let tree = build_accessibility_tree(root_id, &nodes_by_id);
+                parsed.push(tree);
+            }
+        }
+
+        Ok(parsed)
+    }
+
+    pub fn click_by_index(&self, index: usize) -> Result<()> {
+        let tree = self.get_accessibility_tree()?;
+        let node = find_node_by_index(&tree, index)
+            .context(format!("No element found at index {}", index))?;
+
+        let backend_id = node
+            .backend_dom_node_id
+            .context("Element has no backend DOM node ID")?;
+
+        let resolved = self.send_command("DOM.resolveNode", json!({
+            "backendNodeId": backend_id
+        }))?;
+
+        let object_id = resolved
+            .get("object")
+            .and_then(|v| v.get("objectId"))
+            .and_then(|v| v.as_str())
+            .context("Failed to resolve node")?;
+
+        let result = self.send_command("Runtime.callFunctionOn", json!({
+            "objectId": object_id,
+            "functionDeclaration": "function() { this.click(); }",
+            "returnByValue": true
+        }))?;
+
+        if let Some(exception) = result.get("exceptionDetails") {
+            anyhow::bail!(
+                "Click failed: {}",
+                exception.get("text").unwrap_or(&json!("unknown error"))
+            );
+        }
+
+        std::thread::sleep(Duration::from_millis(100));
+        Ok(())
+    }
+
+    pub fn type_by_index(&self, index: usize, text: &str) -> Result<()> {
+        let tree = self.get_accessibility_tree()?;
+        let node = find_node_by_index(&tree, index)
+            .context(format!("No element found at index {}", index))?;
+
+        let backend_id = node
+            .backend_dom_node_id
+            .context("Element has no backend DOM node ID")?;
+
+        let resolved = self.send_command("DOM.resolveNode", json!({
+            "backendNodeId": backend_id
+        }))?;
+
+        let object_id = resolved
+            .get("object")
+            .and_then(|v| v.get("objectId"))
+            .and_then(|v| v.as_str())
+            .context("Failed to resolve node")?;
+
+        let _result = self.send_command("Runtime.callFunctionOn", json!({
+            "objectId": object_id,
+            "functionDeclaration": "function() { this.focus(); }",
+            "returnByValue": true
+        }))?;
+
+        self.type_text("", text)
+    }
+
+    pub fn fill_by_index(&self, index: usize, value: &str, clear: bool) -> Result<()> {
+        let tree = self.get_accessibility_tree()?;
+        let node = find_node_by_index(&tree, index)
+            .context(format!("No element found at index {}", index))?;
+
+        let backend_id = node
+            .backend_dom_node_id
+            .context("Element has no backend DOM node ID")?;
+
+        let resolved = self.send_command("DOM.resolveNode", json!({
+            "backendNodeId": backend_id
+        }))?;
+
+        let object_id = resolved
+            .get("object")
+            .and_then(|v| v.get("objectId"))
+            .and_then(|v| v.as_str())
+            .context("Failed to resolve node")?;
+
+        if clear {
+            let _result = self.send_command("Runtime.callFunctionOn", json!({
+                "objectId": object_id,
+                "functionDeclaration": "function() { this.value = ''; this.dispatchEvent(new Event('input', { bubbles: true })); }",
+                "returnByValue": true
+            }))?;
+        }
+
+        let escaped_value = value.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n");
+        let _result = self.send_command("Runtime.callFunctionOn", json!({
+            "objectId": object_id,
+            "functionDeclaration": &format!("function() {{ this.value = '{}'; this.dispatchEvent(new Event('input', {{ bubbles: true }})); this.dispatchEvent(new Event('change', {{ bubbles: true }})); }}", escaped_value),
+            "returnByValue": true
+        }))?;
+
+        Ok(())
+    }
+
+    pub fn evaluate(&self, expression: &str) -> Result<Value> {
+        let result = self.send_command("Runtime.evaluate", json!({
+            "expression": expression,
+            "returnByValue": true,
+            "awaitPromise": true
+        }))?;
+
+        if let Some(exception) = result.get("exceptionDetails") {
+            let text = exception
+                .get("text")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown error");
+            anyhow::bail!("JavaScript evaluation failed: {}", text);
+        }
+
+        Ok(result.get("result").cloned().unwrap_or(json!(null)))
+    }
+
+    pub fn get_tabs(&self) -> Result<Vec<TabInfo>> {
+        let result = self.send_command("Target.getTargets", json!({}))?;
+
+        let target_infos = result
+            .get("targetInfos")
+            .and_then(|v| v.as_array())
+            .context("No target infos returned")?;
+
+        let mut tabs = Vec::new();
+        for info in target_infos {
+            if info.get("type").and_then(|v| v.as_str()) == Some("page") {
+                tabs.push(TabInfo {
+                    target_id: info
+                        .get("targetId")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    title: info
+                        .get("title")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    url: info
+                        .get("url")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    is_attached: info
+                        .get("attached")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false),
+                });
+            }
+        }
+
+        Ok(tabs)
+    }
+
+    pub fn switch_tab(&self, target_id: &str) -> Result<()> {
+        self.send_command("Target.activateTarget", json!({
+            "targetId": target_id
+        }))?;
+        std::thread::sleep(Duration::from_millis(200));
+        Ok(())
+    }
+
+    pub fn close_tab(&self, target_id: &str) -> Result<()> {
+        self.send_command("Target.closeTarget", json!({
+            "targetId": target_id
+        }))?;
+        std::thread::sleep(Duration::from_millis(200));
+        Ok(())
+    }
+
     pub fn is_alive(&self) -> bool {
         self.child.id() != 0
     }
@@ -374,4 +598,121 @@ fn get_ws_url(port: u16) -> Result<String> {
         .context("No webSocketDebuggerUrl in response")?;
 
     Ok(ws_url.to_string())
+}
+
+fn build_accessibility_tree(node_id: u64, nodes_by_id: &HashMap<u64, Value>) -> AccessibilityNode {
+    let node = nodes_by_id.get(&node_id).cloned().unwrap_or(json!({}));
+
+    let backend_dom_node_id = node
+        .get("backendDOMNodeId")
+        .and_then(|v| v.as_u64());
+
+    let child_node_ids: Vec<u64> = node
+        .get("childIds")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_u64())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let child_nodes: Vec<AccessibilityNode> = child_node_ids
+        .iter()
+        .filter_map(|child_id| nodes_by_id.get(child_id))
+        .map(|child_node| {
+            let child_node_id = child_node
+                .get("nodeId")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            build_accessibility_tree(child_node_id, nodes_by_id)
+        })
+        .collect();
+
+    AccessibilityNode {
+        backend_dom_node_id,
+        child_nodes,
+        chrome_role: node
+            .get("chromeRole")
+            .and_then(|v| v.get("value"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        class_name: node
+            .get("className")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        name: node
+            .get("name")
+            .and_then(|v| v.get("value"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        role: node
+            .get("role")
+            .and_then(|v| v.get("value"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+    }
+}
+
+fn find_node_by_index(nodes: &[AccessibilityNode], target_index: usize) -> Option<AccessibilityNode> {
+    let mut counter = 0;
+    find_node_by_index_recursive(nodes, target_index, &mut counter)
+}
+
+fn find_node_by_index_recursive(
+    nodes: &[AccessibilityNode],
+    target_index: usize,
+    counter: &mut usize,
+) -> Option<AccessibilityNode> {
+    for node in nodes {
+        let current = *counter;
+        *counter += 1;
+
+        if current == target_index {
+            return Some(node.clone());
+        }
+
+        if !node.child_nodes.is_empty() {
+            if let Some(found) = find_node_by_index_recursive(&node.child_nodes, target_index, counter) {
+                return Some(found);
+            }
+        }
+    }
+
+    None
+}
+
+fn accessibility_node_to_text(node: &AccessibilityNode, index: &mut usize, output: &mut String) {
+    let current_index = *index;
+    *index += 1;
+
+    let name = node.name.as_deref().unwrap_or("");
+    let role = node.role.as_deref().unwrap_or("");
+
+    let label = if name.is_empty() && role.is_empty() {
+        format!("{}\n", current_index)
+    } else if name.is_empty() {
+        format!("{}\n  role: {}\n", current_index, role)
+    } else if role.is_empty() {
+        format!("{}\n  name: {}\n", current_index, name)
+    } else {
+        format!("{}\n  role: {}, name: {}\n", current_index, role, name)
+    };
+
+    output.push_str(&label);
+
+    for child in &node.child_nodes {
+        accessibility_node_to_text(child, index, output);
+    }
+}
+
+pub fn format_accessibility_tree(nodes: &[AccessibilityNode]) -> String {
+    let mut output = String::new();
+    let mut index = 0;
+
+    for node in nodes {
+        accessibility_node_to_text(node, &mut index, &mut output);
+    }
+
+    output
 }

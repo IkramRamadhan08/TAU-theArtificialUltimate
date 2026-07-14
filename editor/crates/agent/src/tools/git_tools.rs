@@ -16,6 +16,7 @@ fn project_root(project: &Entity<Project>, cx: &App) -> Result<std::path::PathBu
         .context("no project worktree found")
 }
 
+#[allow(clippy::disallowed_methods, reason = "Git tools require synchronous command execution")]
 fn run_git(cwd: &std::path::Path, args: &[&str]) -> Result<String> {
     let output = std::process::Command::new("git")
         .args(args)

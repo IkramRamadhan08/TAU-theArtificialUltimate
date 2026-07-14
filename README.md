@@ -4,7 +4,7 @@
 
 # TAU — The Artificial Ultimate
 
-**A local-first, agentic coding IDE. Forked from [Zed](https://zed.dev).**
+**A local-first, agentic coding IDE with integrated AI.**
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE-GPL)
 [![Rust](https://img.shields.io/badge/rust-1.85.0-orange)](rust-toolchain.toml)
@@ -16,7 +16,7 @@
 
 <br>
 
-> **Experimental.** TAU extends Zed with a deeply integrated AI agent that writes code, runs commands, edits files, and builds projects — all from natural language. All AI features run through your own LLM provider API keys. No cloud dependency. No telemetry. Expect rough edges.
+> **Experimental.** TAU is a Rust-based IDE with a deeply integrated AI agent that writes code, runs commands, edits files, and builds projects — all from natural language. All AI features run through your own LLM provider API keys. No cloud dependency. No telemetry. Expect rough edges.
 
 ---
 
@@ -320,7 +320,7 @@ Create your own skills in `~/.agents/skills/`:
 | File finder | `Ctrl+P` | `Cmd+P` |
 | Find in project | `Ctrl+Shift+F` | `Cmd+Shift+F` |
 | Go to definition | `F12` | `F12` |
-| Toggle terminal | `Ctrl+\`` | `Cmd+\`` |
+| Toggle terminal | `Ctrl+`` | `Cmd+`` |
 | Toggle file explorer | `Ctrl+Shift+E` | `Cmd+Shift+E` |
 | Toggle git panel | `Ctrl+Shift+G` | `Cmd+Shift+G` |
 
@@ -367,8 +367,6 @@ TAU-theArtificialUltimate/
 
 **Can I use TAU offline?** The editor is fully offline. AI features require API access to your LLM provider, except when using local providers like Ollama or LM Studio.
 
-**What's the difference from Zed?** TAU strips out Zed's collaborative infrastructure (channels, calls, collab servers, LiveKit) and focuses entirely on local-first agentic AI with deep terminal integration, custom skills, and multi-provider LLM support.
-
 **How do I get an API key?** Sign up with any supported provider (Mistral, OpenAI, Anthropic, Google, etc.) and paste the key in Settings → Language Models.
 
 ---
@@ -390,9 +388,7 @@ All contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for the fu
 
 ## License
 
-TAU is a fork of [Zed](https://zed.dev). Original Zed code is dual-licensed under GPL-3.0-or-later / Apache-2.0. TAU modifications are GPL-3.0-or-later.
-
-See [LICENSE-GPL](LICENSE-GPL) and [LICENSE-APACHE](LICENSE-APACHE).
+TAU is licensed under GPL-3.0-or-later. See [LICENSE-GPL](LICENSE-GPL).
 
 ---
 

@@ -11,7 +11,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ui::SharedString;
 
-use super::browser_session::BrowserSession;
+use super::browser_session::{BrowserSession, format_accessibility_tree};
 
 fn global_session() -> &'static std::sync::Mutex<Option<BrowserSession>> {
     static SESSION: OnceLock<std::sync::Mutex<Option<BrowserSession>>> = OnceLock::new();
@@ -848,6 +848,479 @@ impl AgentTool for BrowserCloseTool {
         cx.spawn(async move |_cx| {
             close_session_sync();
             Ok(BrowserCloseOutput::Success { success: true })
+        })
+    }
+}
+
+// ============================================================================
+// browser_accessibility_tree
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct BrowserAccessibilityTreeToolInput {}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum BrowserAccessibilityTreeOutput {
+    Success { tree: String },
+    Error { error: String },
+}
+
+impl From<BrowserAccessibilityTreeOutput> for LanguageModelToolResultContent {
+    fn from(value: BrowserAccessibilityTreeOutput) -> Self {
+        match value {
+            BrowserAccessibilityTreeOutput::Success { tree } => tree.into(),
+            BrowserAccessibilityTreeOutput::Error { error } => error.into(),
+        }
+    }
+}
+
+pub struct BrowserAccessibilityTreeTool;
+
+impl AgentTool for BrowserAccessibilityTreeTool {
+    type Input = BrowserAccessibilityTreeToolInput;
+    type Output = BrowserAccessibilityTreeOutput;
+
+    const NAME: &'static str = "browser_accessibility_tree";
+
+    fn kind() -> acp::ToolKind {
+        acp::ToolKind::Fetch
+    }
+
+    fn initial_title(
+        &self,
+        _input: Result<Self::Input, serde_json::Value>,
+        _cx: &mut App,
+    ) -> SharedString {
+        "Getting accessibility tree".into()
+    }
+
+    fn supports_provider(_provider: &language_model::LanguageModelProviderId) -> bool {
+        true
+    }
+
+    fn run(
+        self: Arc<Self>,
+        _input: ToolInput<Self::Input>,
+        _event_stream: ToolCallEventStream,
+        cx: &mut App,
+    ) -> Task<Result<Self::Output, Self::Output>> {
+        cx.spawn(async move |_cx| {
+            let chrome = find_chrome().ok_or_else(|| BrowserAccessibilityTreeOutput::Error {
+                error: chrome_error(),
+            })?;
+
+            with_session(&chrome, move |session| {
+                let tree = session.get_accessibility_tree()?;
+                let formatted = format_accessibility_tree(&tree);
+                Ok(BrowserAccessibilityTreeOutput::Success { tree: formatted })
+            })
+            .map_err(|e| BrowserAccessibilityTreeOutput::Error { error: e.to_string() })
+        })
+    }
+}
+
+// ============================================================================
+// browser_click_by_index
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct BrowserClickByIndexToolInput {
+    pub index: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum BrowserClickByIndexOutput {
+    Success { success: bool },
+    Error { error: String },
+}
+
+impl From<BrowserClickByIndexOutput> for LanguageModelToolResultContent {
+    fn from(value: BrowserClickByIndexOutput) -> Self {
+        match value {
+            BrowserClickByIndexOutput::Success { .. } => "Element clicked successfully".into(),
+            BrowserClickByIndexOutput::Error { error } => error.into(),
+        }
+    }
+}
+
+pub struct BrowserClickByIndexTool;
+
+impl AgentTool for BrowserClickByIndexTool {
+    type Input = BrowserClickByIndexToolInput;
+    type Output = BrowserClickByIndexOutput;
+
+    const NAME: &'static str = "browser_click_by_index";
+
+    fn kind() -> acp::ToolKind {
+        acp::ToolKind::Fetch
+    }
+
+    fn initial_title(
+        &self,
+        _input: Result<Self::Input, serde_json::Value>,
+        _cx: &mut App,
+    ) -> SharedString {
+        "Clicking element by index".into()
+    }
+
+    fn supports_provider(_provider: &language_model::LanguageModelProviderId) -> bool {
+        true
+    }
+
+    fn run(
+        self: Arc<Self>,
+        input: ToolInput<Self::Input>,
+        _event_stream: ToolCallEventStream,
+        cx: &mut App,
+    ) -> Task<Result<Self::Output, Self::Output>> {
+        cx.spawn(async move |_cx| {
+            let input = input.recv().await.map_err(|e| BrowserClickByIndexOutput::Error {
+                error: e.to_string(),
+            })?;
+
+            let chrome = find_chrome().ok_or_else(|| BrowserClickByIndexOutput::Error {
+                error: chrome_error(),
+            })?;
+
+            let index = input.index;
+
+            with_session(&chrome, move |session| {
+                session.click_by_index(index)?;
+                Ok(BrowserClickByIndexOutput::Success { success: true })
+            })
+            .map_err(|e| BrowserClickByIndexOutput::Error { error: e.to_string() })
+        })
+    }
+}
+
+// ============================================================================
+// browser_type_by_index
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct BrowserTypeByIndexToolInput {
+    pub index: usize,
+    pub text: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum BrowserTypeByIndexOutput {
+    Success { success: bool },
+    Error { error: String },
+}
+
+impl From<BrowserTypeByIndexOutput> for LanguageModelToolResultContent {
+    fn from(value: BrowserTypeByIndexOutput) -> Self {
+        match value {
+            BrowserTypeByIndexOutput::Success { .. } => "Text typed successfully".into(),
+            BrowserTypeByIndexOutput::Error { error } => error.into(),
+        }
+    }
+}
+
+pub struct BrowserTypeByIndexTool;
+
+impl AgentTool for BrowserTypeByIndexTool {
+    type Input = BrowserTypeByIndexToolInput;
+    type Output = BrowserTypeByIndexOutput;
+
+    const NAME: &'static str = "browser_type_by_index";
+
+    fn kind() -> acp::ToolKind {
+        acp::ToolKind::Fetch
+    }
+
+    fn initial_title(
+        &self,
+        _input: Result<Self::Input, serde_json::Value>,
+        _cx: &mut App,
+    ) -> SharedString {
+        "Typing text by index".into()
+    }
+
+    fn supports_provider(_provider: &language_model::LanguageModelProviderId) -> bool {
+        true
+    }
+
+    fn run(
+        self: Arc<Self>,
+        input: ToolInput<Self::Input>,
+        _event_stream: ToolCallEventStream,
+        cx: &mut App,
+    ) -> Task<Result<Self::Output, Self::Output>> {
+        cx.spawn(async move |_cx| {
+            let input = input.recv().await.map_err(|e| BrowserTypeByIndexOutput::Error {
+                error: e.to_string(),
+            })?;
+
+            let chrome = find_chrome().ok_or_else(|| BrowserTypeByIndexOutput::Error {
+                error: chrome_error(),
+            })?;
+
+            let index = input.index;
+            let text = input.text;
+
+            with_session(&chrome, move |session| {
+                session.type_by_index(index, &text)?;
+                Ok(BrowserTypeByIndexOutput::Success { success: true })
+            })
+            .map_err(|e| BrowserTypeByIndexOutput::Error { error: e.to_string() })
+        })
+    }
+}
+
+// ============================================================================
+// browser_fill_by_index
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct BrowserFillByIndexToolInput {
+    pub index: usize,
+    pub value: String,
+    pub clear: Option<bool>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum BrowserFillByIndexOutput {
+    Success { success: bool },
+    Error { error: String },
+}
+
+impl From<BrowserFillByIndexOutput> for LanguageModelToolResultContent {
+    fn from(value: BrowserFillByIndexOutput) -> Self {
+        match value {
+            BrowserFillByIndexOutput::Success { .. } => "Field filled successfully".into(),
+            BrowserFillByIndexOutput::Error { error } => error.into(),
+        }
+    }
+}
+
+pub struct BrowserFillByIndexTool;
+
+impl AgentTool for BrowserFillByIndexTool {
+    type Input = BrowserFillByIndexToolInput;
+    type Output = BrowserFillByIndexOutput;
+
+    const NAME: &'static str = "browser_fill_by_index";
+
+    fn kind() -> acp::ToolKind {
+        acp::ToolKind::Fetch
+    }
+
+    fn initial_title(
+        &self,
+        _input: Result<Self::Input, serde_json::Value>,
+        _cx: &mut App,
+    ) -> SharedString {
+        "Filling form field by index".into()
+    }
+
+    fn supports_provider(_provider: &language_model::LanguageModelProviderId) -> bool {
+        true
+    }
+
+    fn run(
+        self: Arc<Self>,
+        input: ToolInput<Self::Input>,
+        _event_stream: ToolCallEventStream,
+        cx: &mut App,
+    ) -> Task<Result<Self::Output, Self::Output>> {
+        cx.spawn(async move |_cx| {
+            let input = input.recv().await.map_err(|e| BrowserFillByIndexOutput::Error {
+                error: e.to_string(),
+            })?;
+
+            let chrome = find_chrome().ok_or_else(|| BrowserFillByIndexOutput::Error {
+                error: chrome_error(),
+            })?;
+
+            let index = input.index;
+            let value = input.value;
+            let clear = input.clear.unwrap_or(false);
+
+            with_session(&chrome, move |session| {
+                session.fill_by_index(index, &value, clear)?;
+                Ok(BrowserFillByIndexOutput::Success { success: true })
+            })
+            .map_err(|e| BrowserFillByIndexOutput::Error { error: e.to_string() })
+        })
+    }
+}
+
+// ============================================================================
+// browser_evaluate
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct BrowserEvaluateToolInput {
+    pub expression: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum BrowserEvaluateOutput {
+    Success { result: serde_json::Value },
+    Error { error: String },
+}
+
+impl From<BrowserEvaluateOutput> for LanguageModelToolResultContent {
+    fn from(value: BrowserEvaluateOutput) -> Self {
+        match value {
+            BrowserEvaluateOutput::Success { result } => result.to_string().into(),
+            BrowserEvaluateOutput::Error { error } => error.into(),
+        }
+    }
+}
+
+pub struct BrowserEvaluateTool;
+
+impl AgentTool for BrowserEvaluateTool {
+    type Input = BrowserEvaluateToolInput;
+    type Output = BrowserEvaluateOutput;
+
+    const NAME: &'static str = "browser_evaluate";
+
+    fn kind() -> acp::ToolKind {
+        acp::ToolKind::Fetch
+    }
+
+    fn initial_title(
+        &self,
+        _input: Result<Self::Input, serde_json::Value>,
+        _cx: &mut App,
+    ) -> SharedString {
+        "Evaluating JavaScript".into()
+    }
+
+    fn supports_provider(_provider: &language_model::LanguageModelProviderId) -> bool {
+        true
+    }
+
+    fn run(
+        self: Arc<Self>,
+        input: ToolInput<Self::Input>,
+        _event_stream: ToolCallEventStream,
+        cx: &mut App,
+    ) -> Task<Result<Self::Output, Self::Output>> {
+        cx.spawn(async move |_cx| {
+            let input = input.recv().await.map_err(|e| BrowserEvaluateOutput::Error {
+                error: e.to_string(),
+            })?;
+
+            let chrome = find_chrome().ok_or_else(|| BrowserEvaluateOutput::Error {
+                error: chrome_error(),
+            })?;
+
+            let expression = input.expression;
+
+            with_session(&chrome, move |session| {
+                let result = session.evaluate(&expression)?;
+                Ok(BrowserEvaluateOutput::Success { result })
+            })
+            .map_err(|e| BrowserEvaluateOutput::Error { error: e.to_string() })
+        })
+    }
+}
+
+// ============================================================================
+// browser_tabs
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct BrowserTabsToolInput {
+    pub action: String,
+    pub target_id: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum BrowserTabsOutput {
+    Success { tabs: Vec<super::browser_session::TabInfo> },
+    Error { error: String },
+}
+
+impl From<BrowserTabsOutput> for LanguageModelToolResultContent {
+    fn from(value: BrowserTabsOutput) -> Self {
+        match value {
+            BrowserTabsOutput::Success { tabs } => {
+                let text = tabs
+                    .iter()
+                    .map(|tab| format!("- {} ({}): {}", tab.target_id, tab.title, tab.url))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                text.into()
+            }
+            BrowserTabsOutput::Error { error } => error.into(),
+        }
+    }
+}
+
+pub struct BrowserTabsTool;
+
+impl AgentTool for BrowserTabsTool {
+    type Input = BrowserTabsToolInput;
+    type Output = BrowserTabsOutput;
+
+    const NAME: &'static str = "browser_tabs";
+
+    fn kind() -> acp::ToolKind {
+        acp::ToolKind::Fetch
+    }
+
+    fn initial_title(
+        &self,
+        _input: Result<Self::Input, serde_json::Value>,
+        _cx: &mut App,
+    ) -> SharedString {
+        "Managing browser tabs".into()
+    }
+
+    fn supports_provider(_provider: &language_model::LanguageModelProviderId) -> bool {
+        true
+    }
+
+    fn run(
+        self: Arc<Self>,
+        input: ToolInput<Self::Input>,
+        _event_stream: ToolCallEventStream,
+        cx: &mut App,
+    ) -> Task<Result<Self::Output, Self::Output>> {
+        cx.spawn(async move |_cx| {
+            let input = input.recv().await.map_err(|e| BrowserTabsOutput::Error {
+                error: e.to_string(),
+            })?;
+
+            let chrome = find_chrome().ok_or_else(|| BrowserTabsOutput::Error {
+                error: chrome_error(),
+            })?;
+
+            let action = input.action;
+            let target_id = input.target_id;
+
+            with_session(&chrome, move |session| {
+                match action.as_str() {
+                    "list" => {
+                        let tabs = session.get_tabs()?;
+                        Ok(BrowserTabsOutput::Success { tabs })
+                    }
+                    "switch" => {
+                        let id = target_id.ok_or_else(|| anyhow::anyhow!("target_id required for switch"))?;
+                        session.switch_tab(&id)?;
+                        Ok(BrowserTabsOutput::Success { tabs: vec![] })
+                    }
+                    "close" => {
+                        let id = target_id.ok_or_else(|| anyhow::anyhow!("target_id required for close"))?;
+                        session.close_tab(&id)?;
+                        Ok(BrowserTabsOutput::Success { tabs: vec![] })
+                    }
+                    _ => Err(anyhow::anyhow!("Unknown action: {}. Use 'list', 'switch', or 'close'", action))
+                }
+            })
+            .map_err(|e| BrowserTabsOutput::Error { error: e.to_string() })
         })
     }
 }

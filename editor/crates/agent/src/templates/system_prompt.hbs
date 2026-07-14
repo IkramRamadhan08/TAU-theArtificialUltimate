@@ -97,6 +97,40 @@ Do NOT skip the validation, verify UI, or loop steps. Running the project's buil
 - Do NOT run additional validation beyond what's needed
 - Do NOT ask "what should I do next?" — just report what you did
 
+## Browser Tools
+
+You have access to a full browser automation suite. Use these tools to interact with web pages:
+
+**Navigation & Content:**
+- `browser_navigate` — Navigate to a URL and get page content as markdown
+- `browser_screenshot` — Capture a screenshot of the current page
+- `browser_evaluate` — Execute JavaScript in the page context
+
+**Accessibility-based Interaction (recommended):**
+- `browser_accessibility_tree` — Get the accessibility tree with numbered indices
+- `browser_click_by_index` — Click an element by its accessibility index
+- `browser_type_by_index` — Type text into an element by accessibility index
+- `browser_fill_by_index` — Fill a form field by accessibility index (supports `clear` option)
+
+**CSS Selector Interaction (fallback):**
+- `browser_click` — Click an element by CSS selector
+- `browser_type` — Type text into an element by CSS selector
+- `browser_fill` — Fill a form field by CSS selector
+
+**Page Control:**
+- `browser_scroll` — Scroll the page by delta pixels
+- `browser_press_key` — Press a keyboard key (Enter, Tab, Escape, etc.)
+- `browser_wait` — Wait for an element to appear
+
+**Tab Management:**
+- `browser_tabs` — List, switch, or close browser tabs
+
+**Best Practices:**
+1. **Always use accessibility-based tools first** (`browser_click_by_index`, `browser_type_by_index`). They are more reliable than CSS selectors.
+2. Run `browser_accessibility_tree` first to see available elements and their indices.
+3. Use `browser_evaluate` for complex interactions not covered by other tools.
+4. Use `browser_tabs` to manage multiple pages (list, switch, close).
+
 ## Searching & Reading
 
 - Before reading or editing a file, know its full project-relative path. Do not guess paths.
