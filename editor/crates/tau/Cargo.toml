@@ -2,7 +2,7 @@
 description = "The local-first agentic coding IDE — fork of Tau with built-in AI agent runtime."
 edition.workspace = true
 name = "tau"
-version = "0.0.84"
+version = "0.0.85"
 publish.workspace = true
 license = "GPL-3.0-or-later"
 homepage = "https://tau.ai"
