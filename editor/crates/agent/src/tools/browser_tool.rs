@@ -4,7 +4,7 @@ use std::sync::OnceLock;
 use crate::{AgentTool, ToolCallEventStream, ToolInput};
 use agent_client_protocol::schema as acp;
 use anyhow::Result;
-use gpui::{App, Task};
+use gpui::{App, AppContext, AsyncApp, Task};
 use html_to_markdown::convert_html_to_markdown;
 use language_model::{LanguageModelImage, LanguageModelToolResultContent};
 use schemars::JsonSchema;
@@ -18,45 +18,37 @@ fn global_session() -> &'static std::sync::Mutex<Option<BrowserSession>> {
     SESSION.get_or_init(|| std::sync::Mutex::new(None))
 }
 
-fn with_session<R>(chrome_path: &str, f: impl FnOnce(&mut BrowserSession) -> Result<R> + Send + 'static) -> Result<R>
+async fn with_session<R>(cx: &AsyncApp, chrome_path: &str, f: impl FnOnce(&mut BrowserSession) -> Result<R> + Send + 'static) -> Result<R>
 where
     R: Send + 'static,
 {
     let chrome = chrome_path.to_string();
-    let (tx, rx) = async_channel::bounded(1);
+    let task: Task<Result<R>> = cx.background_spawn(async move {
+        let mut guard = global_session().lock().map_err(|e| anyhow::anyhow!("{}", e))?;
 
-    std::thread::spawn(move || {
-        let result = (|| -> Result<R> {
-            let mut guard = global_session().lock().map_err(|e| anyhow::anyhow!("{}", e))?;
-
-            if guard.is_none() || !guard.as_ref().unwrap().is_alive() {
-                if let Some(mut old) = guard.take() {
-                    old.close();
-                }
-                let session = BrowserSession::launch(&chrome)?;
-                *guard = Some(session);
+        if guard.is_none() || !guard.as_ref().unwrap().is_alive() {
+            if let Some(mut old) = guard.take() {
+                old.close();
             }
+            let session = BrowserSession::launch(&chrome)?;
+            *guard = Some(session);
+        }
 
-            f(guard.as_mut().unwrap())
-        })();
-
-        let _ = tx.send_blocking(result);
+        f(guard.as_mut().unwrap())
     });
 
-    rx.recv_blocking().map_err(|e| anyhow::anyhow!("{}", e))?
+    task.await
 }
 
-fn close_session_sync() {
-    let (tx, rx) = async_channel::bounded(1);
-    std::thread::spawn(move || {
+async fn close_session(cx: &AsyncApp) {
+    let task = cx.background_spawn(async move {
         if let Ok(mut guard) = global_session().lock() {
             if let Some(mut session) = guard.take() {
                 session.close();
             }
         }
-        let _ = tx.send_blocking(());
     });
-    let _ = rx.recv_blocking();
+    let _ = task.await;
 }
 
 #[allow(clippy::disallowed_methods, reason = "Browser tool uses blocking command execution for Chrome detection")]
@@ -213,7 +205,7 @@ impl AgentTool for BrowserNavigateTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserToolOutput::Error {
                 error: e.to_string(),
             })?;
@@ -226,7 +218,7 @@ impl AgentTool for BrowserNavigateTool {
                 error: e.to_string(),
             })?;
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 session.navigate(&url)?;
                 let title = session.get_page_title().unwrap_or_default();
                 let dom = session.get_dom().unwrap_or_default();
@@ -241,6 +233,7 @@ impl AgentTool for BrowserNavigateTool {
                     url: current_url,
                 })
             })
+            .await
             .map_err(|e| BrowserToolOutput::Error { error: e.to_string() })
         })
     }
@@ -309,7 +302,7 @@ impl AgentTool for BrowserScreenshotTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserScreenshotOutput::Error {
                 error: e.to_string(),
             })?;
@@ -322,13 +315,14 @@ impl AgentTool for BrowserScreenshotTool {
                 error: e.to_string(),
             })?;
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 session.navigate(&url)?;
                 let base64 = session.screenshot()?;
                 Ok(BrowserScreenshotOutput::Success {
                     screenshot_base64: base64,
                 })
             })
+            .await
             .map_err(|e| BrowserScreenshotOutput::Error { error: e.to_string() })
         })
     }
@@ -389,7 +383,7 @@ impl AgentTool for BrowserClickTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserClickOutput::Error {
                 error: e.to_string(),
             })?;
@@ -400,10 +394,11 @@ impl AgentTool for BrowserClickTool {
 
             let selector = input.selector;
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 session.click(&selector)?;
                 Ok(BrowserClickOutput::Success { success: true })
             })
+            .await
             .map_err(|e| BrowserClickOutput::Error { error: e.to_string() })
         })
     }
@@ -465,7 +460,7 @@ impl AgentTool for BrowserTypeTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserTypeOutput::Error {
                 error: e.to_string(),
             })?;
@@ -477,10 +472,11 @@ impl AgentTool for BrowserTypeTool {
             let selector = input.selector;
             let text = input.text;
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 session.type_text(&selector, &text)?;
                 Ok(BrowserTypeOutput::Success { success: true })
             })
+            .await
             .map_err(|e| BrowserTypeOutput::Error { error: e.to_string() })
         })
     }
@@ -542,7 +538,7 @@ impl AgentTool for BrowserFillTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserFillOutput::Error {
                 error: e.to_string(),
             })?;
@@ -554,10 +550,11 @@ impl AgentTool for BrowserFillTool {
             let selector = input.selector;
             let value = input.value;
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 session.fill(&selector, &value)?;
                 Ok(BrowserFillOutput::Success { success: true })
             })
+            .await
             .map_err(|e| BrowserFillOutput::Error { error: e.to_string() })
         })
     }
@@ -619,7 +616,7 @@ impl AgentTool for BrowserScrollTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserScrollOutput::Error {
                 error: e.to_string(),
             })?;
@@ -631,10 +628,11 @@ impl AgentTool for BrowserScrollTool {
             let delta_x = input.delta_x;
             let delta_y = input.delta_y;
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 session.scroll(delta_x, delta_y)?;
                 Ok(BrowserScrollOutput::Success { success: true })
             })
+            .await
             .map_err(|e| BrowserScrollOutput::Error { error: e.to_string() })
         })
     }
@@ -695,7 +693,7 @@ impl AgentTool for BrowserPressKeyTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserPressKeyOutput::Error {
                 error: e.to_string(),
             })?;
@@ -706,10 +704,11 @@ impl AgentTool for BrowserPressKeyTool {
 
             let key = input.key;
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 session.press_key(&key)?;
                 Ok(BrowserPressKeyOutput::Success { success: true })
             })
+            .await
             .map_err(|e| BrowserPressKeyOutput::Error { error: e.to_string() })
         })
     }
@@ -771,7 +770,7 @@ impl AgentTool for BrowserWaitTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserWaitOutput::Error {
                 error: e.to_string(),
             })?;
@@ -783,10 +782,11 @@ impl AgentTool for BrowserWaitTool {
             let timeout = input.timeout_ms.unwrap_or(10000);
             let selector = input.selector;
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 session.wait_for_element(&selector, timeout)?;
                 Ok(BrowserWaitOutput::Success { found: true })
             })
+            .await
             .map_err(|e| BrowserWaitOutput::Error { error: e.to_string() })
         })
     }
@@ -845,8 +845,8 @@ impl AgentTool for BrowserCloseTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
-            close_session_sync();
+        cx.spawn(async move |cx| {
+            close_session(cx).await;
             Ok(BrowserCloseOutput::Success { success: true })
         })
     }
@@ -905,16 +905,17 @@ impl AgentTool for BrowserAccessibilityTreeTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let chrome = find_chrome().ok_or_else(|| BrowserAccessibilityTreeOutput::Error {
                 error: chrome_error(),
             })?;
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 let tree = session.get_accessibility_tree()?;
                 let formatted = format_accessibility_tree(&tree);
                 Ok(BrowserAccessibilityTreeOutput::Success { tree: formatted })
             })
+            .await
             .map_err(|e| BrowserAccessibilityTreeOutput::Error { error: e.to_string() })
         })
     }
@@ -975,7 +976,7 @@ impl AgentTool for BrowserClickByIndexTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserClickByIndexOutput::Error {
                 error: e.to_string(),
             })?;
@@ -986,10 +987,11 @@ impl AgentTool for BrowserClickByIndexTool {
 
             let index = input.index;
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 session.click_by_index(index)?;
                 Ok(BrowserClickByIndexOutput::Success { success: true })
             })
+            .await
             .map_err(|e| BrowserClickByIndexOutput::Error { error: e.to_string() })
         })
     }
@@ -1051,7 +1053,7 @@ impl AgentTool for BrowserTypeByIndexTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserTypeByIndexOutput::Error {
                 error: e.to_string(),
             })?;
@@ -1063,10 +1065,11 @@ impl AgentTool for BrowserTypeByIndexTool {
             let index = input.index;
             let text = input.text;
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 session.type_by_index(index, &text)?;
                 Ok(BrowserTypeByIndexOutput::Success { success: true })
             })
+            .await
             .map_err(|e| BrowserTypeByIndexOutput::Error { error: e.to_string() })
         })
     }
@@ -1129,7 +1132,7 @@ impl AgentTool for BrowserFillByIndexTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserFillByIndexOutput::Error {
                 error: e.to_string(),
             })?;
@@ -1142,10 +1145,11 @@ impl AgentTool for BrowserFillByIndexTool {
             let value = input.value;
             let clear = input.clear.unwrap_or(false);
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 session.fill_by_index(index, &value, clear)?;
                 Ok(BrowserFillByIndexOutput::Success { success: true })
             })
+            .await
             .map_err(|e| BrowserFillByIndexOutput::Error { error: e.to_string() })
         })
     }
@@ -1206,7 +1210,7 @@ impl AgentTool for BrowserEvaluateTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserEvaluateOutput::Error {
                 error: e.to_string(),
             })?;
@@ -1217,10 +1221,11 @@ impl AgentTool for BrowserEvaluateTool {
 
             let expression = input.expression;
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 let result = session.evaluate(&expression)?;
                 Ok(BrowserEvaluateOutput::Success { result })
             })
+            .await
             .map_err(|e| BrowserEvaluateOutput::Error { error: e.to_string() })
         })
     }
@@ -1289,7 +1294,7 @@ impl AgentTool for BrowserTabsTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserTabsOutput::Error {
                 error: e.to_string(),
             })?;
@@ -1301,7 +1306,7 @@ impl AgentTool for BrowserTabsTool {
             let action = input.action;
             let target_id = input.target_id;
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 match action.as_str() {
                     "list" => {
                         let tabs = session.get_tabs()?;
@@ -1320,6 +1325,7 @@ impl AgentTool for BrowserTabsTool {
                     _ => Err(anyhow::anyhow!("Unknown action: {}. Use 'list', 'switch', or 'close'", action))
                 }
             })
+            .await
             .map_err(|e| BrowserTabsOutput::Error { error: e.to_string() })
         })
     }
@@ -1378,15 +1384,16 @@ impl AgentTool for BrowserPageInfoTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let chrome = find_chrome().ok_or_else(|| BrowserPageInfoOutput::Error {
                 error: chrome_error(),
             })?;
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 let info = session.get_page_info()?;
                 Ok(BrowserPageInfoOutput::Success { info })
             })
+            .await
             .map_err(|e| BrowserPageInfoOutput::Error { error: e.to_string() })
         })
     }
@@ -1450,7 +1457,7 @@ impl AgentTool for BrowserClickAtXyTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserClickAtXyOutput::Error {
                 error: e.to_string(),
             })?;
@@ -1464,10 +1471,11 @@ impl AgentTool for BrowserClickAtXyTool {
             let button = input.button.unwrap_or_else(|| "left".into());
             let clicks = input.clicks.unwrap_or(1);
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 session.click_at_xy(x, y, &button, clicks)?;
                 Ok(BrowserClickAtXyOutput::Success { success: true })
             })
+            .await
             .map_err(|e| BrowserClickAtXyOutput::Error { error: e.to_string() })
         })
     }
@@ -1534,7 +1542,7 @@ impl AgentTool for BrowserWaitForLoadTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserWaitForLoadOutput::Error {
                 error: e.to_string(),
             })?;
@@ -1545,10 +1553,11 @@ impl AgentTool for BrowserWaitForLoadTool {
 
             let timeout = input.timeout_ms.unwrap_or(15000);
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 let loaded = session.wait_for_load(timeout)?;
                 Ok(BrowserWaitForLoadOutput::Success { loaded })
             })
+            .await
             .map_err(|e| BrowserWaitForLoadOutput::Error { error: e.to_string() })
         })
     }
@@ -1616,7 +1625,7 @@ impl AgentTool for BrowserWaitForNetworkIdleTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserWaitForNetworkIdleOutput::Error {
                 error: e.to_string(),
             })?;
@@ -1628,10 +1637,11 @@ impl AgentTool for BrowserWaitForNetworkIdleTool {
             let timeout = input.timeout_ms.unwrap_or(10000);
             let idle = input.idle_ms.unwrap_or(500);
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 let is_idle = session.wait_for_network_idle(timeout, idle)?;
                 Ok(BrowserWaitForNetworkIdleOutput::Success { idle: is_idle })
             })
+            .await
             .map_err(|e| BrowserWaitForNetworkIdleOutput::Error { error: e.to_string() })
         })
     }
@@ -1693,7 +1703,7 @@ impl AgentTool for BrowserUploadFileTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserUploadFileOutput::Error {
                 error: e.to_string(),
             })?;
@@ -1705,10 +1715,11 @@ impl AgentTool for BrowserUploadFileTool {
             let selector = input.selector;
             let file_path = input.file_path;
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 session.upload_file(&selector, &file_path)?;
                 Ok(BrowserUploadFileOutput::Success { success: true })
             })
+            .await
             .map_err(|e| BrowserUploadFileOutput::Error { error: e.to_string() })
         })
     }
@@ -1771,7 +1782,7 @@ impl AgentTool for BrowserDispatchKeyTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserDispatchKeyOutput::Error {
                 error: e.to_string(),
             })?;
@@ -1784,10 +1795,11 @@ impl AgentTool for BrowserDispatchKeyTool {
             let key = input.key;
             let event_type = input.event_type.unwrap_or_else(|| "keypress".into());
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 session.dispatch_key_event(&selector, &key, &event_type)?;
                 Ok(BrowserDispatchKeyOutput::Success { success: true })
             })
+            .await
             .map_err(|e| BrowserDispatchKeyOutput::Error { error: e.to_string() })
         })
     }
@@ -1853,7 +1865,7 @@ impl AgentTool for BrowserIframeTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserIframeOutput::Error {
                 error: e.to_string(),
             })?;
@@ -1864,11 +1876,12 @@ impl AgentTool for BrowserIframeTool {
 
             let url_substring = input.url_substring;
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 let iframes = session.get_iframe_targets()?;
                 let found = iframes.iter().find(|iframe| iframe.url.contains(&url_substring)).cloned();
                 Ok(BrowserIframeOutput::Success { iframe: found })
             })
+            .await
             .map_err(|e| BrowserIframeOutput::Error { error: e.to_string() })
         })
     }
@@ -2164,7 +2177,7 @@ impl AgentTool for BrowserCookiesGetTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserCookiesGetOutput::Error {
                 error: e.to_string(),
             })?;
@@ -2173,10 +2186,11 @@ impl AgentTool for BrowserCookiesGetTool {
                 error: chrome_error(),
             })?;
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 let cookies = session.get_cookies(input.urls)?;
                 Ok(BrowserCookiesGetOutput::Success { cookies })
             })
+            .await
             .map_err(|e| BrowserCookiesGetOutput::Error { error: e.to_string() })
         })
     }
@@ -2237,7 +2251,7 @@ impl AgentTool for BrowserCookiesSetTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserCookiesSetOutput::Error {
                 error: e.to_string(),
             })?;
@@ -2246,10 +2260,11 @@ impl AgentTool for BrowserCookiesSetTool {
                 error: chrome_error(),
             })?;
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 session.set_cookie(&input.cookie)?;
                 Ok(BrowserCookiesSetOutput::Success { success: true })
             })
+            .await
             .map_err(|e| BrowserCookiesSetOutput::Error { error: e.to_string() })
         })
     }
@@ -2312,7 +2327,7 @@ impl AgentTool for BrowserCookiesDeleteTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserCookiesDeleteOutput::Error {
                 error: e.to_string(),
             })?;
@@ -2323,10 +2338,11 @@ impl AgentTool for BrowserCookiesDeleteTool {
 
             let path = input.path.unwrap_or_else(|| "/".into());
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 session.delete_cookies(&input.name, &input.domain, &path)?;
                 Ok(BrowserCookiesDeleteOutput::Success { success: true })
             })
+            .await
             .map_err(|e| BrowserCookiesDeleteOutput::Error { error: e.to_string() })
         })
     }
@@ -2388,7 +2404,7 @@ impl AgentTool for BrowserShadowDomQueryTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserShadowDomQueryOutput::Error {
                 error: e.to_string(),
             })?;
@@ -2397,7 +2413,7 @@ impl AgentTool for BrowserShadowDomQueryTool {
                 error: chrome_error(),
             })?;
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 let result = session.query_shadow_dom(&input.shadow_selector, &input.inner_selector)?;
                 let html = result.get("result")
                     .and_then(|v| v.get("value"))
@@ -2406,6 +2422,7 @@ impl AgentTool for BrowserShadowDomQueryTool {
                     .to_string();
                 Ok(BrowserShadowDomQueryOutput::Success { result: html })
             })
+            .await
             .map_err(|e| BrowserShadowDomQueryOutput::Error { error: e.to_string() })
         })
     }
@@ -2467,7 +2484,7 @@ impl AgentTool for BrowserShadowDomClickTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserShadowDomClickOutput::Error {
                 error: e.to_string(),
             })?;
@@ -2476,10 +2493,11 @@ impl AgentTool for BrowserShadowDomClickTool {
                 error: chrome_error(),
             })?;
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 session.click_in_shadow_dom(&input.shadow_selector, &input.inner_selector)?;
                 Ok(BrowserShadowDomClickOutput::Success { success: true })
             })
+            .await
             .map_err(|e| BrowserShadowDomClickOutput::Error { error: e.to_string() })
         })
     }
@@ -2542,7 +2560,7 @@ impl AgentTool for BrowserShadowDomFillTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserShadowDomFillOutput::Error {
                 error: e.to_string(),
             })?;
@@ -2551,10 +2569,11 @@ impl AgentTool for BrowserShadowDomFillTool {
                 error: chrome_error(),
             })?;
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 session.fill_in_shadow_dom(&input.shadow_selector, &input.inner_selector, &input.value)?;
                 Ok(BrowserShadowDomFillOutput::Success { success: true })
             })
+            .await
             .map_err(|e| BrowserShadowDomFillOutput::Error { error: e.to_string() })
         })
     }
@@ -2615,7 +2634,7 @@ impl AgentTool for BrowserDownloadsTool {
         _event_stream: ToolCallEventStream,
         cx: &mut App,
     ) -> Task<Result<Self::Output, Self::Output>> {
-        cx.spawn(async move |_cx| {
+        cx.spawn(async move |cx| {
             let input = input.recv().await.map_err(|e| BrowserDownloadsOutput::Error {
                 error: e.to_string(),
             })?;
@@ -2626,7 +2645,7 @@ impl AgentTool for BrowserDownloadsTool {
 
             let action = input.action.unwrap_or_else(|| "list".into());
 
-            with_session(&chrome, move |session| {
+            with_session(cx, &chrome, move |session| {
                 match action.as_str() {
                     "start" => {
                         session.start_download_monitoring()?;
@@ -2639,6 +2658,7 @@ impl AgentTool for BrowserDownloadsTool {
                     _ => Err(anyhow::anyhow!("Unknown action: {}. Use 'start' or 'list'", action))
                 }
             })
+            .await
             .map_err(|e| BrowserDownloadsOutput::Error { error: e.to_string() })
         })
     }
