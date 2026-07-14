@@ -12,17 +12,24 @@ use crate::{AgentTool, ThreadEnvironment, ToolCallEventStream, ToolInput};
 
 /// Spawn a sub-agent for a well-scoped task.
 ///
+/// ### Naming
+/// - Use a human name as the `label` (e.g., "Alice", "Bob", "Charlie", "Diana").
+/// - When spawning multiple sub-agents, pick distinct names so the user can tell them apart.
+/// - Announce to the user before spawning: "I'm sending Alice to research X."
+/// - Report completion: "Alice is back with the results."
+///
 /// ### Designing delegated subtasks
 /// - An agent does not see your conversation history. Include all relevant context (file paths, requirements, constraints) in the message.
 /// - Subtasks must be concrete, well-defined, and self-contained.
 /// - Delegated subtasks must materially advance the main task.
 /// - Do not duplicate work between your work and delegated subtasks.
-/// - Do not use this tool for tasks you could accomplish directly with one or two tool calls. For example, don't ask the agent to read a single file and return the contents, you can do this yourself.
+/// - Do not use this tool for tasks you could accomplish directly with one or two tool calls. For example, don't ask the agent to read a single file and return the contents — you can do this yourself.
 /// - When you delegate work, focus on coordinating and synthesizing results instead of duplicating the same work yourself.
 /// - Avoid issuing multiple delegate calls for the same unresolved subproblem unless the new delegated task is genuinely different and necessary.
 /// - Narrow the delegated ask to the concrete output you need next.
 /// - For code-edit subtasks, decompose work so each delegated task has a disjoint write set.
 /// - When sending a follow-up using an existing agent session_id, the agent already has the context from the previous turn. Send only a short, direct message. Do NOT repeat the original task or context.
+/// - Never spawn more than 3 sub-agents simultaneously.
 ///
 /// ### Parallel delegation patterns
 /// - Run multiple independent information-seeking subtasks in parallel when you have distinct questions that can be answered independently.
@@ -37,7 +44,7 @@ use crate::{AgentTool, ThreadEnvironment, ToolCallEventStream, ToolInput};
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct SpawnAgentToolInput {
-    /// Short label displayed in the UI while the agent runs (e.g., "Researching alternatives")
+    /// Human name for this sub-agent (e.g., "Alice", "Bob"). Displayed in the UI so the user can tell agents apart.
     pub label: String,
     /// The prompt for the agent. For new sessions, include full context needed for the task. For follow-ups (with session_id), you can rely on the agent already having the previous message.
     pub message: String,

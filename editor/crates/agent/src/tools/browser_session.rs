@@ -529,6 +529,432 @@ impl BrowserSession {
         Ok(())
     }
 
+    pub fn get_page_info(&self) -> Result<Value> {
+        let expression = "JSON.stringify({url:location.href,title:document.title,w:innerWidth,h:innerHeight,sx:scrollX,sy:scrollY,pw:document.documentElement.scrollWidth,ph:document.documentElement.scrollHeight})";
+        let result = self.send_command("Runtime.evaluate", json!({
+            "expression": expression,
+            "returnByValue": true
+        }))?;
+
+        let value_str = result
+            .get("result")
+            .and_then(|v| v.get("value"))
+            .and_then(|v| v.as_str())
+            .context("No page info")?;
+
+        let info: Value = serde_json::from_str(value_str)
+            .context("Failed to parse page info JSON")?;
+
+        Ok(info)
+    }
+
+    pub fn click_at_xy(&self, x: f64, y: f64, button: &str, clicks: u32) -> Result<()> {
+        self.send_command("Input.dispatchMouseEvent", json!({
+            "type": "mousePressed",
+            "x": x,
+            "y": y,
+            "button": button,
+            "clickCount": clicks
+        }))?;
+
+        self.send_command("Input.dispatchMouseEvent", json!({
+            "type": "mouseReleased",
+            "x": x,
+            "y": y,
+            "button": button,
+            "clickCount": clicks
+        }))?;
+
+        std::thread::sleep(Duration::from_millis(100));
+        Ok(())
+    }
+
+    pub fn wait_for_load(&self, timeout_ms: u64) -> Result<bool> {
+        let start = std::time::Instant::now();
+        let timeout = Duration::from_millis(timeout_ms);
+
+        loop {
+            let result = self.send_command("Runtime.evaluate", json!({
+                "expression": "document.readyState",
+                "returnByValue": true
+            }))?;
+
+            let state = result
+                .get("result")
+                .and_then(|v| v.get("value"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+
+            if state == "complete" {
+                return Ok(true);
+            }
+
+            if start.elapsed() > timeout {
+                return Ok(false);
+            }
+
+            std::thread::sleep(Duration::from_millis(300));
+        }
+    }
+
+    pub fn wait_for_network_idle(&self, timeout_ms: u64, idle_ms: u64) -> Result<bool> {
+        let start = std::time::Instant::now();
+        let timeout = Duration::from_millis(timeout_ms);
+        let idle_duration = Duration::from_millis(idle_ms);
+        let mut last_activity = std::time::Instant::now();
+
+        loop {
+            let expression = r#"
+                (() => {
+                    const entries = performance.getEntriesByType('resource');
+                    if (entries.length === 0) return 'idle';
+                    const lastEntry = entries[entries.length - 1];
+                    const elapsed = Date.now() - lastEntry.responseEnd;
+                    return elapsed > 500 ? 'idle' : 'busy';
+                })()
+            "#;
+
+            let result = self.send_command("Runtime.evaluate", json!({
+                "expression": expression,
+                "returnByValue": true
+            }))?;
+
+            let state = result
+                .get("result")
+                .and_then(|v| v.get("value"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("busy");
+
+            if state == "idle" {
+                if last_activity.elapsed() >= idle_duration {
+                    return Ok(true);
+                }
+            } else {
+                last_activity = std::time::Instant::now();
+            }
+
+            if start.elapsed() > timeout {
+                return Ok(false);
+            }
+
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+
+    pub fn upload_file(&self, selector: &str, file_path: &str) -> Result<()> {
+        let doc = self.send_command("DOM.getDocument", json!({"depth": -1}))?;
+
+        let root_node_id = doc
+            .get("root")
+            .and_then(|v| v.get("nodeId"))
+            .and_then(|v| v.as_u64())
+            .context("No root node")?;
+
+        let result = self.send_command("DOM.querySelector", json!({
+            "nodeId": root_node_id,
+            "selector": selector
+        }))?;
+
+        let node_id = result
+            .get("nodeId")
+            .and_then(|v| v.as_u64())
+            .context("Element not found")?;
+
+        if node_id == 0 {
+            anyhow::bail!("No element found for selector: {}", selector);
+        }
+
+        self.send_command("DOM.setFileInputFiles", json!({
+            "nodeId": node_id,
+            "files": vec![file_path]
+        }))?;
+
+        Ok(())
+    }
+
+    pub fn get_iframe_targets(&self) -> Result<Vec<TabInfo>> {
+        let result = self.send_command("Target.getTargets", json!({}))?;
+
+        let target_infos = result
+            .get("targetInfos")
+            .and_then(|v| v.as_array())
+            .context("No target infos returned")?;
+
+        let mut iframes = Vec::new();
+        for info in target_infos {
+            if info.get("type").and_then(|v| v.as_str()) == Some("iframe") {
+                iframes.push(TabInfo {
+                    target_id: info
+                        .get("targetId")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    title: info
+                        .get("title")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    url: info
+                        .get("url")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    is_attached: info
+                        .get("attached")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false),
+                });
+            }
+        }
+
+        Ok(iframes)
+    }
+
+    pub fn dispatch_key_event(&self, selector: &str, key: &str, event_type: &str) -> Result<()> {
+        let key_code = match key {
+            "Enter" => 13,
+            "Tab" => 9,
+            "Escape" => 27,
+            "Backspace" => 8,
+            "Delete" => 46,
+            " " => 32,
+            "ArrowLeft" => 37,
+            "ArrowUp" => 38,
+            "ArrowRight" => 39,
+            "ArrowDown" => 40,
+            _ => key.chars().next().unwrap_or('\0') as u32,
+        };
+
+        let escaped_key = key.replace('\\', "\\\\").replace('"', "\\\"");
+        let escaped_selector = selector.replace('\\', "\\\\").replace('\'', "\\'");
+
+        let expression = format!(
+            r#"(() => {{
+                const e = document.querySelector('{}');
+                if (e) {{
+                    e.focus();
+                    e.dispatchEvent(new KeyboardEvent('{}', {{
+                        key: '{}',
+                        code: '{}',
+                        keyCode: {},
+                        which: {},
+                        bubbles: true
+                    }}));
+                }}
+            }})()"#,
+            escaped_selector, event_type, escaped_key, escaped_key, key_code, key_code
+        );
+
+        self.send_command("Runtime.evaluate", json!({
+            "expression": expression,
+            "returnByValue": true
+        }))?;
+
+        Ok(())
+    }
+
+    pub fn get_cookies(&self, urls: Option<Vec<String>>) -> Result<Vec<Value>> {
+        let result = self.send_command("Network.getCookies", json!({
+            "urls": urls.unwrap_or_default()
+        }))?;
+
+        let cookies = result
+            .get("cookies")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+
+        Ok(cookies)
+    }
+
+    pub fn set_cookie(&self, cookie: &Value) -> Result<()> {
+        let name = cookie
+            .get("name")
+            .and_then(|v| v.as_str())
+            .context("Cookie name required")?;
+
+        let value = cookie
+            .get("value")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+
+        let domain = cookie
+            .get("domain")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+
+        let path = cookie
+            .get("path")
+            .and_then(|v| v.as_str())
+            .unwrap_or("/");
+
+        let secure = cookie
+            .get("secure")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        let http_only = cookie
+            .get("httpOnly")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        let same_site = cookie
+            .get("sameSite")
+            .and_then(|v| v.as_str())
+            .unwrap_or("None");
+
+        let expires = cookie
+            .get("expires")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(-1.0);
+
+        self.send_command("Network.setCookie", json!({
+            "name": name,
+            "value": value,
+            "domain": domain,
+            "path": path,
+            "secure": secure,
+            "httpOnly": http_only,
+            "sameSite": same_site,
+            "expires": expires
+        }))?;
+
+        Ok(())
+    }
+
+    pub fn delete_cookies(&self, name: &str, domain: &str, path: &str) -> Result<()> {
+        self.send_command("Network.deleteCookies", json!({
+            "name": name,
+            "domain": domain,
+            "path": path
+        }))?;
+
+        Ok(())
+    }
+
+    pub fn query_shadow_dom(&self, shadow_selector: &str, inner_selector: &str) -> Result<Value> {
+        let escaped_shadow = shadow_selector.replace('\\', "\\\\").replace('\'', "\\'");
+        let escaped_inner = inner_selector.replace('\\', "\\\\").replace('\'', "\\'");
+
+        let expression = format!(
+            r#"(() => {{
+                const el = document.querySelector('{}');
+                if (!el || !el.shadowRoot) return null;
+                const inner = el.shadowRoot.querySelector('{}');
+                if (!inner) return null;
+                return inner.outerHTML;
+            }})()"#,
+            escaped_shadow, escaped_inner
+        );
+
+        let result = self.send_command("Runtime.evaluate", json!({
+            "expression": expression,
+            "returnByValue": true
+        }))?;
+
+        Ok(result.get("result").cloned().unwrap_or(json!(null)))
+    }
+
+    pub fn click_in_shadow_dom(&self, shadow_selector: &str, inner_selector: &str) -> Result<()> {
+        let escaped_shadow = shadow_selector.replace('\\', "\\\\").replace('\'', "\\'");
+        let escaped_inner = inner_selector.replace('\\', "\\\\").replace('\'', "\\'");
+
+        let expression = format!(
+            r#"(() => {{
+                const el = document.querySelector('{}');
+                if (!el || !el.shadowRoot) return false;
+                const inner = el.shadowRoot.querySelector('{}');
+                if (!inner) return false;
+                inner.click();
+                return true;
+            }})()"#,
+            escaped_shadow, escaped_inner
+        );
+
+        let result = self.send_command("Runtime.evaluate", json!({
+            "expression": expression,
+            "returnByValue": true
+        }))?;
+
+        let success = result
+            .get("result")
+            .and_then(|v| v.get("value"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        if !success {
+            anyhow::bail!("Failed to click element in shadow DOM");
+        }
+
+        std::thread::sleep(Duration::from_millis(100));
+        Ok(())
+    }
+
+    pub fn fill_in_shadow_dom(&self, shadow_selector: &str, inner_selector: &str, value: &str) -> Result<()> {
+        let escaped_shadow = shadow_selector.replace('\\', "\\\\").replace('\'', "\\'");
+        let escaped_inner = inner_selector.replace('\\', "\\\\").replace('\'', "\\'");
+        let escaped_value = value.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n");
+
+        let expression = format!(
+            r#"(() => {{
+                const el = document.querySelector('{}');
+                if (!el || !el.shadowRoot) return false;
+                const inner = el.shadowRoot.querySelector('{}');
+                if (!inner) return false;
+                inner.focus();
+                inner.value = '{}';
+                inner.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                inner.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                return true;
+            }})()"#,
+            escaped_shadow, escaped_inner, escaped_value
+        );
+
+        let result = self.send_command("Runtime.evaluate", json!({
+            "expression": expression,
+            "returnByValue": true
+        }))?;
+
+        let success = result
+            .get("result")
+            .and_then(|v| v.get("value"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        if !success {
+            anyhow::bail!("Failed to fill element in shadow DOM");
+        }
+
+        Ok(())
+    }
+
+    pub fn start_download_monitoring(&self) -> Result<()> {
+        self.send_command("Page.setDownloadBehavior", json!({
+            "behavior": "allow",
+            "downloadPath": dirs::download_dir()
+                .unwrap_or_else(|| std::path::PathBuf::from("."))
+                .to_string_lossy()
+        }))?;
+        Ok(())
+    }
+
+    pub fn get_downloads(&self) -> Result<Value> {
+        let expression = r#"(() => {
+            const downloads = [];
+            if (window.__TAU_DOWNLOADS) {
+                downloads.push(...window.__TAU_DOWNLOADS);
+            }
+            return JSON.stringify(downloads);
+        })()"#;
+
+        let result = self.send_command("Runtime.evaluate", json!({
+            "expression": expression,
+            "returnByValue": true
+        }))?;
+
+        Ok(result.get("result").cloned().unwrap_or(json!(null)))
+    }
+
     pub fn is_alive(&self) -> bool {
         self.child.id() != 0
     }

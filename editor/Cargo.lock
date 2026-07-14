@@ -266,6 +266,7 @@ dependencies = [
  "context_server",
  "ctor",
  "db",
+ "dirs",
  "editor",
  "env_logger 0.11.11",
  "eval_utils",
@@ -15140,7 +15141,7 @@ dependencies = [
 
 [[package]]
 name = "tau"
-version = "0.0.84"
+version = "0.0.85"
 dependencies = [
  "acp_thread",
  "acp_tools",

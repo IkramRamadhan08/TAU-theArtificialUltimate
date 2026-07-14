@@ -1,6 +1,7 @@
 mod apply_code_action_tool;
 #[allow(clippy::disallowed_methods, reason = "Browser session uses blocking I/O intentionally for CDP communication")]
 mod browser_session;
+mod browser_skills;
 mod browser_tool;
 mod context_server_registry;
 mod copy_path_tool;
@@ -189,18 +190,35 @@ tools! {
     BrowserAccessibilityTreeTool,
     BrowserClickTool,
     BrowserClickByIndexTool,
+    BrowserClickAtXyTool,
     BrowserCloseTool,
+    BrowserCookiesDeleteTool,
+    BrowserCookiesGetTool,
+    BrowserCookiesSetTool,
+    BrowserDispatchKeyTool,
+    BrowserDownloadsTool,
     BrowserEvaluateTool,
     BrowserFillTool,
     BrowserFillByIndexTool,
+    BrowserIframeTool,
     BrowserNavigateTool,
+    BrowserPageInfoTool,
     BrowserPressKeyTool,
     BrowserScreenshotTool,
     BrowserScrollTool,
+    BrowserShadowDomClickTool,
+    BrowserShadowDomFillTool,
+    BrowserShadowDomQueryTool,
+    BrowserSkillListTool,
+    BrowserSkillReadTool,
+    BrowserSkillWriteTool,
     BrowserTabsTool,
     BrowserTypeTool,
     BrowserTypeByIndexTool,
+    BrowserUploadFileTool,
     BrowserWaitTool,
+    BrowserWaitForLoadTool,
+    BrowserWaitForNetworkIdleTool,
     CopyPathTool,
     CreateDirectoryTool,
     CreateThreadTool,
