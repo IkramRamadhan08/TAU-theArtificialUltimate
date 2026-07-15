@@ -17,7 +17,7 @@ use crate::sandboxing::sandboxing_enabled;
 use crate::{AgentTool, ThreadEnvironment, ToolCallEventStream, ToolInput};
 
 const COMMAND_OUTPUT_LIMIT: u64 = 16 * 1024;
-const DEFAULT_TIMEOUT_MS: u64 = 180_000;
+const DEFAULT_TIMEOUT_MS: u64 = 30_000;
 
 /// Executes a shell one-liner and returns the combined output.
 ///
@@ -31,7 +31,7 @@ const DEFAULT_TIMEOUT_MS: u64 = 180_000;
 ///
 /// Do not pipe output to `head`, `tail`, or similar output-filtering commands just to reduce what you receive. Instead, use `head_lines` and/or `tail_lines`; this keeps the terminal output visible to the user in real time while limiting only the final output sent back to you. When both are specified, the first `head_lines` lines are returned, then a blank line, then the last `tail_lines` lines. Avoid requesting too many lines, or the response may waste tokens or exceed the context window.
 ///
-/// Every command has a default timeout of 180s. On timeout the process is kept alive:
+/// Every command has a default timeout of 30s. On timeout the process is kept alive:
 /// reconnect with the returned `terminal_id` and a longer `timeout_ms` to keep waiting.
 /// Add `cancel: true` to stop it.
 ///
@@ -40,7 +40,7 @@ const DEFAULT_TIMEOUT_MS: u64 = 180_000;
 ///
 /// Do not use this tool for commands that run indefinitely, such as servers (like `npm run start`, `npm run dev`, `python -m http.server`, etc) or file watchers that don't terminate on their own. Use `systemctl`, `&` (background), or similar instead.
 ///
-/// For potentially long-running commands, always estimate and set `timeout_ms` to avoid the default 180s cutoff.
+/// For potentially long-running commands, always estimate and set `timeout_ms` to avoid the default 30s cutoff.
 ///
 /// Remember that each invocation of this tool will spawn a new shell process, so you can't rely on any state from previous invocations.
 ///
@@ -86,7 +86,7 @@ pub struct TerminalToolInput {
 ///
 /// Do not pipe output to `head`, `tail`, or similar output-filtering commands just to reduce what you receive. Instead, use `head_lines` and/or `tail_lines`; this keeps the terminal output visible to the user in real time while limiting only the final output sent back to you. When both are specified, the first `head_lines` lines are returned, then a blank line, then the last `tail_lines` lines. Avoid requesting too many lines, or the response may waste tokens or exceed the context window.
 ///
-/// Every command has a default timeout of 180s. On timeout the process is kept alive:
+/// Every command has a default timeout of 30s. On timeout the process is kept alive:
 /// reconnect with the returned `terminal_id` and a longer `timeout_ms` to keep waiting.
 /// Add `cancel: true` to stop it.
 ///
@@ -95,7 +95,7 @@ pub struct TerminalToolInput {
 ///
 /// Do not use this tool for commands that run indefinitely, such as servers (like `npm run start`, `npm run dev`, `python -m http.server`, etc) or file watchers that don't terminate on their own. Use `systemctl`, `&` (background), or similar instead.
 ///
-/// For potentially long-running commands, always estimate and set `timeout_ms` to avoid the default 180s cutoff.
+/// For potentially long-running commands, always estimate and set `timeout_ms` to avoid the default 30s cutoff.
 ///
 /// Remember that each invocation of this tool will spawn a new shell process, so you can't rely on any state from previous invocations.
 ///
@@ -705,6 +705,21 @@ fn process_content(
             )
         }
     } else if timed_out {
+        let last_line = content.lines().last().unwrap_or("").trim_end_matches('`').trim();
+        let looks_like_prompt = last_line.ends_with(':')
+            || last_line.ends_with('?')
+            || last_line.ends_with('>')
+            || last_line.ends_with('$')
+            || last_line.ends_with('#');
+        let stdin_hint = if looks_like_prompt {
+            "\n\nThis program appears to be waiting for interactive input (stdin). \
+             Do NOT retry the same command — it will hang again. Instead, \
+             either pipe the input (e.g. `echo \"value\" | command`), \
+             use a here-string (e.g. `command <<< \"value\"`), or \
+             rewrite the program to accept command-line arguments instead of interactive input."
+        } else {
+            ""
+        };
         let tid_msg = match terminal_id {
             Some(tid) => format!(
                 "\n\nThe terminal session is still running. To wait longer, run this tool again with \
@@ -717,14 +732,14 @@ fn process_content(
         };
         if is_empty {
             format!(
-                "Command \"{command}\" timed out ({}s). No output was captured.{tid_msg}",
+                "Command \"{command}\" timed out ({}s). No output was captured.{stdin_hint}{tid_msg}",
                 timeout_secs.max(DEFAULT_TIMEOUT_MS / 1000),
             )
         } else {
             format!(
                 "Command \"{command}\" timed out ({}s). Output captured before timeout:\n\n{}\n\n\
                  Review the partial output above. If the process was still making progress, \
-                 reconnect with a longer `timeout_ms`.{tid_msg}",
+                 reconnect with a longer `timeout_ms`.{stdin_hint}{tid_msg}",
                 timeout_secs.max(DEFAULT_TIMEOUT_MS / 1000),
                 content,
             )

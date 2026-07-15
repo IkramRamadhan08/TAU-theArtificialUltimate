@@ -5,10 +5,12 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tungstenite::WebSocket;
+use tungstenite::client::{IntoClientRequest, client_with_config};
 use tungstenite::protocol::Message as WsMessage;
+use tungstenite::stream::MaybeTlsStream;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AccessibilityNode {
@@ -28,6 +30,10 @@ pub struct TabInfo {
     pub is_attached: bool,
 }
 
+const CDP_READ_TIMEOUT: Duration = Duration::from_secs(30);
+const CDP_WRITE_TIMEOUT: Duration = Duration::from_secs(10);
+const CDP_COMMAND_DEADLINE: Duration = Duration::from_secs(30);
+
 pub struct CdpClient {
     ws: WebSocket<tungstenite::stream::MaybeTlsStream<TcpStream>>,
     msg_id: AtomicU64,
@@ -35,8 +41,23 @@ pub struct CdpClient {
 
 impl CdpClient {
     pub fn connect(debug_url: &str) -> Result<Self> {
-        let (ws, _) = tungstenite::connect(debug_url)
-            .context("Failed to connect to Chrome DevTools Protocol")?;
+        let request = debug_url
+            .into_client_request()
+            .context("Failed to parse CDP URL")?;
+
+        let uri = request.uri().clone();
+        let host = uri.host().unwrap_or("127.0.0.1").to_string();
+        let port = uri.port_u16().unwrap_or(9222);
+
+        let tcp = TcpStream::connect(format!("{}:{}", host, port))
+            .context("Failed to connect to Chrome debug port")?;
+        tcp.set_read_timeout(Some(CDP_READ_TIMEOUT))
+            .context("Failed to set read timeout")?;
+        tcp.set_write_timeout(Some(CDP_WRITE_TIMEOUT))
+            .context("Failed to set write timeout")?;
+
+        let (ws, _) = client_with_config(request, MaybeTlsStream::Plain(tcp), None)
+            .context("Failed to complete WebSocket handshake with Chrome")?;
 
         Ok(Self {
             ws,
@@ -55,7 +76,17 @@ impl CdpClient {
 
         self.ws.write(WsMessage::Text(msg.to_string().into()))?;
 
+        let deadline = Instant::now() + CDP_COMMAND_DEADLINE;
+
         loop {
+            if Instant::now() > deadline {
+                anyhow::bail!(
+                    "CDP command '{}' timed out after {}s",
+                    method,
+                    CDP_COMMAND_DEADLINE.as_secs()
+                );
+            }
+
             let response = match self.ws.read() {
                 Ok(WsMessage::Text(text)) => {
                     serde_json::from_str::<Value>(&text)
@@ -65,6 +96,12 @@ impl CdpClient {
                     anyhow::bail!("WebSocket closed");
                 }
                 Ok(_) => continue,
+                Err(tungstenite::Error::Io(e))
+                    if e.kind() == std::io::ErrorKind::TimedOut
+                        || e.kind() == std::io::ErrorKind::WouldBlock =>
+                {
+                    continue;
+                }
                 Err(e) => {
                     anyhow::bail!("WebSocket error: {}", e);
                 }
@@ -990,6 +1027,8 @@ fn find_free_port() -> Result<u16> {
 
 fn get_ws_url(port: u16) -> Result<String> {
     let mut client = TcpStream::connect(format!("127.0.0.1:{}", port))?;
+    client.set_read_timeout(Some(CDP_READ_TIMEOUT))?;
+    client.set_write_timeout(Some(CDP_WRITE_TIMEOUT))?;
 
     let request = format!(
         "GET /json/version HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nConnection: close\r\n\r\n",

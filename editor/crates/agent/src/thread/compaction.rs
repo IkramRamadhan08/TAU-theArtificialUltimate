@@ -191,7 +191,8 @@ pub(crate) struct RunningTurn {
     /// Used for verification and self-healing.
     pub(crate) plan: Option<AgentPlan>,
     /// Tracks which plan steps need verification after tool execution.
-    pub(crate) pending_verification: Vec<String>,
+    /// Maps tool name to number of consecutive failures.
+    pub(crate) pending_verification: HashMap<String, u32>,
     /// Whether any file-modifying tools (write_file, edit_file, etc.)
     /// were called during this turn. Used by the verification gate.
     pub(crate) has_modifications: bool,
@@ -214,7 +215,7 @@ impl RunningTurn {
             cancellation_tx,
             streaming_tool_inputs: HashMap::default(),
             plan: None,
-            pending_verification: Vec::new(),
+            pending_verification: HashMap::default(),
             has_modifications: false,
             gate_triggered: false,
         }

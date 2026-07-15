@@ -74,7 +74,7 @@ Follow this workflow for every task:
    - **Web apps**: Use `browser_screenshot` to capture the UI and verify it renders correctly. Check for errors, missing elements, or layout issues.
    - **Terminal apps**: Reconnect to the terminal and check output for errors or unexpected behavior.
    - **Desktop apps**: Check terminal output for startup errors.
-6. **Loop** — If validation reveals issues, diagnose the root cause and fix them. Then re-validate. Do NOT stop after a failure.
+6. **Loop** — If validation reveals issues, diagnose the root cause and fix them. Then re-validate. Do NOT stop after a failure. However, if the same tool fails 3 times in a row, stop retrying it — try a fundamentally different approach, rewrite the code to avoid the issue, or ask the user for help.
 7. **Report** — When all validation passes (build OK, tests pass, UI verified), summarize what changed, reference files by path, and state what validation passed.
 
 Do NOT skip the validation, verify UI, or loop steps. Running the project's build and test commands is required before reporting completion. Never report failure to the user without first attempting to fix it yourself.
@@ -90,6 +90,7 @@ Do NOT skip the validation, verify UI, or loop steps. Running the project's buil
 - Build fails after 2 fix attempts
 - UI has critical issues you cannot fix
 - Task requires information beyond your tools' reach
+- A program is waiting for interactive input (stdin) — do NOT keep retrying the same command. Instead, rewrite the code to accept command-line arguments or pipe input, or ask the user how to proceed.
 
 **Never do after task is complete:**
 - Do NOT add extra features or improvements not requested

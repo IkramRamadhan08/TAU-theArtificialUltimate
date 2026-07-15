@@ -1619,14 +1619,40 @@ impl Thread {
                 // Inject verification context if tools had retryable errors
                 if let Some(running_turn) = this.running_turn.as_mut() {
                     if !running_turn.pending_verification.is_empty() {
-                        let context = format!(
-                            "[System] The following tools reported failures: {}. Their output may contain errors. Verify and retry if needed.",
-                            running_turn.pending_verification.join(", ")
-                        );
-                        this.messages.push(Arc::new(Message::User(UserMessage {
-                            id: UserMessageId::new(),
-                            content: Arc::from([UserMessageContent::Text(context)]),
-                        })));
+                        let mut never_retry_tools = Vec::new();
+                        let mut retry_tools = Vec::new();
+                        for (tool_name, &count) in &running_turn.pending_verification {
+                            if count >= MAX_PER_TOOL_FAILURES {
+                                never_retry_tools.push(format!(
+                                    "{} (failed {} times)",
+                                    tool_name, count
+                                ));
+                            } else {
+                                retry_tools.push(tool_name.clone());
+                            }
+                        }
+                        if !never_retry_tools.is_empty() {
+                            let context = format!(
+                                "[System] The following tools have failed repeatedly and should NOT be retried: {}. \
+                                 They are likely blocked (e.g. waiting for interactive input, missing dependencies, or wrong approach). \
+                                 Try a fundamentally different approach, rewrite the code to avoid the issue, or ask the user for help.",
+                                never_retry_tools.join(", ")
+                            );
+                            this.messages.push(Arc::new(Message::User(UserMessage {
+                                id: UserMessageId::new(),
+                                content: Arc::from([UserMessageContent::Text(context)]),
+                            })));
+                        }
+                        if !retry_tools.is_empty() {
+                            let context = format!(
+                                "[System] The following tools reported failures: {}. Their output may contain errors. Verify and retry if needed.",
+                                retry_tools.join(", ")
+                            );
+                            this.messages.push(Arc::new(Message::User(UserMessage {
+                                id: UserMessageId::new(),
+                                content: Arc::from([UserMessageContent::Text(context)]),
+                            })));
+                        }
                         running_turn.pending_verification.clear();
                     }
                 }
@@ -2301,7 +2327,10 @@ impl Thread {
                     }
                 }
                 if (is_error || has_hidden_failure) && !is_canceled {
-                    running_turn.pending_verification.push(tool_name);
+                    *running_turn
+                        .pending_verification
+                        .entry(tool_name)
+                        .or_insert(0) += 1;
                 }
             }
         })?;

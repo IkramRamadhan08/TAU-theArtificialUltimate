@@ -48,6 +48,7 @@ impl std::fmt::Display for PromptId {
 
 pub(crate) const MAX_RETRY_ATTEMPTS: u8 = 4;
 pub(crate) const MAX_TOOL_CALL_ITERATIONS: u32 = 25;
+pub(crate) const MAX_PER_TOOL_FAILURES: u32 = 3;
 pub(crate) const BASE_RETRY_DELAY: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone)]
