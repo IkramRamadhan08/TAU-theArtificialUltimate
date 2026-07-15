@@ -1,14 +1,16 @@
 use std::sync::Arc;
 use std::sync::OnceLock;
+use std::time::Duration;
 
 use crate::{AgentTool, ToolCallEventStream, ToolInput};
 use agent_client_protocol::schema as acp;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use gpui::{App, AppContext, AsyncApp, Task};
 use html_to_markdown::convert_html_to_markdown;
 use language_model::{LanguageModelImage, LanguageModelToolResultContent};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::process::Stdio;
 use ui::SharedString;
 
 use super::browser_session::{BrowserSession, format_accessibility_tree};
@@ -16,6 +18,229 @@ use super::browser_session::{BrowserSession, format_accessibility_tree};
 fn global_session() -> &'static std::sync::Mutex<Option<BrowserSession>> {
     static SESSION: OnceLock<std::sync::Mutex<Option<BrowserSession>>> = OnceLock::new();
     SESSION.get_or_init(|| std::sync::Mutex::new(None))
+}
+
+#[derive(Debug, Clone)]
+struct BrowserDetection {
+    path: String,
+    name: &'static str,
+    os: &'static str,
+}
+
+impl BrowserDetection {
+    fn human_name(&self) -> &str {
+        self.name
+    }
+
+    fn install_command(&self) -> &str {
+        match self.os {
+            "linux" => "sudo apt install chromium-browser",
+            "macos" => "brew install --cask chromium",
+            "windows" => "https://www.google.com/chrome/",
+            _ => "install a Chromium-based browser",
+        }
+    }
+}
+
+#[allow(clippy::disallowed_methods, reason = "Browser tool uses blocking command execution for Chrome detection")]
+fn detect_os() -> &'static str {
+    if cfg!(target_os = "linux") {
+        "linux"
+    } else if cfg!(target_os = "macos") {
+        "macos"
+    } else if cfg!(target_os = "windows") {
+        "windows"
+    } else {
+        "unknown"
+    }
+}
+
+#[allow(clippy::disallowed_methods, reason = "Browser tool uses blocking command execution for Chrome detection")]
+fn find_browser_candidates() -> Vec<BrowserDetection> {
+    let os = detect_os();
+    let mut candidates = Vec::new();
+
+    if cfg!(target_os = "macos") {
+        candidates.extend([
+            BrowserDetection { path: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome".into(), name: "Google Chrome", os },
+            BrowserDetection { path: "/Applications/Chromium.app/Contents/MacOS/Chromium".into(), name: "Chromium", os },
+            BrowserDetection { path: "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary".into(), name: "Chrome Canary", os },
+            BrowserDetection { path: "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser".into(), name: "Brave Browser", os },
+            BrowserDetection { path: "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge".into(), name: "Microsoft Edge", os },
+            BrowserDetection { path: "/Applications/Arc.app/Contents/MacOS/Arc".into(), name: "Arc", os },
+        ]);
+    } else if cfg!(target_os = "windows") {
+        let local_app_data = std::env::var("LOCALAPPDATA").unwrap_or_default();
+        let program_files = std::env::var("PROGRAMFILES").unwrap_or_default();
+        let program_files_x86 = std::env::var("PROGRAMFILES(X86)").unwrap_or_default();
+        candidates.extend([
+            BrowserDetection { path: format!("{}\\Google\\Chrome\\Application\\chrome.exe", local_app_data), name: "Google Chrome", os },
+            BrowserDetection { path: format!("{}\\Google\\Chrome\\Application\\chrome.exe", program_files), name: "Google Chrome", os },
+            BrowserDetection { path: format!("{}\\Google\\Chrome\\Application\\chrome.exe", program_files_x86), name: "Google Chrome", os },
+            BrowserDetection { path: format!("{}\\Microsoft\\Edge\\Application\\msedge.exe", program_files), name: "Microsoft Edge", os },
+            BrowserDetection { path: format!("{}\\Microsoft\\Edge\\Application\\msedge.exe", program_files_x86), name: "Microsoft Edge", os },
+            BrowserDetection { path: format!("{}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe", local_app_data), name: "Brave Browser", os },
+        ]);
+    } else {
+        candidates.extend([
+            BrowserDetection { path: "/usr/bin/google-chrome".into(), name: "Google Chrome", os },
+            BrowserDetection { path: "/usr/bin/google-chrome-stable".into(), name: "Google Chrome", os },
+            BrowserDetection { path: "/usr/bin/google-chrome-beta".into(), name: "Chrome Beta", os },
+            BrowserDetection { path: "/usr/bin/google-chrome-dev".into(), name: "Chrome Dev", os },
+            BrowserDetection { path: "/usr/bin/chromium".into(), name: "Chromium", os },
+            BrowserDetection { path: "/usr/bin/chromium-browser".into(), name: "Chromium", os },
+            BrowserDetection { path: "/snap/bin/chromium".into(), name: "Chromium (Snap)", os },
+            BrowserDetection { path: "/usr/bin/org.chromium.Chromium".into(), name: "Chromium", os },
+            BrowserDetection { path: "/usr/bin/brave-browser".into(), name: "Brave Browser", os },
+            BrowserDetection { path: "/usr/bin/brave-browser-stable".into(), name: "Brave Browser", os },
+            BrowserDetection { path: "/usr/bin/microsoft-edge".into(), name: "Microsoft Edge", os },
+            BrowserDetection { path: "/usr/bin/microsoft-edge-stable".into(), name: "Microsoft Edge", os },
+        ]);
+    }
+
+    candidates
+}
+
+#[allow(clippy::disallowed_methods, reason = "Browser tool uses blocking command execution for Chrome detection")]
+fn find_chrome() -> Option<BrowserDetection> {
+    let candidates = find_browser_candidates();
+
+    let mut first_existing: Option<BrowserDetection> = None;
+
+    for candidate in &candidates {
+        if std::path::Path::new(&candidate.path).exists() {
+            if first_existing.is_none() {
+                first_existing = Some(candidate.clone());
+            }
+            if test_chrome_headless(&candidate.path).is_ok() {
+                return Some(candidate.clone());
+            }
+        }
+    }
+
+    let which_cmd = if cfg!(target_os = "windows") { "where" } else { "which" };
+    for name in &["google-chrome", "chromium", "chromium-browser", "chrome", "brave-browser", "microsoft-edge"] {
+        if let Ok(output) = std::process::Command::new(which_cmd).arg(name).output() {
+            if output.status.success() {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !path.is_empty() && std::path::Path::new(&path).exists() {
+                    let os = detect_os();
+                    let detection = BrowserDetection {
+                        path,
+                        name: match *name {
+                            "google-chrome" | "chrome" => "Google Chrome",
+                            "chromium" | "chromium-browser" => "Chromium",
+                            "brave-browser" => "Brave Browser",
+                            "microsoft-edge" => "Microsoft Edge",
+                            _ => "Chromium-based browser",
+                        },
+                        os,
+                    };
+                    if first_existing.is_none() {
+                        first_existing = Some(detection.clone());
+                    }
+                    if test_chrome_headless(&detection.path).is_ok() {
+                        return Some(detection);
+                    }
+                }
+            }
+        }
+    }
+
+    first_existing
+}
+
+#[allow(clippy::disallowed_methods, reason = "Browser tool uses blocking command execution for Chrome detection")]
+fn test_chrome_headless(chrome_path: &str) -> Result<()> {
+    let mut child = std::process::Command::new(chrome_path)
+        .arg("--headless=new")
+        .arg("--no-sandbox")
+        .arg("--disable-gpu")
+        .arg("--dump-dom")
+        .arg("data:text/html,<html><body><p>ok</p></body></html>")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("Failed to spawn Chrome headless test")?;
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                if status.success() {
+                    return Ok(());
+                }
+                let mut stderr = String::new();
+                if let Some(ref mut pipe) = child.stderr {
+                    use std::io::Read;
+                    let _ = pipe.read_to_string(&mut stderr);
+                }
+                anyhow::bail!(
+                    "Chrome headless test failed (exit {}): {}",
+                    status.code().unwrap_or(-1),
+                    stderr.lines().take(3).collect::<Vec<_>>().join(" | ")
+                );
+            }
+            Ok(None) => {
+                if std::time::Instant::now() >= deadline {
+                    let _ = child.kill();
+                    anyhow::bail!("Chrome headless test timed out after 10s — browser may be hanging");
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(e) => {
+                anyhow::bail!("Failed to check Chrome headless test status: {}", e);
+            }
+        }
+    }
+}
+
+fn chrome_error(detection: Option<&BrowserDetection>) -> String {
+    let os = detect_os();
+    match detection {
+        Some(browser) => {
+            format!(
+                "Found {} at {} but it cannot run in headless mode.\n\n\
+                 Possible causes:\n\
+                 - Missing system libraries (common on headless/Linux servers)\n\
+                 - Chrome is too old and does not support --headless=new\n\
+                 - Another Chrome instance is blocking the debug port\n\n\
+                 Install command: {}\n\n\
+                 Alternative: install Chromium which has fewer dependencies:\n\
+                 {}",
+                browser.human_name(),
+                browser.path,
+                browser.install_command(),
+                if os == "linux" { "sudo apt install chromium-browser" } else { browser.install_command() },
+            )
+        }
+        None => {
+            let mut msg = "No Chromium-based browser found on this system.\n\n".to_string();
+            msg.push_str(&format!("Detected OS: {}\n\n", os));
+            msg.push_str("Install one of these:\n");
+            match os {
+                "linux" => {
+                    msg.push_str("  - Chromium: sudo apt install chromium-browser\n");
+                    msg.push_str("  - Google Chrome: wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && sudo dpkg -i google-chrome-stable_current_amd64.deb\n");
+                    msg.push_str("  - Brave: sudo apt install brave-browser\n");
+                }
+                "macos" => {
+                    msg.push_str("  - Chromium: brew install --cask chromium\n");
+                    msg.push_str("  - Google Chrome: brew install --cask google-chrome\n");
+                    msg.push_str("  - Brave: brew install --cask brave-browser\n");
+                }
+                "windows" => {
+                    msg.push_str("  - Google Chrome: https://www.google.com/chrome/\n");
+                    msg.push_str("  - Microsoft Edge: https://www.microsoft.com/edge\n");
+                    msg.push_str("  - Brave: https://brave.com/download/\n");
+                }
+                _ => {
+                    msg.push_str("  - Any Chromium-based browser (Chrome, Chromium, Brave, Edge)\n");
+                }
+            }
+            msg
+        }
+    }
 }
 
 async fn with_session<R>(cx: &AsyncApp, chrome_path: &str, f: impl FnOnce(&mut BrowserSession) -> Result<R> + Send + 'static) -> Result<R>
@@ -51,66 +276,6 @@ async fn close_session(cx: &AsyncApp) {
     let _ = task.await;
 }
 
-#[allow(clippy::disallowed_methods, reason = "Browser tool uses blocking command execution for Chrome detection")]
-fn find_chrome() -> Option<String> {
-    let candidates: Vec<String> = if cfg!(target_os = "macos") {
-        vec![
-            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome".into(),
-            "/Applications/Chromium.app/Contents/MacOS/Chromium".into(),
-            "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary".into(),
-            "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser".into(),
-            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge".into(),
-        ]
-    } else if cfg!(target_os = "windows") {
-        let local_app_data = std::env::var("LOCALAPPDATA").unwrap_or_default();
-        let program_files = std::env::var("PROGRAMFILES").unwrap_or_default();
-        let program_files_x86 = std::env::var("PROGRAMFILES(X86)").unwrap_or_default();
-        vec![
-            format!("{}\\Google\\Chrome\\Application\\chrome.exe", local_app_data),
-            format!("{}\\Google\\Chrome\\Application\\chrome.exe", program_files),
-            format!("{}\\Google\\Chrome\\Application\\chrome.exe", program_files_x86),
-            format!("{}\\Microsoft\\Edge\\Application\\msedge.exe", program_files),
-            format!("{}\\Microsoft\\Edge\\Application\\msedge.exe", program_files_x86),
-            format!("{}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe", local_app_data),
-        ]
-    } else {
-        vec![
-            "/usr/bin/google-chrome".into(),
-            "/usr/bin/google-chrome-stable".into(),
-            "/usr/bin/google-chrome-beta".into(),
-            "/usr/bin/google-chrome-dev".into(),
-            "/usr/bin/chromium".into(),
-            "/usr/bin/chromium-browser".into(),
-            "/snap/bin/chromium".into(),
-            "/usr/bin/org.chromium.Chromium".into(),
-            "/usr/bin/brave-browser".into(),
-            "/usr/bin/brave-browser-stable".into(),
-            "/usr/bin/microsoft-edge".into(),
-            "/usr/bin/microsoft-edge-stable".into(),
-        ]
-    };
-
-    for path in &candidates {
-        if std::path::Path::new(path).exists() {
-            return Some(path.clone());
-        }
-    }
-
-    let which_cmd = if cfg!(target_os = "windows") { "where" } else { "which" };
-    for name in &["google-chrome", "chromium", "chromium-browser", "chrome", "brave-browser", "microsoft-edge"] {
-        if let Ok(output) = std::process::Command::new(which_cmd).arg(name).output() {
-            if output.status.success() {
-                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !path.is_empty() && std::path::Path::new(&path).exists() {
-                    return Some(path);
-                }
-            }
-        }
-    }
-
-    None
-}
-
 fn validate_url(url: &str) -> Result<String> {
     let normalized = if !url.starts_with("http://") && !url.starts_with("https://") {
         format!("https://{}", url)
@@ -131,10 +296,6 @@ fn validate_url(url: &str) -> Result<String> {
     }
 
     Ok(normalized)
-}
-
-fn chrome_error() -> String {
-    "No Chrome/Chromium browser found. Install Google Chrome, Chromium, or Brave:\n  - Linux: sudo apt install chromium-browser\n  - macOS: brew install --cask chromium\n  - Windows: https://www.google.com/chrome/".into()
 }
 
 // ============================================================================
@@ -211,8 +372,8 @@ impl AgentTool for BrowserNavigateTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserToolOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             let url = validate_url(&input.url).map_err(|e| BrowserToolOutput::Error {
                 error: e.to_string(),
@@ -308,8 +469,8 @@ impl AgentTool for BrowserScreenshotTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserScreenshotOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             let url = validate_url(&input.url).map_err(|e| BrowserScreenshotOutput::Error {
                 error: e.to_string(),
@@ -389,8 +550,8 @@ impl AgentTool for BrowserClickTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserClickOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             let selector = input.selector;
 
@@ -466,8 +627,8 @@ impl AgentTool for BrowserTypeTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserTypeOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             let selector = input.selector;
             let text = input.text;
@@ -544,8 +705,8 @@ impl AgentTool for BrowserFillTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserFillOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             let selector = input.selector;
             let value = input.value;
@@ -622,8 +783,8 @@ impl AgentTool for BrowserScrollTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserScrollOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             let delta_x = input.delta_x;
             let delta_y = input.delta_y;
@@ -699,8 +860,8 @@ impl AgentTool for BrowserPressKeyTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserPressKeyOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             let key = input.key;
 
@@ -776,8 +937,8 @@ impl AgentTool for BrowserWaitTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserWaitOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             let timeout = input.timeout_ms.unwrap_or(10000);
             let selector = input.selector;
@@ -907,8 +1068,8 @@ impl AgentTool for BrowserAccessibilityTreeTool {
     ) -> Task<Result<Self::Output, Self::Output>> {
         cx.spawn(async move |cx| {
             let chrome = find_chrome().ok_or_else(|| BrowserAccessibilityTreeOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             with_session(cx, &chrome, move |session| {
                 let tree = session.get_accessibility_tree()?;
@@ -982,8 +1143,8 @@ impl AgentTool for BrowserClickByIndexTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserClickByIndexOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             let index = input.index;
 
@@ -1059,8 +1220,8 @@ impl AgentTool for BrowserTypeByIndexTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserTypeByIndexOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             let index = input.index;
             let text = input.text;
@@ -1138,8 +1299,8 @@ impl AgentTool for BrowserFillByIndexTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserFillByIndexOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             let index = input.index;
             let value = input.value;
@@ -1216,8 +1377,8 @@ impl AgentTool for BrowserEvaluateTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserEvaluateOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             let expression = input.expression;
 
@@ -1300,8 +1461,8 @@ impl AgentTool for BrowserTabsTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserTabsOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             let action = input.action;
             let target_id = input.target_id;
@@ -1386,8 +1547,8 @@ impl AgentTool for BrowserPageInfoTool {
     ) -> Task<Result<Self::Output, Self::Output>> {
         cx.spawn(async move |cx| {
             let chrome = find_chrome().ok_or_else(|| BrowserPageInfoOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             with_session(cx, &chrome, move |session| {
                 let info = session.get_page_info()?;
@@ -1463,8 +1624,8 @@ impl AgentTool for BrowserClickAtXyTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserClickAtXyOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             let x = input.x;
             let y = input.y;
@@ -1548,8 +1709,8 @@ impl AgentTool for BrowserWaitForLoadTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserWaitForLoadOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             let timeout = input.timeout_ms.unwrap_or(15000);
 
@@ -1631,8 +1792,8 @@ impl AgentTool for BrowserWaitForNetworkIdleTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserWaitForNetworkIdleOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             let timeout = input.timeout_ms.unwrap_or(10000);
             let idle = input.idle_ms.unwrap_or(500);
@@ -1709,8 +1870,8 @@ impl AgentTool for BrowserUploadFileTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserUploadFileOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             let selector = input.selector;
             let file_path = input.file_path;
@@ -1788,8 +1949,8 @@ impl AgentTool for BrowserDispatchKeyTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserDispatchKeyOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             let selector = input.selector;
             let key = input.key;
@@ -1871,8 +2032,8 @@ impl AgentTool for BrowserIframeTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserIframeOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             let url_substring = input.url_substring;
 
@@ -2183,8 +2344,8 @@ impl AgentTool for BrowserCookiesGetTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserCookiesGetOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             with_session(cx, &chrome, move |session| {
                 let cookies = session.get_cookies(input.urls)?;
@@ -2257,8 +2418,8 @@ impl AgentTool for BrowserCookiesSetTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserCookiesSetOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             with_session(cx, &chrome, move |session| {
                 session.set_cookie(&input.cookie)?;
@@ -2333,8 +2494,8 @@ impl AgentTool for BrowserCookiesDeleteTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserCookiesDeleteOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             let path = input.path.unwrap_or_else(|| "/".into());
 
@@ -2410,8 +2571,8 @@ impl AgentTool for BrowserShadowDomQueryTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserShadowDomQueryOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             with_session(cx, &chrome, move |session| {
                 let result = session.query_shadow_dom(&input.shadow_selector, &input.inner_selector)?;
@@ -2490,8 +2651,8 @@ impl AgentTool for BrowserShadowDomClickTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserShadowDomClickOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             with_session(cx, &chrome, move |session| {
                 session.click_in_shadow_dom(&input.shadow_selector, &input.inner_selector)?;
@@ -2566,8 +2727,8 @@ impl AgentTool for BrowserShadowDomFillTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserShadowDomFillOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             with_session(cx, &chrome, move |session| {
                 session.fill_in_shadow_dom(&input.shadow_selector, &input.inner_selector, &input.value)?;
@@ -2640,8 +2801,8 @@ impl AgentTool for BrowserDownloadsTool {
             })?;
 
             let chrome = find_chrome().ok_or_else(|| BrowserDownloadsOutput::Error {
-                error: chrome_error(),
-            })?;
+                error: chrome_error(None),
+            })?.path;
 
             let action = input.action.unwrap_or_else(|| "list".into());
 
