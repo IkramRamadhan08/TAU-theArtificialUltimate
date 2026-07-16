@@ -1745,11 +1745,6 @@
       "proxy_no_verify": null,
       "enable_next_edit_suggestions": true,
     },
-    "codestral": {
-      "api_url": "https://codestral.mistral.ai",
-      "model": "codestral-latest",
-      "max_tokens": 150,
-    },
     "ollama": {
       "api_url": "http://localhost:11434",
       "model": "qwen2.5-coder:7b-base",
@@ -2423,9 +2418,6 @@
     },
     "deepseek": {
       "api_url": "https://api.deepseek.com/v1",
-    },
-    "mistral": {
-      "api_url": "https://api.mistral.ai/v1",
     },
     "vercel_ai_gateway": {
       "api_url": "https://ai-gateway.vercel.sh/v1",
