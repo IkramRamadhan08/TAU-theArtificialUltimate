@@ -6,26 +6,11 @@
 // custom settings, run `tau: open default settings` from the
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
-  "ui_font_size": 16,
-  "buffer_font_size": 15,
+  "ui_font_size": 14,
+  "buffer_font_size": 14,
   "theme": {
     "mode": "system",
     "light": "One Light",
     "dark": "One Dark",
-  },
-  "agent_servers": {
-    "tau": {
-      "type": "custom",
-      "command": "tau-acp",
-      "args": [],
-      "env": {
-        "TAU_LLM_PROVIDER": "zai",
-        "FOXAI_URL": "https://api.ofox.ai",
-        "FOXAI_MODEL": "z-ai/glm-4.7-flash:free",
-        "FOXAI_TIMEOUT_SECS": "120",
-        "ZAI_MODEL": "z-ai/glm-4.7-flash:free",
-      },
-      "default_mode": "code",
-    },
   },
 }
