@@ -152,12 +152,22 @@ fn find_chrome() -> Option<BrowserDetection> {
 
 #[allow(clippy::disallowed_methods, reason = "Browser tool uses blocking command execution for Chrome detection")]
 fn test_chrome_headless(chrome_path: &str) -> Result<()> {
+    let port = {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0")
+            .context("Failed to bind test port")?;
+        let p = listener.local_addr()?.port();
+        drop(listener);
+        p
+    };
+
     let mut child = std::process::Command::new(chrome_path)
         .arg("--headless=new")
         .arg("--no-sandbox")
         .arg("--disable-gpu")
-        .arg("--dump-dom")
-        .arg("data:text/html,<html><body><p>ok</p></body></html>")
+        .arg("--disable-dev-shm-usage")
+        .arg("--disable-extensions")
+        .arg(format!("--remote-debugging-port={}", port))
+        .arg("about:blank")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -167,9 +177,6 @@ fn test_chrome_headless(chrome_path: &str) -> Result<()> {
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
-                if status.success() {
-                    return Ok(());
-                }
                 let mut stderr = String::new();
                 if let Some(ref mut pipe) = child.stderr {
                     use std::io::Read;
@@ -186,7 +193,18 @@ fn test_chrome_headless(chrome_path: &str) -> Result<()> {
                     let _ = child.kill();
                     anyhow::bail!("Chrome headless test timed out after 10s — browser may be hanging");
                 }
-                std::thread::sleep(Duration::from_millis(50));
+                if let Ok(mut probe) = std::net::TcpStream::connect(format!("127.0.0.1:{}", port)) {
+                    let _ = probe.write_all(b"GET /json/version HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
+                    let mut buf = [0u8; 4096];
+                    if let Ok(n) = probe.read(&mut buf) {
+                        let resp = String::from_utf8_lossy(&buf[..n]);
+                        if resp.contains("webSocketDebuggerUrl") {
+                            let _ = child.kill();
+                            return Ok(());
+                        }
+                    }
+                }
+                std::thread::sleep(Duration::from_millis(100));
             }
             Err(e) => {
                 anyhow::bail!("Failed to check Chrome headless test status: {}", e);
