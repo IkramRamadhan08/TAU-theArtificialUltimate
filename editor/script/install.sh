@@ -128,8 +128,27 @@ if curl $CURL_OPTS -fsSL -I "$DOWNLOAD_URL" 2>/dev/null; then
   if [[ "$OS" == "linux" ]]; then
     mkdir -p "$TAU_APP_DIR"
     curl $CURL_OPTS -fsSL "$DOWNLOAD_URL" | tar xJ -C "$(dirname "$TAU_APP_DIR")"
-    chmod +x "$TAU_APP_DIR/libexec/tau-editor" 2>/dev/null || true
-    ln -sf "$TAU_APP_DIR/libexec/tau-editor" "$INSTALL_DIR/tau"
+
+    # Find the actual binary in the extracted bundle
+    TAU_BINARY=""
+    if [[ -f "$TAU_APP_DIR/libexec/tau-editor" ]]; then
+      TAU_BINARY="$TAU_APP_DIR/libexec/tau-editor"
+    elif [[ -f "$TAU_APP_DIR/tau-editor" ]]; then
+      TAU_BINARY="$TAU_APP_DIR/tau-editor"
+    elif [[ -f "$TAU_APP_DIR/tau" ]]; then
+      TAU_BINARY="$TAU_APP_DIR/tau"
+    fi
+
+    if [[ -z "$TAU_BINARY" ]]; then
+      echo "  Error: could not find TAU binary in extracted bundle"
+      echo "  Contents of $TAU_APP_DIR:"
+      ls -la "$TAU_APP_DIR" 2>/dev/null || true
+      exit 1
+    fi
+
+    chmod +x "$TAU_BINARY"
+    ln -sf "$TAU_BINARY" "$INSTALL_DIR/tau"
+    echo "  Linked $TAU_BINARY -> $INSTALL_DIR/tau"
   elif [[ "$OS" == "darwin" ]]; then
     curl $CURL_OPTS -fsSL -o /tmp/tau.tar.gz "$DOWNLOAD_URL"
     tar xzf /tmp/tau.tar.gz -C /tmp
@@ -139,6 +158,8 @@ if curl $CURL_OPTS -fsSL -I "$DOWNLOAD_URL" 2>/dev/null; then
       chmod +x "$INSTALL_DIR/tau"
     else
       echo "  Error: could not find binary in archive"
+      echo "  Contents of /tmp after extraction:"
+      ls -la /tmp/tau-* 2>/dev/null || true
       exit 1
     fi
     rm -f /tmp/tau.tar.gz /tmp/tau-*-macos
@@ -151,6 +172,8 @@ if curl $CURL_OPTS -fsSL -I "$DOWNLOAD_URL" 2>/dev/null; then
       chmod +x "$INSTALL_DIR/tau.exe"
     else
       echo "  Error: could not find binary in archive"
+      echo "  Contents of /tmp/tau-install:"
+      ls -la /tmp/tau-install/ 2>/dev/null || true
       exit 1
     fi
     rm -rf /tmp/tau.zip /tmp/tau-install
@@ -164,11 +187,33 @@ fi
 
 # ---------- Verify binary ----------
 echo "  $MSG_VERIFY"
-if [[ -f "$INSTALL_DIR/tau" ]]; then
-  echo "  $MSG_VERIFY_OK"
+if [[ "$OS" == "windows" ]]; then
+  TAU_BIN="$INSTALL_DIR/tau.exe"
+else
+  TAU_BIN="$INSTALL_DIR/tau"
+fi
+
+if [[ -f "$TAU_BIN" ]]; then
+  if [[ "$OS" != "windows" ]] && [[ ! -x "$TAU_BIN" ]]; then
+    chmod +x "$TAU_BIN"
+  fi
+  # Test that binary actually runs
+  if "$TAU_BIN" --version >/dev/null 2>&1; then
+    VERSION_OUTPUT=$("$TAU_BIN" --version 2>/dev/null || echo "")
+    if [[ -n "$VERSION_OUTPUT" ]]; then
+      echo "  $MSG_VERIFY_OK ($VERSION_OUTPUT)"
+    else
+      echo "  $MSG_VERIFY_OK"
+    fi
+  else
+    # Binary exists but --version fails (maybe it needs display or deps)
+    echo "  $MSG_VERIFY_OK"
+    echo "  (Note: '$TAU_BIN --version' failed, but binary exists)"
+  fi
 else
   echo "  $MSG_VERIFY_FAIL"
-  echo "  $INSTALL_DIR/tau"
+  echo "  $TAU_BIN"
+  exit 1
 fi
 
 # ---------- Desktop shortcut (always create if display available) ----------
