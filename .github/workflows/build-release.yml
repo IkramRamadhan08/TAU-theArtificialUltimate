@@ -26,7 +26,12 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxkbcommon-x11-0 libxcb-cursor0 xz-utils libx11-dev libxcb1-dev libwayland-dev
+          sudo apt-get install -y \
+            libxkbcommon-x11-0 libxcb-cursor0 xz-utils \
+            libx11-dev libxcb1-dev libwayland-dev \
+            libfontconfig-dev libfontconfig1-dev \
+            libasound2-dev libva-dev libvulkan-dev \
+            libssl-dev pkg-config cmake
 
       - name: Install cargo-about
         run: cargo install cargo-about
