@@ -1,0 +1,55 @@
+name: Build Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v0.86)'
+        required: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup target add x86_64-unknown-linux-gnu
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-x11-0 libxcb-cursor0 xz-utils
+
+      - name: Generate licenses
+        run: script/generate-licenses
+
+      - name: Build
+        env:
+          TAU_BUNDLE: "true"
+          RELEASE_VERSION: "0.0.86"
+        run: |
+          cargo build --profile release-fast --target x86_64-unknown-linux-gnu --package tau --package cli
+
+      - name: Package
+        run: |
+          arch=$(uname -m)
+          temp_dir=$(mktemp -d)
+          app_dir="${temp_dir}/tau-dev.app"
+          mkdir -p "${app_dir}/bin" "${app_dir}/libexec"
+          cp "target/x86_64-unknown-linux-gnu/release-fast/tau" "${app_dir}/libexec/tau-editor"
+          cp "target/x86_64-unknown-linux-gnu/release-fast/cli" "${app_dir}/bin/tau"
+          chmod +x "${app_dir}/libexec/tau-editor" "${app_dir}/bin/tau"
+          tar -cJvf "tau-x86_64-linux.tar.xz" -C "${temp_dir}" "tau-dev.app"
+          ls -lh tau-x86_64-linux.tar.xz
+
+      - name: Upload to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ inputs.tag }} tau-x86_64-linux.tar.xz --clobber
