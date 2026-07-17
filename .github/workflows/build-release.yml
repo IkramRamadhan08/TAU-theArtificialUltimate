@@ -13,6 +13,8 @@ env:
 jobs:
   build-linux:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -26,10 +28,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libxkbcommon-x11-0 libxcb-cursor0 xz-utils
 
+      - name: Install cargo-about
+        run: cargo install cargo-about
+
       - name: Generate licenses
+        working-directory: editor
         run: script/generate-licenses
 
       - name: Build
+        working-directory: editor
         env:
           TAU_BUNDLE: "true"
           RELEASE_VERSION: "0.0.86"
@@ -37,8 +44,8 @@ jobs:
           cargo build --profile release-fast --target x86_64-unknown-linux-gnu --package tau --package cli
 
       - name: Package
+        working-directory: editor
         run: |
-          arch=$(uname -m)
           temp_dir=$(mktemp -d)
           app_dir="${temp_dir}/tau-dev.app"
           mkdir -p "${app_dir}/bin" "${app_dir}/libexec"
@@ -49,6 +56,7 @@ jobs:
           ls -lh tau-x86_64-linux.tar.xz
 
       - name: Upload to release
+        working-directory: editor
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
