@@ -106,6 +106,69 @@ fi
 TAU_APP_DIR="${INSTALL_DIR}/../tau.app"
 RELEASE_VERSION=""
 
+# ---------- Download with progress ----------
+download_with_progress() {
+  local url="$1"
+  local output="$2"
+  local label="$3"
+
+  # Get file size first
+  local total_size
+  total_size=$(curl -4 -fsSL --connect-timeout 10 --max-time 10 -I "$url" 2>/dev/null | grep -i content-length | awk '{print $2}' | tr -d '\r' || echo "")
+
+  if [[ -z "$total_size" || "$total_size" -eq 0 ]]; then
+    # Can't get size, download with simple progress
+    echo "  $label (size unknown, downloading...)"
+    curl $CURL_OPTS -fsSL --progress-bar -o "$output" "$url"
+    return $?
+  fi
+
+  # Download with accurate progress bar using #
+  local width=40
+
+  echo "  $label"
+
+  # Use curl with progress output to stderr, parse it
+  local last_percent=0
+  local bar=""
+
+  curl $CURL_OPTS -fsSL -# -o "$output" "$url" 2>&1 | while IFS= read -r line; do
+    # curl -# outputs progress like: "\r  ##  12.3M/45.6M  27%"
+    if [[ "$line" =~ ([0-9]+)% ]]; then
+      local percent="${BASH_REMATCH[1]}"
+      if [[ "$percent" -ne "$last_percent" ]]; then
+        last_percent=$percent
+        local filled=$((percent * width / 100))
+        bar=""
+        for (( i=0; i<filled; i++ )); do
+          bar="${bar}#"
+        done
+        for (( i=filled; i<width; i++ )); do
+          bar="${bar}-"
+        done
+        printf "\r  [$bar] %3d%%" "$percent"
+      fi
+    fi
+  done
+
+  local exit_code=${PIPESTATUS[0]}
+
+  # Final state
+  if [[ $exit_code -eq 0 ]] && [[ -f "$output" ]]; then
+    local final_size
+    final_size=$(stat -c%s "$output" 2>/dev/null || echo 0)
+    local bar=""
+    for (( i=0; i<width; i++ )); do
+      bar="${bar}#"
+    done
+    printf "\r  [$bar] 100%% ✓ (%s)\n" "$(numfmt --to=iec $final_size)"
+  else
+    printf "\r  Download failed ✗\n"
+  fi
+
+  return $exit_code
+}
+
 # Try IPv4 first, fallback to IPv6
 CURL_OPTS="--progress-bar --connect-timeout 15 --max-time 600"
 if curl -4 -fsSL --connect-timeout 5 --max-time 5 -o /dev/null -w '' "https://github.com" 2>/dev/null; then
@@ -127,7 +190,9 @@ if curl $CURL_OPTS -fsSL -I "$DOWNLOAD_URL" 2>/dev/null; then
 
   if [[ "$OS" == "linux" ]]; then
     mkdir -p "$TAU_APP_DIR"
-    curl $CURL_OPTS -fsSL "$DOWNLOAD_URL" | tar xJ -C "$(dirname "$TAU_APP_DIR")"
+    download_with_progress "$DOWNLOAD_URL" "/tmp/tau-download.tar.xz" "Downloading TAU for Linux ($ARCH)"
+    tar xJ -f /tmp/tau-download.tar.xz -C "$(dirname "$TAU_APP_DIR")"
+    rm -f /tmp/tau-download.tar.xz
 
     # Find the actual binary in the extracted bundle
     TAU_BINARY=""
@@ -150,7 +215,7 @@ if curl $CURL_OPTS -fsSL -I "$DOWNLOAD_URL" 2>/dev/null; then
     ln -sf "$TAU_BINARY" "$INSTALL_DIR/tau"
     echo "  Linked $TAU_BINARY -> $INSTALL_DIR/tau"
   elif [[ "$OS" == "darwin" ]]; then
-    curl $CURL_OPTS -fsSL -o /tmp/tau.tar.gz "$DOWNLOAD_URL"
+    download_with_progress "$DOWNLOAD_URL" "/tmp/tau.tar.gz" "Downloading TAU for macOS ($ARCH)"
     tar xzf /tmp/tau.tar.gz -C /tmp
     BINARY=$(ls /tmp/tau-*-macos 2>/dev/null | head -1)
     if [[ -n "$BINARY" ]]; then
@@ -164,7 +229,7 @@ if curl $CURL_OPTS -fsSL -I "$DOWNLOAD_URL" 2>/dev/null; then
     fi
     rm -f /tmp/tau.tar.gz /tmp/tau-*-macos
   elif [[ "$OS" == "windows" ]]; then
-    curl $CURL_OPTS -fsSL -o /tmp/tau.zip "$DOWNLOAD_URL"
+    download_with_progress "$DOWNLOAD_URL" "/tmp/tau.zip" "Downloading TAU for Windows"
     unzip -o /tmp/tau.zip -d /tmp/tau-install
     BINARY=$(ls /tmp/tau-install/*.exe 2>/dev/null | head -1)
     if [[ -n "$BINARY" ]]; then

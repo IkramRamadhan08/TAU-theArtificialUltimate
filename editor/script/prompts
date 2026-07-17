@@ -24,14 +24,14 @@ if [ "$1" = "link" ]; then
             git branch prompts
         fi
         # Check if 'prompts' worktree exists
-        if git worktree list | grep -q "../zed_prompts"; then
-            echo "Worktree already exists at ../zed_prompts."
+        if git worktree list | grep -q "../tau_prompts"; then
+            echo "Worktree already exists at ../tau_prompts."
         else
             # Create worktree if it doesn't exist
-            git worktree add ../zed_prompts prompts || git worktree add ../zed_prompts -b prompts
+            git worktree add ../tau_prompts prompts || git worktree add ../tau_prompts -b prompts
         fi
-        ln -sf "$(realpath "$(pwd)/../zed_prompts/assets/prompts")" ~/.config/tau/prompt_overrides
-        echo "Linked $(realpath "$(pwd)/../zed_prompts/assets/prompts") to ~/.config/tau/prompt_overrides"
+        ln -sf "$(realpath "$(pwd)/../tau_prompts/assets/prompts")" ~/.config/tau/prompt_overrides
+        echo "Linked $(realpath "$(pwd)/../tau_prompts/assets/prompts") to ~/.config/tau/prompt_overrides"
         echo -e "\033[0;33mDon't forget you have it linked, or your prompts will go stale\033[0m"
     else
         ln -sf "$(pwd)/assets/prompts" ~/.config/tau/prompt_overrides

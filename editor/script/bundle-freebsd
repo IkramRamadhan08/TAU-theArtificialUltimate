@@ -22,7 +22,7 @@ while getopts 'h' flag; do
     esac
 done
 
-export ZED_BUNDLE=true
+export TAU_BUNDLE=true
 
 channel=$(<crates/tau/RELEASE_CHANNEL)
 target_dir="${CARGO_TARGET_DIR:-target}"
@@ -93,68 +93,8 @@ if [ "$channel" != "stable" ]; then
     suffix="-$channel"
 fi
 
-# Move everything that should end up in the final package
-# into a temp directory.
-# temp_dir=$(mktemp -d)
-# zed_dir="${temp_dir}/tau$suffix.app"
-
-# Binary
-# mkdir -p "${zed_dir}/bin" "${zed_dir}/libexec"
-# cp "${target_dir}/${target_triple}/release/tau" "${zed_dir}/libexec/tau-editor"
-# cp "${target_dir}/${target_triple}/release/cli" "${zed_dir}/bin/tau"
-
-# Libs
-# find_libs() {
-#     ldd ${target_dir}/${target_triple}/release/tau |
-#         cut -d' ' -f3 |
-#         grep -v '\<\(libstdc++.so\|libc.so\|libgcc_s.so\|libm.so\|libpthread.so\|libdl.so\|libasound.so\)'
-# }
-
-# mkdir -p "${zed_dir}/lib"
-# rm -rf "${zed_dir}/lib/*"
-# cp $(find_libs) "${zed_dir}/lib"
-
-# Icons
-# mkdir -p "${zed_dir}/share/icons/hicolor/512x512/apps"
-# cp "crates/tau/resources/app-icon$suffix.png" "${zed_dir}/share/icons/hicolor/512x512/apps/tau.png"
-# mkdir -p "${zed_dir}/share/icons/hicolor/1024x1024/apps"
-# cp "crates/tau/resources/app-icon$suffix@2x.png" "${zed_dir}/share/icons/hicolor/1024x1024/apps/tau.png"
-
-# .desktop
-# export DO_STARTUP_NOTIFY="true"
-# export APP_CLI="tau"
-# export APP_ICON="tau"
-# export APP_ARGS="%U"
-# if [[ "$channel" == "preview" ]]; then
-#     export APP_NAME="Tau Preview"
-# elif [[ "$channel" == "nightly" ]]; then
-#     export APP_NAME="Tau Nightly"
-# elif [[ "$channel" == "dev" ]]; then
-#     export APP_NAME="Tau Devel"
-# else
-#     export APP_NAME="Tau"
-# fi
-
-# mkdir -p "${zed_dir}/share/applications"
-# envsubst <"crates/tau/resources/tau.desktop.in" >"${zed_dir}/share/applications/tau$suffix.desktop"
-# chmod +x "${zed_dir}/share/applications/tau$suffix.desktop"
-
-# Copy generated licenses so they'll end up in archive too
-# cp "assets/licenses.md" "${zed_dir}/licenses.md"
-
-# Create archive out of everything that's in the temp directory
+# Create archive
 arch=$(uname -m)
-# target="freebsd-${arch}"
-# if [[ "$channel" == "dev" ]]; then
-#     archive="tau-${commit}-${target}.tar.gz"
-# else
-#     archive="tau-${target}.tar.gz"
-# fi
-
-# rm -rf "${archive}"
-# remove_match="tau(-[a-zA-Z0-9]+)?-linux-$(uname -m)\.tar\.gz"
-# ls "${target_dir}/release" | grep -E ${remove_match} | xargs -d "\n" -I {} rm -f "${target_dir}/release/{}" || true
-# tar -czvf "${target_dir}/release/$archive" -C ${temp_dir} "tau$suffix.app"
 
 gzip -f --stdout --best "${target_dir}/${remote_server_triple}/release/remote_server" \
-    > "${target_dir}/tau-remote-server-freebsd-x86_64.gz"
+    > "${target_dir}/tau-remote-server-freebsd-${arch}.gz"

@@ -2,7 +2,7 @@
 
 // ./script/cargo is a transparent wrapper around cargo that:
 // - When running in a clone of `./tau-industries/tau`
-// - outputs build timings to the ZED_DATA_DIR/build_timings
+// - outputs build timings to the TAU_DATA_DIR/build_timings
 // When Tau starts for staff-members it uploads the build timings to Snowflake
 // To use it:
 //  ./script/cargo --init
@@ -166,7 +166,7 @@ function initShellAlias() {
   }
 }
 
-function isZedRepo() {
+function isTauRepo() {
   try {
     const result = spawnSync("git", ["remote", "-v"], {
       encoding: "utf-8",
@@ -255,7 +255,7 @@ async function main() {
   }
 
   // If not in tau repo, just pass through to cargo
-  if (!isZedRepo()) {
+  if (!isTauRepo()) {
     runCargoPassthrough(args);
     return;
   }

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::Duration;
+use std::io::{Read, Write};
 
 use crate::{AgentTool, ToolCallEventStream, ToolInput};
 use agent_client_protocol::schema as acp;
