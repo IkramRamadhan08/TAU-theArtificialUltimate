@@ -46,6 +46,8 @@ jobs:
         run: echo "stable" > crates/tau/RELEASE_CHANNEL
       - name: Build release
         run: cargo build --release --bin tau
+        env:
+          RELEASE_CHANNEL: stable
       - name: Package
         working-directory: .
         run: |
@@ -83,6 +85,8 @@ jobs:
         run: echo "stable" > crates/tau/RELEASE_CHANNEL
       - name: Build release
         run: cargo build --release --bin tau
+        env:
+          RELEASE_CHANNEL: stable
       - name: Package
         working-directory: .
         run: |
@@ -126,6 +130,7 @@ jobs:
         run: cargo build --release --bin tau
         env:
           RUSTFLAGS: "-Ctarget-feature=+crt-static -D warnings"
+          RELEASE_CHANNEL: stable
       - name: Package
         working-directory: .
         run: |
