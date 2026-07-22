@@ -49,7 +49,7 @@ jobs:
         env:
           RELEASE_CHANNEL: stable
       - name: Strip binary
-        run: strip -s editor/target/release/tau
+        run: strip -s target/release/tau
       - name: Package
         working-directory: .
         run: |
