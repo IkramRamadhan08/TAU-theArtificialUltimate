@@ -2416,6 +2416,9 @@
     "lmstudio": {
       "api_url": "http://localhost:1234/api/v0",
     },
+    "mistral": {
+      "api_url": "https://api.mistral.ai/v1",
+    },
     "deepseek": {
       "api_url": "https://api.deepseek.com/v1",
     },

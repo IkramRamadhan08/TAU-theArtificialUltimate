@@ -48,6 +48,8 @@ jobs:
         run: cargo build --release --bin tau
         env:
           RELEASE_CHANNEL: stable
+      - name: Strip binary
+        run: strip -s editor/target/release/tau
       - name: Package
         working-directory: .
         run: |
@@ -87,6 +89,8 @@ jobs:
         run: cargo build --release --bin tau
         env:
           RELEASE_CHANNEL: stable
+      - name: Strip binary
+        run: strip -x target/release/tau
       - name: Package
         working-directory: .
         run: |

@@ -49,6 +49,12 @@ jobs:
         run: |
           cargo build --profile release-fast --target x86_64-unknown-linux-gnu --package tau --package cli
 
+      - name: Strip binaries
+        working-directory: editor
+        run: |
+          strip -s target/x86_64-unknown-linux-gnu/release-fast/tau
+          strip -s target/x86_64-unknown-linux-gnu/release-fast/cli
+
       - name: Package
         working-directory: editor
         run: |

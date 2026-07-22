@@ -953,7 +953,7 @@ tau_actions = { codegen-units = 1 }
 debug = "limited"
 lto = "thin"
 codegen-units = 1
-strip = true
+strip = "all"
 
 [profile.release.package]
 tau = { codegen-units = 16 }
