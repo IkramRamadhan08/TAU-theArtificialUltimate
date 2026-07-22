@@ -48,6 +48,15 @@ esac
 
 echo "$MSG_TITLE"
 
+# ---------- Confirmation ----------
+if [[ "$1" != "-y" ]] && [[ "$1" != "--yes" ]]; then
+  read -rp "Install TAU to ~/.local? [Y/n] " CONFIRM
+  case "$CONFIRM" in
+    [nN][oO]|[nN]) echo "Installation cancelled."; exit 0 ;;
+    *) ;;
+  esac
+fi
+
 ARCH="$(uname -m)"
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 

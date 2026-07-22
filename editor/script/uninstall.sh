@@ -1,8 +1,32 @@
 #!/usr/bin/env bash
 set -e
 
-echo "=== TAU Editor Uninstaller ==="
+# ---------- Language detection ----------
+LANG_CODE="${LANG:0:2}"
+case "$LANG_CODE" in
+  id)
+    MSG_TITLE="=== Pencopotan TAU Editor ==="
+    MSG_CONFIRM="Hapus TAU dan semua file terkait? [Y/n] "
+    MSG_CANCELLED="Pencopotan dibatalkan."
+    ;;
+  *)
+    MSG_TITLE="=== TAU Editor Uninstaller ==="
+    MSG_CONFIRM="Remove TAU and all related files? [Y/n] "
+    MSG_CANCELLED="Uninstall cancelled."
+    ;;
+esac
+
+echo "$MSG_TITLE"
 echo ""
+
+# ---------- Confirmation ----------
+if [[ "$1" != "-y" ]] && [[ "$1" != "--yes" ]]; then
+  read -rp "$MSG_CONFIRM" CONFIRM
+  case "$CONFIRM" in
+    [nN][oO]|[nN]) echo "$MSG_CANCELLED"; exit 0 ;;
+    *) ;;
+  esac
+fi
 
 INSTALL_DIR="${HOME}/.local/bin"
 TAU_APP_DIR="${HOME}/.local/tau.app"
