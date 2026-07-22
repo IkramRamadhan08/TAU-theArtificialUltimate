@@ -20,7 +20,7 @@ jobs:
       run:
         working-directory: editor
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: "1.95.0"
@@ -34,7 +34,7 @@ jobs:
             libglib2.0-dev libpango1.0-dev libatk1.0-dev libgdk-pixbuf-2.0-dev \
             libgtk-3-dev libharfbuzz-dev
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -57,7 +57,7 @@ jobs:
           cp editor/target/release/tau dist/tau.app/libexec/tau-editor
           tar cJf tau-x86_64-linux.tar.xz -C dist tau.app
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-x86_64
           path: tau-x86_64-linux.tar.xz
@@ -70,12 +70,12 @@ jobs:
       run:
         working-directory: editor
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: "1.95.0"
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -98,7 +98,7 @@ jobs:
           chmod +x tau-aarch64-macos
           tar czf tau-aarch64-macos.tar.gz tau-aarch64-macos
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-arm64
           path: tau-aarch64-macos.tar.gz
@@ -114,12 +114,12 @@ jobs:
       - name: Enable long paths
         working-directory: .
         run: git config --global core.longpaths true
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: "1.95.0"
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -141,7 +141,7 @@ jobs:
           copy editor\target\release\tau.exe tau-x86_64-windows.exe
           Compress-Archive -Path tau-x86_64-windows.exe -DestinationPath tau-x86_64-windows.zip
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-x86_64
           path: tau-x86_64-windows.zip
@@ -152,12 +152,12 @@ jobs:
     needs: [build-linux, build-macos, build-windows]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
 
