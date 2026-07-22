@@ -114,7 +114,7 @@ download_with_progress() {
 
   # Get file size first
   local total_size
-  total_size=$(curl -4 -fsSL --connect-timeout 10 --max-time 10 -I "$url" 2>/dev/null | grep -i content-length | awk '{print $2}' | tr -d '\r' || echo "")
+  total_size=$(curl -4 -fsSL --connect-timeout 10 --max-time 10 -I "$url" 2>/dev/null | grep -i content-length | awk '{print $2}' | tr -d '\r' | head -1 || echo "")
 
   if [[ -z "$total_size" || "$total_size" -eq 0 ]]; then
     # Can't get size, download with simple progress
