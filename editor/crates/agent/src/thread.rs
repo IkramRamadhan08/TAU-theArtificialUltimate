@@ -62,7 +62,7 @@ use uuid::Uuid;
 
 const TOOL_CANCELED_MESSAGE: &str = "Tool canceled by user";
 pub const MAX_TOOL_NAME_LENGTH: usize = 64;
-pub const MAX_SUBAGENT_DEPTH: u8 = 1;
+pub const MAX_SUBAGENT_DEPTH: u8 = 3;
 
 /// Auto-compaction is only available for models whose context window is at least
 /// this large. For smaller models there isn't enough headroom for a compaction
