@@ -71,6 +71,8 @@ jobs:
           mkdir -p dist/tau.app/libexec dist/tau.app/bin
           cp editor/target/release/tau dist/tau.app/libexec/tau-editor
           cp editor/target/release/cli dist/tau.app/bin/tau
+          # Copy bundled libs from editor/dist/ (Bundle step runs in editor/ working dir)
+          cp -r editor/dist/tau.app/lib dist/tau.app/ 2>/dev/null || true
           chmod +x dist/tau.app/libexec/tau-editor dist/tau.app/bin/tau
           tar cJf tau-x86_64-linux.tar.xz -C dist tau.app
       - name: Upload artifact
