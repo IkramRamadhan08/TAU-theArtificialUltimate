@@ -849,7 +849,19 @@ impl NativeAgent {
             return project_id;
         }
 
-        let project_context = cx.new(|_| ProjectContext::new(vec![]));
+        let initial_worktrees = project
+            .read(cx)
+            .visible_worktrees(cx)
+            .map(|wt| {
+                let snapshot = wt.read(cx);
+                WorktreeContext {
+                    root_name: snapshot.root_name_str().to_string(),
+                    abs_path: snapshot.abs_path(),
+                    rules_file: None,
+                }
+            })
+            .collect();
+        let project_context = cx.new(|_| ProjectContext::new(initial_worktrees));
         self.register_project_with_initial_context(project.clone(), project_context, cx);
         if let Some(state) = self.projects.get_mut(&project_id) {
             state.project_context_needs_refresh.send(()).ok();
