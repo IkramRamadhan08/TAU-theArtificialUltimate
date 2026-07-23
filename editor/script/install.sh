@@ -246,11 +246,14 @@ if curl $CURL_OPTS -fsSL -I "$DOWNLOAD_URL" 2>/dev/null; then
     tar xzf /tmp/tau.tar.gz -C /tmp
     # Handle .app bundle or flat binary layout
     if [[ -d "/tmp/TAU.app" ]]; then
-      # .app bundle: copy to ~/.local/ and symlink the binary
+      # .app bundle: copy to ~/.local/, symlink to the CLI binary inside it.
+      # The CLI binary (tau-cli) handles IPC, single-instance, and launches
+      # the editor via LSOpenFromURLSpec. Linking to the editor binary directly
+      # would cause the terminal to be killed on launch.
       rm -rf "$HOME/.local/TAU.app"
       cp -R "/tmp/TAU.app" "$HOME/.local/TAU.app"
-      chmod +x "$HOME/.local/TAU.app/Contents/MacOS/tau"
-      ln -sf "$HOME/.local/TAU.app/Contents/MacOS/tau" "$INSTALL_DIR/tau"
+      chmod +x "$HOME/.local/TAU.app/Contents/MacOS/tau" "$HOME/.local/TAU.app/Contents/MacOS/tau-cli"
+      ln -sf "$HOME/.local/TAU.app/Contents/MacOS/tau-cli" "$INSTALL_DIR/tau"
     else
       # Flat binary fallback: prefer CLI launcher over editor binary
       TAU_BINARY=""

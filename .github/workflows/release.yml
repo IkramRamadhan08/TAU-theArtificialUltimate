@@ -120,7 +120,8 @@ jobs:
           APP="TAU.app"
           mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
           cp editor/target/release/tau "$APP/Contents/MacOS/tau"
-          chmod +x "$APP/Contents/MacOS/tau"
+          cp editor/target/release/cli "$APP/Contents/MacOS/tau-cli"
+          chmod +x "$APP/Contents/MacOS/tau" "$APP/Contents/MacOS/tau-cli"
           python3 -c "
           import json, plistlib, sys
           plist = {
