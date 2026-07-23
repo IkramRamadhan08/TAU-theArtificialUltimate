@@ -92,13 +92,20 @@ try {
     exit 1
 }
 
-$EXE = Get-ChildItem -Path $TEMP_DIR -Filter "*.exe" -Recurse | Select-Object -First 1
+$EXE = Get-ChildItem -Path $TEMP_DIR -Filter "tau-x86_64-windows.exe" -Recurse | Select-Object -First 1
+if (-not $EXE) {
+    # Fallback: find any .exe that is not the CLI
+    $EXE = Get-ChildItem -Path $TEMP_DIR -Filter "*.exe" -Recurse | Where-Object { $_.Name -notlike "tau-cli-*" } | Select-Object -First 1
+}
 if (-not $EXE) {
     Write-Error "Could not find tau.exe in archive"
     Remove-Item $TEMP_ZIP -Force -ErrorAction SilentlyContinue
     Remove-Item $TEMP_DIR -Recurse -Force -ErrorAction SilentlyContinue
     exit 1
 }
+
+# Look for CLI binary (optional, improves terminal functionality)
+$CLI_EXE = Get-ChildItem -Path $TEMP_DIR -Filter "tau-cli-*.exe" -Recurse | Select-Object -First 1
 
 # ----- Install -----
 Write-Step "Installing to $INSTALL_DIR..."
@@ -109,6 +116,11 @@ if (-not (Test-Path $INSTALL_DIR)) {
 try {
     Copy-Item -Path $EXE.FullName -Destination $BINARY_PATH -Force
     Write-OK "Installed tau.exe ($([math]::Round((Get-Item $BINARY_PATH).Length / 1MB, 1)) MB)"
+    if ($CLI_EXE) {
+        $CLI_PATH = "$INSTALL_DIR\tau-cli.exe"
+        Copy-Item -Path $CLI_EXE.FullName -Destination $CLI_PATH -Force
+        Write-OK "Installed tau-cli.exe (CLI launcher)"
+    }
 } catch {
     Write-Error "Failed to copy binary: $_"
     Remove-Item $TEMP_ZIP -Force -ErrorAction SilentlyContinue

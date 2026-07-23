@@ -426,12 +426,19 @@ pub fn listen_for_cli_connections(opener: OpenListener) -> Result<()> {
     use std::os::unix::net::UnixDatagram;
 
     let sock_path = paths::data_dir().join(format!("tau-{}.sock", *RELEASE_CHANNEL_NAME));
-    // remove the socket if the process listening on it has died
-    if let Err(e) = UnixDatagram::unbound()?.connect(&sock_path)
-        && e.kind() == std::io::ErrorKind::ConnectionRefused
+
+    // If connect succeeds, another instance is actively listening — bail out.
+    if UnixDatagram::unbound()
+        .and_then(|sock| sock.connect(&sock_path))
+        .is_ok()
     {
-        std::fs::remove_file(&sock_path)?;
+        anyhow::bail!("tau is already running");
     }
+
+    // Socket exists but no process is listening (stale from a crash).
+    // Remove it so we can bind to the address.
+    let _ = std::fs::remove_file(&sock_path);
+
     let listener = UnixDatagram::bind(&sock_path)?;
     thread::spawn(move || {
         let mut buf = [0u8; 1024];

@@ -102,12 +102,13 @@ mkdir -p "$INSTALL_DIR" "$ICON_DIR" "$APP_DIR"
 
 # ---------- Install runtime deps ----------
 if [[ "$OS" == "linux" ]]; then
+  MSG_DEPS_FAIL="Warning: failed to install some runtime dependencies. TAU may not launch correctly."
   if command -v apt &>/dev/null; then
-    sudo apt install -y libxkbcommon-x11-0 libxcb-cursor0 xz-utils 2>/dev/null || true
+    sudo apt install -y libxkbcommon-x11-0 libxcb-cursor0 xz-utils 2>/dev/null || echo "  $MSG_DEPS_FAIL"
   elif command -v pacman &>/dev/null; then
-    sudo pacman -S --noconfirm libxkbcommon libxcb wayland fontconfig libva mesa alsa-lib xz 2>/dev/null || true
+    sudo pacman -S --noconfirm libxkbcommon libxcb wayland fontconfig libva mesa alsa-lib xz 2>/dev/null || echo "  $MSG_DEPS_FAIL"
   elif command -v dnf &>/dev/null; then
-    sudo dnf install -y libxkbcommon libxcb wayland fontconfig libva mesa-libGL alsa-lib xz 2>/dev/null || true
+    sudo dnf install -y libxkbcommon libxcb wayland fontconfig libva mesa-libGL alsa-lib xz 2>/dev/null || echo "  $MSG_DEPS_FAIL"
   fi
 fi
 
@@ -204,8 +205,14 @@ if curl $CURL_OPTS -fsSL -I "$DOWNLOAD_URL" 2>/dev/null; then
     rm -f /tmp/tau-download.tar.xz
 
     # Find the actual binary in the extracted bundle
+    # Prefer bin/tau (CLI launcher) over libexec/tau-editor (editor binary).
+    # The CLI launcher handles IPC, single-instance detection, and proper
+    # terminal behavior. Linking directly to the editor binary bypasses all
+    # of that and causes the terminal to be killed on launch.
     TAU_BINARY=""
-    if [[ -f "$TAU_APP_DIR/libexec/tau-editor" ]]; then
+    if [[ -f "$TAU_APP_DIR/bin/tau" ]]; then
+      TAU_BINARY="$TAU_APP_DIR/bin/tau"
+    elif [[ -f "$TAU_APP_DIR/libexec/tau-editor" ]]; then
       TAU_BINARY="$TAU_APP_DIR/libexec/tau-editor"
     elif [[ -f "$TAU_APP_DIR/tau-editor" ]]; then
       TAU_BINARY="$TAU_APP_DIR/tau-editor"
@@ -314,7 +321,7 @@ Name=TAU
 GenericName=AI Code Editor
 Comment=The Artificial Ultimate local agentic coding IDE.
 TryExec=$INSTALL_DIR/tau
-Exec=$INSTALL_DIR/tau %F
+Exec=$INSTALL_DIR/tau --foreground %F
 Icon=tau
 Categories=Utility;TextEditor;Development;IDE;
 Keywords=tau;agent;code;ide;
@@ -323,7 +330,7 @@ StartupNotify=false
 Actions=NewWorkspace;
 
 [Desktop Action NewWorkspace]
-Exec=$INSTALL_DIR/tau --new %F
+Exec=$INSTALL_DIR/tau --foreground --new %F
 Name=Open a new workspace
 DESKTOP
 
@@ -373,7 +380,11 @@ if [[ -n "$SHELL_CONFIG" ]] && ! grep -q "$INSTALL_DIR" "$SHELL_CONFIG" 2>/dev/n
   else
     echo "" >> "$SHELL_CONFIG"
     echo "# TAU Editor" >> "$SHELL_CONFIG"
-    echo "export PATH=\"\$PATH:$INSTALL_DIR\"" >> "$SHELL_CONFIG"
+    if [[ "$SHELL" == */fish ]]; then
+      echo "set -gx PATH \$PATH $INSTALL_DIR" >> "$SHELL_CONFIG"
+    else
+      echo "export PATH=\"\$PATH:$INSTALL_DIR\"" >> "$SHELL_CONFIG"
+    fi
     echo "  $MSG_PATH_ADD $SHELL_CONFIG"
   fi
 fi

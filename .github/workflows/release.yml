@@ -44,17 +44,24 @@ jobs:
           restore-keys: linux-release-
       - name: Set release channel
         run: echo "stable" > crates/tau/RELEASE_CHANNEL
+      - name: Set build metadata
+        run: echo "TAU_COMMIT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
       - name: Build release
-        run: cargo build --release --bin tau
+        run: cargo build --release --bin tau --package cli
         env:
           RELEASE_CHANNEL: stable
+          TAU_BUNDLE: "true"
       - name: Strip binary
-        run: strip -s target/release/tau
+        run: |
+          strip -s target/release/tau
+          strip -s target/release/cli
       - name: Package
         working-directory: .
         run: |
-          mkdir -p dist/tau.app/libexec
+          mkdir -p dist/tau.app/libexec dist/tau.app/bin
           cp editor/target/release/tau dist/tau.app/libexec/tau-editor
+          cp editor/target/release/cli dist/tau.app/bin/tau
+          chmod +x dist/tau.app/libexec/tau-editor dist/tau.app/bin/tau
           tar cJf tau-x86_64-linux.tar.xz -C dist tau.app
       - name: Upload artifact
         uses: actions/upload-artifact@v7
@@ -85,18 +92,24 @@ jobs:
           restore-keys: macos-release-
       - name: Set release channel
         run: echo "stable" > crates/tau/RELEASE_CHANNEL
+      - name: Set build metadata
+        run: echo "TAU_COMMIT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
       - name: Build release
-        run: cargo build --release --bin tau
+        run: cargo build --release --bin tau --package cli
         env:
           RELEASE_CHANNEL: stable
+          TAU_BUNDLE: "true"
       - name: Strip binary
-        run: strip -x target/release/tau
+        run: |
+          strip -x target/release/tau
+          strip -x target/release/cli
       - name: Package
         working-directory: .
         run: |
           cp editor/target/release/tau tau-aarch64-macos
-          chmod +x tau-aarch64-macos
-          tar czf tau-aarch64-macos.tar.gz tau-aarch64-macos
+          cp editor/target/release/cli tau-cli-aarch64-macos
+          chmod +x tau-aarch64-macos tau-cli-aarch64-macos
+          tar czf tau-aarch64-macos.tar.gz tau-aarch64-macos tau-cli-aarch64-macos
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
@@ -130,16 +143,21 @@ jobs:
       - name: Set release channel
         shell: bash
         run: echo "stable" > crates/tau/RELEASE_CHANNEL
+      - name: Set build metadata
+        shell: bash
+        run: echo "TAU_COMMIT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
       - name: Build release
-        run: cargo build --release --bin tau
+        run: cargo build --release --bin tau --package cli
         env:
           RUSTFLAGS: "-Ctarget-feature=+crt-static -D warnings"
           RELEASE_CHANNEL: stable
+          TAU_BUNDLE: "true"
       - name: Package
         working-directory: .
         run: |
           copy editor\target\release\tau.exe tau-x86_64-windows.exe
-          Compress-Archive -Path tau-x86_64-windows.exe -DestinationPath tau-x86_64-windows.zip
+          copy editor\target\release\cli.exe tau-cli-x86_64-windows.exe
+          Compress-Archive -Path tau-x86_64-windows.exe,tau-cli-x86_64-windows.exe -DestinationPath tau-x86_64-windows.zip
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
