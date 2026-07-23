@@ -51,7 +51,7 @@ jobs:
         env:
           RELEASE_CHANNEL: stable
           TAU_BUNDLE: "true"
-          RUSTFLAGS: "-C link-args=-Wl,--disable-new-dtags,-rpath,\\$ORIGIN/../lib"
+          RUSTFLAGS: "-C link-args=-Wl,--disable-new-dtags,-rpath,$ORIGIN/../lib"
       - name: Bundle shared libraries
         run: |
           mkdir -p dist/tau.app/lib
