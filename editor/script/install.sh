@@ -166,12 +166,23 @@ download_with_progress() {
   # Final state
   if [[ $exit_code -eq 0 ]] && [[ -f "$output" ]]; then
     local final_size
-    final_size=$(stat -c%s "$output" 2>/dev/null || echo 0)
     local bar=""
     for (( i=0; i<width; i++ )); do
       bar="${bar}#"
     done
-    printf "\r  [$bar] 100%% ✓ (%s)\n" "$(numfmt --to=iec $final_size)"
+    if [[ "$OS" == "darwin" ]]; then
+      local final_size
+      final_size=$(stat -f%z "$output" 2>/dev/null || echo 0)
+      printf "\r  [$bar] 100%% ✓ (%s bytes)\n" "$final_size"
+    else
+      local final_size
+      final_size=$(stat -c%s "$output" 2>/dev/null || echo 0)
+      if command -v numfmt &>/dev/null; then
+        printf "\r  [$bar] 100%% ✓ (%s)\n" "$(numfmt --to=iec $final_size)"
+      else
+        printf "\r  [$bar] 100%% ✓ (%s bytes)\n" "$final_size"
+      fi
+    fi
   else
     printf "\r  Download failed ✗\n"
   fi
@@ -195,7 +206,7 @@ if curl $CURL_OPTS -fsSL -I "$DOWNLOAD_URL" 2>/dev/null; then
   # Get version from redirect URL
   REDIRECT_URL=$(curl -4 -fsSL --connect-timeout 15 --max-time 15 -o /dev/null -w '%{redirect_url}' "$DOWNLOAD_URL" 2>/dev/null || echo "")
   if [[ -n "$REDIRECT_URL" ]]; then
-    RELEASE_VERSION=$(echo "$REDIRECT_URL" | grep -oP 'tag/v\K[0-9]+\.[0-9]+' | head -1)
+    RELEASE_VERSION=$(echo "$REDIRECT_URL" | sed -n 's|.*tag/v\([0-9][0-9]*\.[0-9][0-9]*\).*|\1|p' | head -1)
   fi
 
   if [[ "$OS" == "linux" ]]; then
@@ -233,9 +244,14 @@ if curl $CURL_OPTS -fsSL -I "$DOWNLOAD_URL" 2>/dev/null; then
   elif [[ "$OS" == "darwin" ]]; then
     download_with_progress "$DOWNLOAD_URL" "/tmp/tau.tar.gz" "Downloading TAU for macOS ($ARCH)"
     tar xzf /tmp/tau.tar.gz -C /tmp
-    BINARY=$(ls /tmp/tau-*-macos 2>/dev/null | head -1)
-    if [[ -n "$BINARY" ]]; then
-      cp "$BINARY" "$INSTALL_DIR/tau"
+    # Prefer CLI launcher over editor binary (same rationale as Linux).
+    TAU_BINARY=""
+    TAU_BINARY=$(ls /tmp/tau-cli-*-macos 2>/dev/null | head -1)
+    if [[ -z "$TAU_BINARY" ]]; then
+      TAU_BINARY=$(ls /tmp/tau-*-macos 2>/dev/null | head -1)
+    fi
+    if [[ -n "$TAU_BINARY" ]]; then
+      cp "$TAU_BINARY" "$INSTALL_DIR/tau"
       chmod +x "$INSTALL_DIR/tau"
     else
       echo "  Error: could not find binary in archive"
@@ -247,7 +263,12 @@ if curl $CURL_OPTS -fsSL -I "$DOWNLOAD_URL" 2>/dev/null; then
   elif [[ "$OS" == "windows" ]]; then
     download_with_progress "$DOWNLOAD_URL" "/tmp/tau.zip" "Downloading TAU for Windows"
     unzip -o /tmp/tau.zip -d /tmp/tau-install
-    BINARY=$(ls /tmp/tau-install/*.exe 2>/dev/null | head -1)
+    # Explicitly find the editor binary (not the CLI) to avoid sort-order issues.
+    BINARY=""
+    BINARY=$(ls /tmp/tau-install/tau-x86_64-windows.exe 2>/dev/null | head -1)
+    if [[ -z "$BINARY" ]]; then
+      BINARY=$(ls /tmp/tau-install/tau-*-windows.exe 2>/dev/null | grep -v 'tau-cli' | head -1)
+    fi
     if [[ -n "$BINARY" ]]; then
       mv "$BINARY" "$INSTALL_DIR/tau.exe"
       chmod +x "$INSTALL_DIR/tau.exe"
@@ -321,7 +342,7 @@ Name=TAU
 GenericName=AI Code Editor
 Comment=The Artificial Ultimate local agentic coding IDE.
 TryExec=$INSTALL_DIR/tau
-Exec=$INSTALL_DIR/tau --foreground %F
+Exec=$INSTALL_DIR/tau --foreground %U
 Icon=tau
 Categories=Utility;TextEditor;Development;IDE;
 Keywords=tau;agent;code;ide;
@@ -330,7 +351,7 @@ StartupNotify=false
 Actions=NewWorkspace;
 
 [Desktop Action NewWorkspace]
-Exec=$INSTALL_DIR/tau --foreground --new %F
+Exec=$INSTALL_DIR/tau --foreground --new %U
 Name=Open a new workspace
 DESKTOP
 

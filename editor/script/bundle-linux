@@ -165,9 +165,9 @@ cp $(find_libs) "${tau_dir}/lib"
 
 # Icons
 mkdir -p "${tau_dir}/share/icons/hicolor/512x512/apps"
-cp "crates/tau/resources/tau-icon.png" "${tau_dir}/share/icons/hicolor/512x512/apps/tau.png"
+cp "assets/images/tau-icon.png" "${tau_dir}/share/icons/hicolor/512x512/apps/tau.png"
 mkdir -p "${tau_dir}/share/icons/hicolor/1024x1024/apps"
-cp "crates/tau/resources/tau-icon@2x.png" "${tau_dir}/share/icons/hicolor/1024x1024/apps/tau.png"
+cp "assets/images/tau-icon@2x.png" "${tau_dir}/share/icons/hicolor/1024x1024/apps/tau.png"
 
 # .desktop
 export DO_STARTUP_NOTIFY="true"
