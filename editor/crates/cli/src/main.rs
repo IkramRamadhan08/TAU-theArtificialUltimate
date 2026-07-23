@@ -761,6 +761,22 @@ fn run() -> Result<()> {
         for handle in anonymous_fd_pipe_handles {
             handle.join().unwrap()?;
         }
+        // Kill the parent shell so the terminal closes automatically,
+        // matching the original Zed UX. The editor is fully running at
+        // this point (IPC connected), so it survives independently.
+        #[cfg(unix)]
+        {
+            use std::io::IsTerminal;
+            if std::io::stdin().is_terminal() {
+                let ppid = std::os::unix::process::parent_id();
+                if ppid > 1 {
+                    let _ = std::process::Command::new("/bin/kill")
+                        .arg("-TERM")
+                        .arg(ppid.to_string())
+                        .spawn();
+                }
+            }
+        }
     }
 
     if let Some(exit_status) = exit_status.lock().take() {
