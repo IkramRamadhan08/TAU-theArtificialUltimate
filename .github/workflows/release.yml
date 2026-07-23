@@ -57,7 +57,7 @@ jobs:
           mkdir -p dist/tau.app/lib
           ldd target/release/tau | awk '/=>/ { print $3 }' | while read lib; do
             case "$lib" in
-              libc.so|libgcc_s.so|libm.so|libpthread.so|libdl.so|libasound.so) continue ;;
+              libc.so|libgcc_s.so|libm.so|libpthread.so|libdl.so) continue ;;
               *) cp "$lib" dist/tau.app/lib/ 2>/dev/null || true ;;
             esac
           done

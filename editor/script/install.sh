@@ -104,7 +104,7 @@ mkdir -p "$INSTALL_DIR" "$ICON_DIR" "$APP_DIR"
 if [[ "$OS" == "linux" ]]; then
   MSG_DEPS_FAIL="Warning: failed to install some runtime dependencies. TAU may not launch correctly."
   if command -v apt &>/dev/null; then
-    sudo apt install -y libxkbcommon-x11-0 libxcb-cursor0 xz-utils 2>/dev/null || echo "  $MSG_DEPS_FAIL"
+    sudo apt install -y libxkbcommon-x11-0 libxcb-cursor0 libasound2 xz-utils 2>/dev/null || echo "  $MSG_DEPS_FAIL"
   elif command -v pacman &>/dev/null; then
     sudo pacman -S --noconfirm libxkbcommon libxcb wayland fontconfig libva mesa alsa-lib xz 2>/dev/null || echo "  $MSG_DEPS_FAIL"
   elif command -v dnf &>/dev/null; then
@@ -210,6 +210,7 @@ if curl $CURL_OPTS -fsSL -I "$DOWNLOAD_URL" 2>/dev/null; then
   fi
 
   if [[ "$OS" == "linux" ]]; then
+    rm -rf "$TAU_APP_DIR"
     mkdir -p "$TAU_APP_DIR"
     download_with_progress "$DOWNLOAD_URL" "/tmp/tau-download.tar.xz" "Downloading TAU for Linux ($ARCH)"
     tar xJ -f /tmp/tau-download.tar.xz -C "$(dirname "$TAU_APP_DIR")"
@@ -254,6 +255,12 @@ if curl $CURL_OPTS -fsSL -I "$DOWNLOAD_URL" 2>/dev/null; then
       cp -R "/tmp/TAU.app" "$HOME/.local/TAU.app"
       chmod +x "$HOME/.local/TAU.app/Contents/MacOS/tau" "$HOME/.local/TAU.app/Contents/MacOS/tau-cli"
       ln -sf "$HOME/.local/TAU.app/Contents/MacOS/tau-cli" "$INSTALL_DIR/tau"
+      # Also install to /Applications so TAU appears in Finder/Spotlight/Dock
+      if [[ -d "/Applications" ]]; then
+        sudo rm -rf "/Applications/TAU.app" 2>/dev/null || true
+        sudo cp -R "$HOME/.local/TAU.app" "/Applications/TAU.app"
+        echo "  Installed /Applications/TAU.app (accessible from Finder/Spotlight/Dock)"
+      fi
     else
       # Flat binary fallback: prefer CLI launcher over editor binary
       TAU_BINARY=""
@@ -285,6 +292,12 @@ if curl $CURL_OPTS -fsSL -I "$DOWNLOAD_URL" 2>/dev/null; then
     if [[ -n "$BINARY" ]]; then
       mv "$BINARY" "$INSTALL_DIR/tau.exe"
       chmod +x "$INSTALL_DIR/tau.exe"
+      # Also install CLI binary for IPC and single-instance support
+      CLI_BIN=$(ls /tmp/tau-install/tau-cli-*-windows.exe 2>/dev/null | head -1)
+      if [[ -n "$CLI_BIN" ]]; then
+        mv "$CLI_BIN" "$INSTALL_DIR/tau-cli.exe"
+        chmod +x "$INSTALL_DIR/tau-cli.exe"
+      fi
     else
       echo "  Error: could not find binary in archive"
       echo "  Contents of /tmp/tau-install:"

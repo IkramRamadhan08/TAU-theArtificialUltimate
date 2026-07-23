@@ -156,7 +156,7 @@ ln -sf tau "${tau_dir}/bin/TAU"
 find_libs() {
     ldd ${target_dir}/${target_triple}/release/tau |\
         cut -d' ' -f3 |\
-        grep -v '\<\(libc.so\|libgcc_s.so\|libm.so\|libpthread.so\|libdl.so\|libasound.so\)'
+        grep -v '\<\(libc.so\|libgcc_s.so\|libm.so\|libpthread.so\|libdl.so\)'
 }
 
 mkdir -p "${tau_dir}/lib"

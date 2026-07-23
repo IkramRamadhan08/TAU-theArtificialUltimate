@@ -113,6 +113,14 @@ if (-not (Test-Path $INSTALL_DIR)) {
     New-Item -ItemType Directory -Path $INSTALL_DIR -Force | Out-Null
 }
 
+# Stop TAU if running to avoid file lock errors on reinstall
+$existingProcess = Get-Process -Name "tau" -ErrorAction SilentlyContinue
+if ($existingProcess) {
+    Write-Info "TAU is running. Closing it before install..."
+    $existingProcess | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 500
+}
+
 try {
     Copy-Item -Path $EXE.FullName -Destination $BINARY_PATH -Force
     Write-OK "Installed tau.exe ($([math]::Round((Get-Item $BINARY_PATH).Length / 1MB, 1)) MB)"
@@ -122,7 +130,7 @@ try {
         Write-OK "Installed tau-cli.exe (CLI launcher)"
     }
 } catch {
-    Write-Error "Failed to copy binary: $_"
+    Write-Error "Failed to copy binary. Make sure TAU is closed and try again: $_"
     Remove-Item $TEMP_ZIP -Force -ErrorAction SilentlyContinue
     Remove-Item $TEMP_DIR -Recurse -Force -ErrorAction SilentlyContinue
     exit 1
@@ -249,7 +257,7 @@ try {
     if (-not (Test-Path $shellOpenKey)) {
         New-Item -Path $shellOpenKey -Force | Out-Null
     }
-    Set-ItemProperty -Path $shellOpenKey -Name "Icon" -Value "`"$BINARY_PATH`""
+    Set-ItemProperty -Path $shellOpenKey -Name "Icon" -Value "$BINARY_PATH"
     $commandKey = "$progIdKey\shell\open\command"
     if (-not (Test-Path $commandKey)) {
         New-Item -Path $commandKey -Force | Out-Null

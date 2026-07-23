@@ -1236,7 +1236,7 @@ mod windows {
 
                 // ../TAU.exe is the standard, lib/tau is for MSYS2, ./tau.exe is for the target
                 // directory in development builds.
-                let possible_locations = ["../TAU.exe", "../lib/tau/tau-editor.exe", "./tau.exe"];
+                let possible_locations = ["../tau.exe", "../lib/tau/tau-editor.exe", "./tau.exe"];
                 possible_locations
                     .iter()
                     .find_map(|p| dir.join(p).canonicalize().ok().filter(|path| path != &cli))

@@ -264,7 +264,7 @@ fn main() {
     unsafe {
         use windows::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
 
-        if args.foreground {
+        if args.foreground || args.version || args.printenv || args.dump_all_actions {
             let _ = AttachConsole(ATTACH_PARENT_PROCESS);
         }
     }
