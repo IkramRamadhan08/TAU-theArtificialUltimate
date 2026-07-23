@@ -68,8 +68,8 @@ fn with_pipe(f: &dyn Fn(String)) {
             PIPE_ACCESS_INBOUND,
             PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
             1,
-            128,
-            128,
+            1024,
+            1024,
             0,
             None,
         )
@@ -99,7 +99,7 @@ fn retrieve_message_from_pipe(pipe: HANDLE) -> anyhow::Result<String> {
 }
 
 fn retrieve_message_from_pipe_inner(pipe: HANDLE) -> anyhow::Result<String> {
-    let mut buffer = [0u8; 128];
+    let mut buffer = [0u8; 1024];
     unsafe {
         ReadFile(pipe, Some(&mut buffer), None, None)?;
     }

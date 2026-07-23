@@ -116,10 +116,34 @@ jobs:
       - name: Package
         working-directory: .
         run: |
-          cp editor/target/release/tau tau-aarch64-macos
-          cp editor/target/release/cli tau-cli-aarch64-macos
-          chmod +x tau-aarch64-macos tau-cli-aarch64-macos
-          tar czf tau-aarch64-macos.tar.gz tau-aarch64-macos tau-cli-aarch64-macos
+          # Create minimal .app bundle for Spotlight/Finder integration
+          APP="TAU.app"
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          cp editor/target/release/tau "$APP/Contents/MacOS/tau"
+          chmod +x "$APP/Contents/MacOS/tau"
+          python3 -c "
+          import json, plistlib, sys
+          plist = {
+              'CFBundleExecutable': 'tau',
+              'CFBundleIdentifier': 'ai.tau.TAU',
+              'CFBundleName': 'TAU',
+              'CFBundleDisplayName': 'TAU',
+              'CFBundleVersion': '1.0.0',
+              'CFBundleShortVersionString': '1.0.0',
+              'CFBundlePackageType': 'APPL',
+              'CFBundleSupportedPlatforms': ['MacOSX'],
+              'LSMinimumSystemVersion': '11.0',
+              'NSHighResolutionCapable': True,
+              'CFBundleDocumentTypes': [{
+                  'CFBundleTypeRole': 'Editor',
+                  'LSHandlerRank': 'Alternate',
+                  'LSItemContentTypes': ['public.folder', 'public.plain-text', 'public.text'],
+              }],
+          }
+          with open('$APP/Contents/Info.plist', 'wb') as f:
+              plistlib.dump(plist, f)
+          "
+          tar czf tau-aarch64-macos.tar.gz "$APP"
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:

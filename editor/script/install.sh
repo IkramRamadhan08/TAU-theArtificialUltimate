@@ -244,22 +244,32 @@ if curl $CURL_OPTS -fsSL -I "$DOWNLOAD_URL" 2>/dev/null; then
   elif [[ "$OS" == "darwin" ]]; then
     download_with_progress "$DOWNLOAD_URL" "/tmp/tau.tar.gz" "Downloading TAU for macOS ($ARCH)"
     tar xzf /tmp/tau.tar.gz -C /tmp
-    # Prefer CLI launcher over editor binary (same rationale as Linux).
-    TAU_BINARY=""
-    TAU_BINARY=$(ls /tmp/tau-cli-*-macos 2>/dev/null | head -1)
-    if [[ -z "$TAU_BINARY" ]]; then
-      TAU_BINARY=$(ls /tmp/tau-*-macos 2>/dev/null | head -1)
-    fi
-    if [[ -n "$TAU_BINARY" ]]; then
-      cp "$TAU_BINARY" "$INSTALL_DIR/tau"
-      chmod +x "$INSTALL_DIR/tau"
+    # Handle .app bundle or flat binary layout
+    if [[ -d "/tmp/TAU.app" ]]; then
+      # .app bundle: copy to ~/.local/ and symlink the binary
+      rm -rf "$HOME/.local/TAU.app"
+      cp -R "/tmp/TAU.app" "$HOME/.local/TAU.app"
+      chmod +x "$HOME/.local/TAU.app/Contents/MacOS/tau"
+      ln -sf "$HOME/.local/TAU.app/Contents/MacOS/tau" "$INSTALL_DIR/tau"
     else
-      echo "  Error: could not find binary in archive"
-      echo "  Contents of /tmp after extraction:"
-      ls -la /tmp/tau-* 2>/dev/null || true
-      exit 1
+      # Flat binary fallback: prefer CLI launcher over editor binary
+      TAU_BINARY=""
+      TAU_BINARY=$(ls /tmp/tau-cli-*-macos 2>/dev/null | head -1)
+      if [[ -z "$TAU_BINARY" ]]; then
+        TAU_BINARY=$(ls /tmp/tau-*-macos 2>/dev/null | head -1)
+      fi
+      if [[ -n "$TAU_BINARY" ]]; then
+        cp "$TAU_BINARY" "$INSTALL_DIR/tau"
+        chmod +x "$INSTALL_DIR/tau"
+      else
+        echo "  Error: could not find binary in archive"
+        echo "  Contents of /tmp after extraction:"
+        ls -la /tmp/tau-* 2>/dev/null || true
+        exit 1
+      fi
     fi
-    rm -f /tmp/tau.tar.gz /tmp/tau-*-macos
+    rm -f /tmp/tau.tar.gz
+    rm -rf /tmp/tau-*-macos /tmp/TAU.app
   elif [[ "$OS" == "windows" ]]; then
     download_with_progress "$DOWNLOAD_URL" "/tmp/tau.zip" "Downloading TAU for Windows"
     unzip -o /tmp/tau.zip -d /tmp/tau-install
