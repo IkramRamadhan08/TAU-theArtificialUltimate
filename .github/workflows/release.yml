@@ -47,7 +47,7 @@ jobs:
       - name: Set build metadata
         run: echo "TAU_COMMIT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
       - name: Build release
-        run: cargo build --release --bin tau --package cli
+        run: cargo build --release --bin tau --bin cli
         env:
           RELEASE_CHANNEL: stable
           TAU_BUNDLE: "true"
@@ -95,7 +95,7 @@ jobs:
       - name: Set build metadata
         run: echo "TAU_COMMIT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
       - name: Build release
-        run: cargo build --release --bin tau --package cli
+        run: cargo build --release --bin tau --bin cli
         env:
           RELEASE_CHANNEL: stable
           TAU_BUNDLE: "true"
@@ -147,7 +147,7 @@ jobs:
         shell: bash
         run: echo "TAU_COMMIT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
       - name: Build release
-        run: cargo build --release --bin tau --package cli
+        run: cargo build --release --bin tau --bin cli
         env:
           RUSTFLAGS: "-Ctarget-feature=+crt-static -D warnings"
           RELEASE_CHANNEL: stable
