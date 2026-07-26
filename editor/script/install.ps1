@@ -172,6 +172,7 @@ if (-not $NoStartMenu) {
     $Shortcut.TargetPath = $BINARY_PATH
     $Shortcut.WorkingDirectory = $INSTALL_DIR
     $Shortcut.Description = "TAU - The Artificial Ultimate AI Code Editor"
+    $Shortcut.IconLocation = "$BINARY_PATH,0"
     $Shortcut.Save()
     Write-OK "Start Menu shortcut created"
 }
@@ -185,6 +186,7 @@ if (-not $NoDesktop) {
     $Shortcut.TargetPath = $BINARY_PATH
     $Shortcut.WorkingDirectory = $INSTALL_DIR
     $Shortcut.Description = "TAU - The Artificial Ultimate AI Code Editor"
+    $Shortcut.IconLocation = "$BINARY_PATH,0"
     $Shortcut.Save()
     Write-OK "Desktop shortcut created"
 }
