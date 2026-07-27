@@ -11434,11 +11434,11 @@ impl EditorSnapshot {
             let shows_folds = is_singleton && gutter_settings.folds;
 
             let right_padding = if shows_folds && show_line_numbers {
-                ch_width * 4.0
-            } else if shows_folds || (!is_singleton && show_line_numbers) {
                 ch_width * 3.0
+            } else if shows_folds || (!is_singleton && show_line_numbers) {
+                ch_width * 2.0
             } else if show_line_numbers {
-                ch_width
+                ch_width * 0.5
             } else {
                 px(0.)
             };
