@@ -151,9 +151,21 @@ impl BrowserSession {
             .spawn()
             .context("Failed to launch Chrome")?;
 
-        std::thread::sleep(Duration::from_millis(500));
-
-        let ws_url = get_ws_url(port).context("Failed to get WebSocket URL")?;
+        let mut ws_url = None;
+        for attempt in 0..10 {
+            match get_ws_url(port) {
+                Ok(url) => {
+                    ws_url = Some(url);
+                    break;
+                }
+                Err(_) => {
+                    if attempt < 9 {
+                        std::thread::sleep(Duration::from_millis(200 * (attempt as u64 + 1)));
+                    }
+                }
+            }
+        }
+        let ws_url = ws_url.context("Failed to get WebSocket URL after retries")?;
         let client = CdpClient::connect(&ws_url)?;
 
         Ok(Self {
@@ -170,7 +182,32 @@ impl BrowserSession {
 
     pub fn navigate(&self, url: &str) -> Result<()> {
         self.send_command("Page.navigate", json!({ "url": url }))?;
-        std::thread::sleep(Duration::from_millis(500));
+
+        let start = Instant::now();
+        let timeout = Duration::from_secs(30);
+        loop {
+            let result = self.send_command("Runtime.evaluate", json!({
+                "expression": "document.readyState",
+                "returnByValue": true
+            }))?;
+
+            let state = result
+                .get("result")
+                .and_then(|v| v.get("value"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+
+            if state == "complete" || state == "interactive" {
+                break;
+            }
+
+            if start.elapsed() > timeout {
+                break;
+            }
+
+            std::thread::sleep(Duration::from_millis(200));
+        }
+
         Ok(())
     }
 

@@ -104,6 +104,25 @@ fn find_browser_candidates() -> Vec<BrowserDetection> {
 
 #[allow(clippy::disallowed_methods, reason = "Browser tool uses blocking command execution for Chrome detection")]
 fn find_chrome() -> Option<BrowserDetection> {
+    if let Ok(custom_path) = std::env::var("TAU_CHROME_PATH") {
+        let path = custom_path.trim().to_string();
+        if !path.is_empty() && std::path::Path::new(&path).exists() {
+            let os = detect_os();
+            let detection = BrowserDetection {
+                path,
+                name: "Custom Browser",
+                os,
+            };
+            if test_chrome_headless(&detection.path).is_ok() {
+                return Some(detection);
+            }
+            log::warn!(
+                "TAU_CHROME_PATH is set but browser cannot run headless: {}",
+                detection.path
+            );
+        }
+    }
+
     let candidates = find_browser_candidates();
 
     let mut first_existing: Option<BrowserDetection> = None;
@@ -216,21 +235,25 @@ fn test_chrome_headless(chrome_path: &str) -> Result<()> {
 
 fn chrome_error(detection: Option<&BrowserDetection>) -> String {
     let os = detect_os();
+    let env_hint = "\n\nTip: Set TAU_CHROME_PATH environment variable to the full path of your \
+                    browser executable to bypass auto-detection.\n\
+                    Example: export TAU_CHROME_PATH=/usr/bin/chromium-browser";
     match detection {
         Some(browser) => {
             format!(
                 "Found {} at {} but it cannot run in headless mode.\n\n\
                  Possible causes:\n\
                  - Missing system libraries (common on headless/Linux servers)\n\
-                 - Chrome is too old and does not support --headless=new\n\
+                 - Chrome is too old and does not support --headless=new (requires Chrome 112+)\n\
                  - Another Chrome instance is blocking the debug port\n\n\
                  Install command: {}\n\n\
                  Alternative: install Chromium which has fewer dependencies:\n\
-                 {}",
+                 {}{}",
                 browser.human_name(),
                 browser.path,
                 browser.install_command(),
                 if os == "linux" { "sudo apt install chromium-browser" } else { browser.install_command() },
+                env_hint,
             )
         }
         None => {
@@ -257,6 +280,7 @@ fn chrome_error(detection: Option<&BrowserDetection>) -> String {
                     msg.push_str("  - Any Chromium-based browser (Chrome, Chromium, Brave, Edge)\n");
                 }
             }
+            msg.push_str(env_hint);
             msg
         }
     }

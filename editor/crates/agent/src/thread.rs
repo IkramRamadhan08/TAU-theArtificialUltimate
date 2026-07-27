@@ -1,12 +1,18 @@
 use crate::{
-    ApplyCodeActionTool, BrowserClickTool, BrowserCloseTool, BrowserFillTool, BrowserNavigateTool,
-    BrowserPressKeyTool, BrowserScreenshotTool, BrowserScrollTool, BrowserTypeTool,
-    BrowserWaitTool, CodeActionStore, ContextServerRegistry, CopyPathTool, CreateDirectoryTool,
-    CreateThreadTool, CredentialStore, DbLanguageModel, DbThread, DeletePathTool, DiagnosticsTool,
-    EditFileTool, FetchTool, FindPathTool, FindReferencesTool, GitBranchTool, GitCommitTool,
-    GitLogTool, GitPushTool, GitStatusTool, GetCodeActionsTool, GoToDefinitionTool, GrepTool,
-    ListAgentsAndModelsTool, ListDirectoryTool, MovePathTool, ProjectSnapshot, ReadFileTool,
-    RenameTool, RequestCredentialTool, SandboxedTerminalTool, SearchSemanticTool, SpawnAgentTool,
+    ApplyCodeActionTool, BrowserAccessibilityTreeTool, BrowserClickAtXyTool, BrowserClickTool,
+    BrowserClickByIndexTool, BrowserCloseTool, BrowserCookiesGetTool, BrowserCookiesSetTool,
+    BrowserCookiesDeleteTool, BrowserDispatchKeyTool, BrowserDownloadsTool, BrowserEvaluateTool,
+    BrowserFillTool, BrowserFillByIndexTool, BrowserIframeTool, BrowserNavigateTool,
+    BrowserPageInfoTool, BrowserPressKeyTool, BrowserScreenshotTool, BrowserScrollTool,
+    BrowserShadowDomClickTool, BrowserShadowDomFillTool, BrowserShadowDomQueryTool,
+    BrowserTabsTool, BrowserTypeTool, BrowserTypeByIndexTool, BrowserUploadFileTool,
+    BrowserWaitForLoadTool, BrowserWaitForNetworkIdleTool, BrowserWaitTool, CodeActionStore,
+    ContextServerRegistry, CopyPathTool, CreateDirectoryTool, CreateThreadTool, CredentialStore,
+    DbLanguageModel, DbThread, DeletePathTool, DiagnosticsTool, EditFileTool, FetchTool,
+    FindPathTool, FindReferencesTool, GitBranchTool, GitCommitTool, GitLogTool, GitPushTool,
+    GitStatusTool, GetCodeActionsTool, GoToDefinitionTool, GrepTool, ListAgentsAndModelsTool,
+    ListDirectoryTool, MovePathTool, ProjectSnapshot, ReadFileTool, RenameTool,
+    RequestCredentialTool, SandboxedTerminalTool, SearchSemanticTool, SpawnAgentTool,
     SystemPromptTemplate, Template, Templates, TerminalTool, WebSearchTool, WriteFileTool,
 };
 use acp_thread::UserMessageId;
@@ -1007,6 +1013,26 @@ impl Thread {
         self.add_tool(BrowserPressKeyTool);
         self.add_tool(BrowserWaitTool);
         self.add_tool(BrowserCloseTool);
+        self.add_tool(BrowserAccessibilityTreeTool);
+        self.add_tool(BrowserClickByIndexTool);
+        self.add_tool(BrowserTypeByIndexTool);
+        self.add_tool(BrowserFillByIndexTool);
+        self.add_tool(BrowserEvaluateTool);
+        self.add_tool(BrowserTabsTool);
+        self.add_tool(BrowserPageInfoTool);
+        self.add_tool(BrowserClickAtXyTool);
+        self.add_tool(BrowserWaitForLoadTool);
+        self.add_tool(BrowserWaitForNetworkIdleTool);
+        self.add_tool(BrowserUploadFileTool);
+        self.add_tool(BrowserDispatchKeyTool);
+        self.add_tool(BrowserIframeTool);
+        self.add_tool(BrowserCookiesGetTool);
+        self.add_tool(BrowserCookiesSetTool);
+        self.add_tool(BrowserCookiesDeleteTool);
+        self.add_tool(BrowserShadowDomQueryTool);
+        self.add_tool(BrowserShadowDomClickTool);
+        self.add_tool(BrowserShadowDomFillTool);
+        self.add_tool(BrowserDownloadsTool);
 
         self.add_tool(DiagnosticsTool::new(self.project.clone()));
         self.add_tool(GitStatusTool::new(self.project.clone()));
