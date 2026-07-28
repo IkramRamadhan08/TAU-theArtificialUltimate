@@ -78,9 +78,13 @@ fn find_browser_candidates() -> Vec<BrowserDetection> {
             BrowserDetection { path: format!("{}\\Google\\Chrome\\Application\\chrome.exe", local_app_data), name: "Google Chrome", os },
             BrowserDetection { path: format!("{}\\Google\\Chrome\\Application\\chrome.exe", program_files), name: "Google Chrome", os },
             BrowserDetection { path: format!("{}\\Google\\Chrome\\Application\\chrome.exe", program_files_x86), name: "Google Chrome", os },
+            BrowserDetection { path: format!("{}\\Microsoft\\Edge\\Application\\msedge.exe", local_app_data), name: "Microsoft Edge", os },
             BrowserDetection { path: format!("{}\\Microsoft\\Edge\\Application\\msedge.exe", program_files), name: "Microsoft Edge", os },
             BrowserDetection { path: format!("{}\\Microsoft\\Edge\\Application\\msedge.exe", program_files_x86), name: "Microsoft Edge", os },
             BrowserDetection { path: format!("{}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe", local_app_data), name: "Brave Browser", os },
+            BrowserDetection { path: format!("{}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe", program_files), name: "Brave Browser", os },
+            BrowserDetection { path: format!("{}\\Opera Software\\Opera Stable\\opera.exe", local_app_data), name: "Opera", os },
+            BrowserDetection { path: format!("{}\\Vivaldi\\Application\\vivaldi.exe", local_app_data), name: "Vivaldi", os },
         ]);
     } else {
         candidates.extend([
@@ -137,7 +141,7 @@ fn find_chrome() -> Option<BrowserDetection> {
     }
 
     let which_cmd = if cfg!(target_os = "windows") { "where" } else { "which" };
-    for name in &["google-chrome", "chromium", "chromium-browser", "chrome", "brave-browser", "microsoft-edge"] {
+    for name in &["google-chrome", "chromium", "chromium-browser", "chrome", "brave-browser", "microsoft-edge", "opera", "vivaldi"] {
         if let Ok(output) = std::process::Command::new(which_cmd).arg(name).output() {
             if output.status.success() {
                 let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -150,6 +154,8 @@ fn find_chrome() -> Option<BrowserDetection> {
                             "chromium" | "chromium-browser" => "Chromium",
                             "brave-browser" => "Brave Browser",
                             "microsoft-edge" => "Microsoft Edge",
+                            "opera" => "Opera",
+                            "vivaldi" => "Vivaldi",
                             _ => "Chromium-based browser",
                         },
                         os,
@@ -281,6 +287,8 @@ fn chrome_error(detection: Option<&BrowserDetection>) -> String {
                     msg.push_str("  - Google Chrome: https://www.google.com/chrome/\n");
                     msg.push_str("  - Microsoft Edge: https://www.microsoft.com/edge\n");
                     msg.push_str("  - Brave: https://brave.com/download/\n");
+                    msg.push_str("  - Opera: https://www.opera.com/download\n");
+                    msg.push_str("  - Vivaldi: https://vivaldi.com/download/\n");
                 }
                 _ => {
                     msg.push_str("  - Any Chromium-based browser (Chrome, Chromium, Brave, Edge)\n");
