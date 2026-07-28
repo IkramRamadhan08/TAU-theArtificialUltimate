@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::Duration;
-use std::io::{Read, Write};
 
 use crate::{AgentTool, ToolCallEventStream, ToolInput};
 use agent_client_protocol::schema as acp;
@@ -11,7 +10,6 @@ use html_to_markdown::convert_html_to_markdown;
 use language_model::{LanguageModelImage, LanguageModelToolResultContent};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::process::Stdio;
 use ui::SharedString;
 
 use super::browser_session::{BrowserSession, format_accessibility_tree};
@@ -112,31 +110,19 @@ fn find_chrome() -> Option<BrowserDetection> {
         let path = custom_path.trim().to_string();
         if !path.is_empty() && std::path::Path::new(&path).exists() {
             let os = detect_os();
-            let detection = BrowserDetection {
+            return Some(BrowserDetection {
                 path,
                 name: "Custom Browser",
                 os,
-            };
-            if test_chrome_headless(&detection.path).is_ok() {
-                return Some(detection);
-            }
-            log::warn!(
-                "TAU_CHROME_PATH is set but browser cannot run headless: {}",
-                detection.path
-            );
+            });
         }
     }
 
     let candidates = find_browser_candidates();
 
-    let mut found_but_failed: Vec<String> = Vec::new();
-
     for candidate in &candidates {
         if std::path::Path::new(&candidate.path).exists() {
-            if test_chrome_headless(&candidate.path).is_ok() {
-                return Some(candidate.clone());
-            }
-            found_but_failed.push(format!("{} ({})", candidate.human_name(), candidate.path));
+            return Some(candidate.clone());
         }
     }
 
@@ -147,7 +133,7 @@ fn find_chrome() -> Option<BrowserDetection> {
                 let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 if !path.is_empty() && std::path::Path::new(&path).exists() {
                     let os = detect_os();
-                    let detection = BrowserDetection {
+                    return Some(BrowserDetection {
                         path,
                         name: match *name {
                             "google-chrome" | "chrome" => "Google Chrome",
@@ -159,87 +145,13 @@ fn find_chrome() -> Option<BrowserDetection> {
                             _ => "Chromium-based browser",
                         },
                         os,
-                    };
-                    if test_chrome_headless(&detection.path).is_ok() {
-                        return Some(detection);
-                    }
-                    found_but_failed.push(format!("{} ({})", detection.human_name(), detection.path));
+                    });
                 }
             }
         }
-    }
-
-    if !found_but_failed.is_empty() {
-        log::warn!(
-            "Found browsers but none can run headless: {}",
-            found_but_failed.join(", ")
-        );
     }
 
     None
-}
-
-#[allow(clippy::disallowed_methods, reason = "Browser tool uses blocking command execution for Chrome detection")]
-fn test_chrome_headless(chrome_path: &str) -> Result<()> {
-    let port = {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0")
-            .context("Failed to bind test port")?;
-        let p = listener.local_addr()?.port();
-        drop(listener);
-        p
-    };
-
-    let mut child = std::process::Command::new(chrome_path)
-        .arg("--headless=new")
-        .arg("--no-sandbox")
-        .arg("--disable-gpu")
-        .arg("--disable-dev-shm-usage")
-        .arg("--disable-extensions")
-        .arg(format!("--remote-debugging-port={}", port))
-        .arg("about:blank")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .context("Failed to spawn Chrome headless test")?;
-
-    let deadline = std::time::Instant::now() + Duration::from_secs(10);
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                let mut stderr = String::new();
-                if let Some(ref mut pipe) = child.stderr {
-                    use std::io::Read;
-                    let _ = pipe.read_to_string(&mut stderr);
-                }
-                anyhow::bail!(
-                    "Chrome headless test failed (exit {}): {}",
-                    status.code().unwrap_or(-1),
-                    stderr.lines().take(3).collect::<Vec<_>>().join(" | ")
-                );
-            }
-            Ok(None) => {
-                if std::time::Instant::now() >= deadline {
-                    let _ = child.kill();
-                    anyhow::bail!("Chrome headless test timed out after 10s — browser may be hanging");
-                }
-                if let Ok(mut probe) = std::net::TcpStream::connect(format!("127.0.0.1:{}", port)) {
-                    let _ = probe.write_all(b"GET /json/version HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
-                    let mut buf = [0u8; 4096];
-                    if let Ok(n) = probe.read(&mut buf) {
-                        let resp = String::from_utf8_lossy(&buf[..n]);
-                        if resp.contains("webSocketDebuggerUrl") {
-                            let _ = child.kill();
-                            return Ok(());
-                        }
-                    }
-                }
-                std::thread::sleep(Duration::from_millis(100));
-            }
-            Err(e) => {
-                anyhow::bail!("Failed to check Chrome headless test status: {}", e);
-            }
-        }
-    }
 }
 
 fn chrome_error(detection: Option<&BrowserDetection>) -> String {
@@ -313,8 +225,13 @@ where
             if let Some(mut old) = guard.take() {
                 old.close();
             }
-            let session = BrowserSession::launch(&chrome)?;
-            *guard = Some(session);
+
+            if let Some(session) = super::browser_session::try_attach_existing() {
+                *guard = Some(session);
+            } else {
+                let session = BrowserSession::launch(&chrome)?;
+                *guard = Some(session);
+            }
         }
 
         f(guard.as_mut().unwrap())

@@ -128,12 +128,27 @@ impl CdpClient {
 }
 
 pub struct BrowserSession {
-    child: Child,
+    child: Option<Child>,
     _debug_port: u16,
     client: std::sync::Mutex<CdpClient>,
 }
 
 impl BrowserSession {
+    fn new(client: CdpClient, child: Option<Child>, debug_port: u16) -> Self {
+        Self {
+            child,
+            _debug_port: debug_port,
+            client: std::sync::Mutex::new(client),
+        }
+    }
+
+    pub fn attach(port: u16) -> Result<Self> {
+        let ws_url = get_ws_url(port)
+            .context("Failed to get WebSocket URL from existing browser")?;
+        let client = CdpClient::connect(&ws_url)?;
+        Ok(Self::new(client, None, port))
+    }
+
     pub fn launch(chrome_path: &str) -> Result<Self> {
         let port = find_free_port()?;
 
@@ -168,11 +183,7 @@ impl BrowserSession {
         let ws_url = ws_url.context("Failed to get WebSocket URL after retries")?;
         let client = CdpClient::connect(&ws_url)?;
 
-        Ok(Self {
-            child,
-            _debug_port: port,
-            client: std::sync::Mutex::new(client),
-        })
+        Ok(Self::new(client, Some(child), port))
     }
 
     pub fn send_command(&self, method: &str, params: Value) -> Result<Value> {
@@ -1030,27 +1041,34 @@ impl BrowserSession {
     }
 
     pub fn is_alive(&self) -> bool {
-        self.child.id() != 0
+        match &self.child {
+            Some(child) => child.id() != 0,
+            None => true,
+        }
     }
 
     pub fn close(&mut self) {
-        let alive = self.child.id() != 0;
-
-        if alive {
+        if let Some(ref mut child) = self.child {
+            if child.id() != 0 {
+                if let Ok(client) = self.client.get_mut() {
+                    client.close();
+                }
+                let _ = child.kill();
+            }
+        } else {
             if let Ok(client) = self.client.get_mut() {
                 client.close();
             }
-            let _ = self.child.kill();
         }
     }
 }
 
 impl Drop for BrowserSession {
     fn drop(&mut self) {
-        let alive = self.child.id() != 0;
-
-        if alive {
-            let _ = self.child.kill();
+        if let Some(ref mut child) = self.child {
+            if child.id() != 0 {
+                let _ = child.kill();
+            }
         }
     }
 }
@@ -1060,6 +1078,18 @@ fn find_free_port() -> Result<u16> {
     let port = listener.local_addr()?.port();
     drop(listener);
     Ok(port)
+}
+
+pub fn try_attach_existing() -> Option<BrowserSession> {
+    for port in 9222..9232 {
+        if get_ws_url(port).is_ok() {
+            if let Ok(session) = BrowserSession::attach(port) {
+                log::info!("Attached to existing browser on port {}", port);
+                return Some(session);
+            }
+        }
+    }
+    None
 }
 
 fn get_ws_url(port: u16) -> Result<String> {
