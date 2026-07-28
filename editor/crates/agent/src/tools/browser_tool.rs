@@ -125,16 +125,14 @@ fn find_chrome() -> Option<BrowserDetection> {
 
     let candidates = find_browser_candidates();
 
-    let mut first_existing: Option<BrowserDetection> = None;
+    let mut found_but_failed: Vec<String> = Vec::new();
 
     for candidate in &candidates {
         if std::path::Path::new(&candidate.path).exists() {
-            if first_existing.is_none() {
-                first_existing = Some(candidate.clone());
-            }
             if test_chrome_headless(&candidate.path).is_ok() {
                 return Some(candidate.clone());
             }
+            found_but_failed.push(format!("{} ({})", candidate.human_name(), candidate.path));
         }
     }
 
@@ -156,18 +154,23 @@ fn find_chrome() -> Option<BrowserDetection> {
                         },
                         os,
                     };
-                    if first_existing.is_none() {
-                        first_existing = Some(detection.clone());
-                    }
                     if test_chrome_headless(&detection.path).is_ok() {
                         return Some(detection);
                     }
+                    found_but_failed.push(format!("{} ({})", detection.human_name(), detection.path));
                 }
             }
         }
     }
 
-    first_existing
+    if !found_but_failed.is_empty() {
+        log::warn!(
+            "Found browsers but none can run headless: {}",
+            found_but_failed.join(", ")
+        );
+    }
+
+    None
 }
 
 #[allow(clippy::disallowed_methods, reason = "Browser tool uses blocking command execution for Chrome detection")]
@@ -246,10 +249,13 @@ fn chrome_error(detection: Option<&BrowserDetection>) -> String {
                  - Missing system libraries (common on headless/Linux servers)\n\
                  - Chrome is too old and does not support --headless=new (requires Chrome 112+)\n\
                  - Another Chrome instance is blocking the debug port\n\n\
+                 Debug: try running this command to check:\n\
+                 {} --headless=new --no-sandbox --disable-gpu --dump-dom about:blank\n\n\
                  Install command: {}\n\n\
                  Alternative: install Chromium which has fewer dependencies:\n\
                  {}{}",
                 browser.human_name(),
+                browser.path,
                 browser.path,
                 browser.install_command(),
                 if os == "linux" { "sudo apt install chromium-browser" } else { browser.install_command() },
@@ -257,7 +263,7 @@ fn chrome_error(detection: Option<&BrowserDetection>) -> String {
             )
         }
         None => {
-            let mut msg = "No Chromium-based browser found on this system.\n\n".to_string();
+            let mut msg = "No Chromium-based browser found or browser cannot run in headless mode.\n\n".to_string();
             msg.push_str(&format!("Detected OS: {}\n\n", os));
             msg.push_str("Install one of these:\n");
             match os {
@@ -280,6 +286,7 @@ fn chrome_error(detection: Option<&BrowserDetection>) -> String {
                     msg.push_str("  - Any Chromium-based browser (Chrome, Chromium, Brave, Edge)\n");
                 }
             }
+            msg.push_str("\nIf a browser is already installed, it may be missing headless dependencies.");
             msg.push_str(env_hint);
             msg
         }
