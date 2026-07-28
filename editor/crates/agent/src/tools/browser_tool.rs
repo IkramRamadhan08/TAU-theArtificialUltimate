@@ -225,13 +225,8 @@ where
             if let Some(mut old) = guard.take() {
                 old.close();
             }
-
-            if let Some(session) = super::browser_session::try_attach_existing() {
-                *guard = Some(session);
-            } else {
-                let session = BrowserSession::launch(&chrome)?;
-                *guard = Some(session);
-            }
+            let session = BrowserSession::launch(&chrome)?;
+            *guard = Some(session);
         }
 
         f(guard.as_mut().unwrap())

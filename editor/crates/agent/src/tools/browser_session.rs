@@ -142,13 +142,6 @@ impl BrowserSession {
         }
     }
 
-    pub fn attach(port: u16) -> Result<Self> {
-        let ws_url = get_ws_url(port)
-            .context("Failed to get WebSocket URL from existing browser")?;
-        let client = CdpClient::connect(&ws_url)?;
-        Ok(Self::new(client, None, port))
-    }
-
     pub fn launch(chrome_path: &str) -> Result<Self> {
         let port = find_free_port()?;
 
@@ -1078,18 +1071,6 @@ fn find_free_port() -> Result<u16> {
     let port = listener.local_addr()?.port();
     drop(listener);
     Ok(port)
-}
-
-pub fn try_attach_existing() -> Option<BrowserSession> {
-    for port in 9222..9232 {
-        if get_ws_url(port).is_ok() {
-            if let Ok(session) = BrowserSession::attach(port) {
-                log::info!("Attached to existing browser on port {}", port);
-                return Some(session);
-            }
-        }
-    }
-    None
 }
 
 fn get_ws_url(port: u16) -> Result<String> {
