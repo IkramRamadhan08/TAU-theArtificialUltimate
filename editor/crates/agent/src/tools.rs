@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 mod apply_code_action_tool;
 #[allow(clippy::disallowed_methods, reason = "Browser session uses blocking I/O intentionally for CDP communication")]
 mod browser_session;
@@ -270,4 +272,8 @@ pub fn tool_feature_flag_enabled(tool_name: &str, cx: &App) -> bool {
         }
         _ => true,
     }
+}
+
+pub fn init_browser_http_client(http_client: Arc<http_client::HttpClientWithUrl>) {
+    browser_tool::init_browser_http_client(http_client);
 }

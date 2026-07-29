@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use futures::AsyncReadExt;
-use http_client::HttpClient;
+use http_client::HttpClientWithUrl;
 use serde::Deserialize;
 use util::archive::extract_zip;
 use util::fs::make_file_executable;
@@ -15,6 +15,7 @@ const FALLBACK_VERSION: &str = "131.0.6778.85";
 
 pub struct BrowserRuntime {
     pub binary_path: PathBuf,
+    #[allow(dead_code)]
     pub version: String,
 }
 
@@ -38,6 +39,7 @@ struct Downloads {
 #[derive(Deserialize)]
 struct DownloadEntry {
     platform: String,
+    #[allow(dead_code)]
     url: String,
 }
 
@@ -95,7 +97,7 @@ async fn validate_binary(binary_path: &Path) -> bool {
     }
 }
 
-async fn fetch_latest_version(http: &Arc<dyn HttpClient>) -> Result<String> {
+async fn fetch_latest_version(http: &Arc<HttpClientWithUrl>) -> Result<String> {
     let mut response = http
         .get(CFT_VERSION_LIST_URL, Default::default(), true)
         .await
@@ -130,7 +132,7 @@ async fn fetch_latest_version(http: &Arc<dyn HttpClient>) -> Result<String> {
     Ok(version)
 }
 
-pub async fn ensure_browser_installed(http: &Arc<dyn HttpClient>) -> Result<BrowserRuntime> {
+pub async fn ensure_browser_installed(http: &Arc<HttpClientWithUrl>) -> Result<BrowserRuntime> {
     let platform = platform_string()?;
 
     let version = match fetch_latest_version(http).await {
@@ -180,14 +182,14 @@ pub async fn ensure_browser_installed(http: &Arc<dyn HttpClient>) -> Result<Brow
 }
 
 async fn download_and_extract(
-    http: &Arc<dyn HttpClient>,
+    http: &Arc<HttpClientWithUrl>,
     version: &str,
     platform: &str,
 ) -> Result<()> {
     let url = cft_download_url(version, platform);
     log::info!("Downloading from {url}");
 
-    let mut response = http
+    let response = http
         .get(&url, Default::default(), true)
         .await
         .context("Failed to download Chrome for Testing")?;

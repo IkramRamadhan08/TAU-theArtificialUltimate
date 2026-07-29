@@ -1,12 +1,12 @@
 use std::sync::Arc;
 use std::sync::OnceLock;
-use std::time::Duration;
 
 use crate::{AgentTool, ToolCallEventStream, ToolInput};
 use agent_client_protocol::schema as acp;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use gpui::{App, AppContext, AsyncApp, Task};
 use html_to_markdown::convert_html_to_markdown;
+use http_client::HttpClientWithUrl;
 use language_model::{LanguageModelImage, LanguageModelToolResultContent};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -20,24 +20,46 @@ fn global_session() -> &'static std::sync::Mutex<Option<BrowserSession>> {
     SESSION.get_or_init(|| std::sync::Mutex::new(None))
 }
 
+fn global_http_client() -> &'static OnceLock<Arc<HttpClientWithUrl>> {
+    static CLIENT: OnceLock<Arc<HttpClientWithUrl>> = OnceLock::new();
+    &CLIENT
+}
+
+pub fn init_browser_http_client(http_client: Arc<HttpClientWithUrl>) {
+    let _ = global_http_client().set(http_client);
+}
+
 async fn with_session<R>(cx: &AsyncApp, f: impl FnOnce(&mut BrowserSession) -> Result<R> + Send + 'static) -> Result<R>
 where
     R: Send + 'static,
 {
-    let http = cx.http_client().clone();
+    let http = global_http_client().get().expect("HTTP client not initialized for browser tools").clone();
     let task: Task<Result<R>> = cx.background_spawn(async move {
-        let mut guard = global_session().lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+        let session = {
+            let mut guard = global_session().lock().map_err(|e| anyhow::anyhow!("{}", e))?;
+            guard.take()
+        };
 
-        if guard.is_none() || !guard.as_ref().unwrap().is_alive() {
-            if let Some(mut old) = guard.take() {
+        let mut session = match session {
+            Some(s) if s.is_alive() => s,
+            Some(mut old) => {
                 old.close();
+                let runtime = browser_runtime::ensure_browser_installed(&http).await?;
+                BrowserSession::launch(runtime.binary_path.to_str().unwrap_or_default())?
             }
-            let runtime = browser_runtime::ensure_browser_installed(&http).await?;
-            let session = BrowserSession::launch(runtime.binary_path.to_str().unwrap_or_default())?;
+            None => {
+                let runtime = browser_runtime::ensure_browser_installed(&http).await?;
+                BrowserSession::launch(runtime.binary_path.to_str().unwrap_or_default())?
+            }
+        };
+
+        let result = f(&mut session);
+
+        if let Ok(mut guard) = global_session().lock() {
             *guard = Some(session);
         }
 
-        f(guard.as_mut().unwrap())
+        result
     });
 
     task.await
