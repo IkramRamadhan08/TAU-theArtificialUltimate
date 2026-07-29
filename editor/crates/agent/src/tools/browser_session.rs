@@ -131,34 +131,39 @@ pub struct BrowserSession {
     child: Option<Child>,
     _debug_port: u16,
     client: std::sync::Mutex<CdpClient>,
+    _temp_dir: Option<tempfile::TempDir>,
 }
 
 impl BrowserSession {
-    fn new(client: CdpClient, child: Option<Child>, debug_port: u16) -> Self {
+    fn new(client: CdpClient, child: Option<Child>, debug_port: u16, temp_dir: Option<tempfile::TempDir>) -> Self {
         Self {
             child,
             _debug_port: debug_port,
             client: std::sync::Mutex::new(client),
+            _temp_dir: temp_dir,
         }
     }
 
-    pub fn launch(chrome_path: &str) -> Result<Self> {
+    pub fn launch(browser_path: &str) -> Result<Self> {
         let port = find_free_port()?;
+        let temp_dir = tempfile::tempdir().context("Failed to create temp dir for browser")?;
 
-        let child = Command::new(chrome_path)
+        let child = Command::new(browser_path)
             .arg("--headless=new")
             .arg("--disable-gpu")
             .arg("--no-sandbox")
             .arg("--disable-dev-shm-usage")
             .arg("--disable-extensions")
             .arg("--window-size=1280,720")
-            .arg(format!("--remote-debugging-port={}", port))
+            .arg(format!("--remote-debugging-port={port}"))
+            .arg(format!("--user-data-dir={}", temp_dir.path().display()))
             .arg("about:blank")
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .context("Failed to launch Chrome")?;
+            .context("Failed to launch browser")?;
 
+        let mut last_error = String::from("no attempts made");
         let mut ws_url = None;
         for attempt in 0..10 {
             match get_ws_url(port) {
@@ -166,17 +171,21 @@ impl BrowserSession {
                     ws_url = Some(url);
                     break;
                 }
-                Err(_) => {
+                Err(e) => {
+                    last_error = e.to_string();
                     if attempt < 9 {
                         std::thread::sleep(Duration::from_millis(200 * (attempt as u64 + 1)));
                     }
                 }
             }
         }
-        let ws_url = ws_url.context("Failed to get WebSocket URL after retries")?;
+        let ws_url = ws_url.context(format!(
+            "Failed to get WebSocket URL from browser debug port {port}. \
+             Last error: {last_error}"
+        ))?;
         let client = CdpClient::connect(&ws_url)?;
 
-        Ok(Self::new(client, Some(child), port))
+        Ok(Self::new(client, Some(child), port, Some(temp_dir)))
     }
 
     pub fn send_command(&self, method: &str, params: Value) -> Result<Value> {
@@ -1074,13 +1083,23 @@ fn find_free_port() -> Result<u16> {
 }
 
 fn get_ws_url(port: u16) -> Result<String> {
-    let mut client = TcpStream::connect(format!("127.0.0.1:{}", port))?;
+    match try_get_ws_url_from_json_version(port) {
+        Ok(url) => return Ok(url),
+        Err(e) => {
+            log::warn!("/json/version on port {port} failed: {e}, trying /json/list");
+        }
+    }
+
+    try_get_ws_url_from_json_list(port)
+}
+
+fn http_get(port: u16, path: &str) -> Result<String> {
+    let mut client = TcpStream::connect(format!("127.0.0.1:{port}"))?;
     client.set_read_timeout(Some(CDP_READ_TIMEOUT))?;
     client.set_write_timeout(Some(CDP_WRITE_TIMEOUT))?;
 
     let request = format!(
-        "GET /json/version HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nConnection: close\r\n\r\n",
-        port
+        "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n",
     );
 
     client.write_all(request.as_bytes())?;
@@ -1097,20 +1116,49 @@ fn get_ws_url(port: u16) -> Result<String> {
 
     let response = String::from_utf8_lossy(&response);
 
+    let status_line = response.lines().next().unwrap_or("");
+    if !status_line.contains("200") {
+        anyhow::bail!("HTTP {status_line}");
+    }
+
     let body = response
         .split("\r\n\r\n")
         .nth(1)
         .unwrap_or("");
 
-    let json: Value = serde_json::from_str(body)
-        .context("Failed to parse Chrome version JSON")?;
+    Ok(body.to_string())
+}
+
+fn try_get_ws_url_from_json_version(port: u16) -> Result<String> {
+    let body = http_get(port, "/json/version")?;
+
+    let json: Value = serde_json::from_str(&body)
+        .context("Failed to parse /json/version JSON")?;
 
     let ws_url = json
         .get("webSocketDebuggerUrl")
         .and_then(|v| v.as_str())
-        .context("No webSocketDebuggerUrl in response")?;
+        .context("No webSocketDebuggerUrl in /json/version response")?;
 
     Ok(ws_url.to_string())
+}
+
+fn try_get_ws_url_from_json_list(port: u16) -> Result<String> {
+    let body = http_get(port, "/json/list")?;
+
+    let targets: Vec<Value> = serde_json::from_str(&body)
+        .context("Failed to parse /json/list JSON")?;
+
+    let ws_url = targets
+        .iter()
+        .find_map(|t| {
+            t.get("webSocketDebuggerUrl")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        })
+        .context("No webSocketDebuggerUrl found in /json/list targets")?;
+
+    Ok(ws_url)
 }
 
 fn build_accessibility_tree(node_id: u64, nodes_by_id: &HashMap<u64, Value>) -> AccessibilityNode {
