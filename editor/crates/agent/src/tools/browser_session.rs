@@ -148,7 +148,7 @@ impl BrowserSession {
         let port = find_free_port()?;
         let temp_dir = tempfile::tempdir().context("Failed to create temp dir for browser")?;
 
-        let child = Command::new(browser_path)
+        let mut child = Command::new(browser_path)
             .arg("--headless=new")
             .arg("--disable-gpu")
             .arg("--no-sandbox")
@@ -166,6 +166,13 @@ impl BrowserSession {
         let mut last_error = String::from("no attempts made");
         let mut ws_url = None;
         for attempt in 0..10 {
+            if let Ok(Some(_)) = child.try_wait() {
+                anyhow::bail!(
+                    "Browser process exited early during startup on port {port}. \
+                     Check that '{}' is a valid Chrome/Chromium binary.",
+                    browser_path
+                );
+            }
             match get_ws_url(port) {
                 Ok(url) => {
                     ws_url = Some(url);
@@ -183,7 +190,10 @@ impl BrowserSession {
             "Failed to get WebSocket URL from browser debug port {port}. \
              Last error: {last_error}"
         ))?;
-        let client = CdpClient::connect(&ws_url)?;
+        let mut client = CdpClient::connect(&ws_url)?;
+        client
+            .send_command("Browser.getVersion", serde_json::json!({}))
+            .context("Browser process is unresponsive after connecting")?;
 
         Ok(Self::new(client, Some(child), port, Some(temp_dir)))
     }
@@ -194,17 +204,23 @@ impl BrowserSession {
     }
 
     pub fn navigate(&self, url: &str) -> Result<()> {
-        self.send_command("Page.navigate", json!({ "url": url }))?;
+        let result = self.send_command("Page.navigate", json!({ "url": url }))?;
+
+        if let Some(error_text) = result.get("errorText").and_then(|v| v.as_str()) {
+            if !error_text.is_empty() {
+                anyhow::bail!("Navigation failed: {error_text}");
+            }
+        }
 
         let start = Instant::now();
         let timeout = Duration::from_secs(30);
         loop {
-            let result = self.send_command("Runtime.evaluate", json!({
+            let ready = self.send_command("Runtime.evaluate", json!({
                 "expression": "document.readyState",
                 "returnByValue": true
             }))?;
 
-            let state = result
+            let state = ready
                 .get("result")
                 .and_then(|v| v.get("value"))
                 .and_then(|v| v.as_str())
@@ -215,7 +231,10 @@ impl BrowserSession {
             }
 
             if start.elapsed() > timeout {
-                break;
+                anyhow::bail!(
+                    "Page did not reach readyState 'complete' within {}s (last state: '{state}')",
+                    timeout.as_secs()
+                );
             }
 
             std::thread::sleep(Duration::from_millis(200));
@@ -677,7 +696,7 @@ impl BrowserSession {
             }
 
             if start.elapsed() > timeout {
-                return Ok(false);
+                anyhow::bail!("Page did not reach readyState 'complete' within {}ms", timeout_ms);
             }
 
             std::thread::sleep(Duration::from_millis(300));
@@ -1042,24 +1061,30 @@ impl BrowserSession {
         Ok(result.get("result").cloned().unwrap_or(json!(null)))
     }
 
-    pub fn is_alive(&self) -> bool {
-        match &self.child {
-            Some(child) => child.id() != 0,
-            None => true,
+    pub fn is_alive(&mut self) -> bool {
+        match &mut self.child {
+            Some(child) => match child.try_wait() {
+                Ok(None) => true,
+                _ => false,
+            },
+            None => false,
         }
     }
 
     pub fn close(&mut self) {
+        if let Ok(client) = self.client.get_mut() {
+            client.close();
+        }
         if let Some(ref mut child) = self.child {
             if child.id() != 0 {
-                if let Ok(client) = self.client.get_mut() {
-                    client.close();
+                for _ in 0..50 {
+                    if let Ok(Some(_)) = child.try_wait() {
+                        return;
+                    }
+                    std::thread::sleep(Duration::from_millis(100));
                 }
                 let _ = child.kill();
-            }
-        } else {
-            if let Ok(client) = self.client.get_mut() {
-                client.close();
+                let _ = child.wait();
             }
         }
     }
@@ -1070,6 +1095,7 @@ impl Drop for BrowserSession {
         if let Some(ref mut child) = self.child {
             if child.id() != 0 {
                 let _ = child.kill();
+                let _ = child.wait();
             }
         }
     }

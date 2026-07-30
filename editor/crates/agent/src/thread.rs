@@ -13,7 +13,7 @@ use crate::{
     GitStatusTool, GetCodeActionsTool, GoToDefinitionTool, GrepTool, ListAgentsAndModelsTool,
     ListDirectoryTool, MovePathTool, ProjectSnapshot, ReadFileTool, RenameTool,
     RequestCredentialTool, SandboxedTerminalTool, SearchSemanticTool, SpawnAgentTool,
-    SystemPromptTemplate, Template, Templates, TerminalTool, WebSearchTool, WriteFileTool,
+    SystemPromptTemplate, Template, Templates, TerminalTool, WebSearchTool, WriteFileTool, profile_instruction,
 };
 use acp_thread::UserMessageId;
 use action_log::ActionLog;
@@ -109,6 +109,7 @@ struct SystemPromptCache {
     user_agents_md: Option<SharedString>,
     sandboxing: bool,
     require_verification: bool,
+    profile_instructions: Option<&'static str>,
 }
 
 impl SystemPromptCache {
@@ -120,6 +121,7 @@ impl SystemPromptCache {
         user_agents_md: &Option<SharedString>,
         sandboxing: bool,
         require_verification: bool,
+        profile_instructions: Option<&'static str>,
     ) -> bool {
         self.system_prompt.is_some()
             && self.available_tools == available_tools
@@ -128,6 +130,7 @@ impl SystemPromptCache {
             && self.user_agents_md == *user_agents_md
             && self.sandboxing == sandboxing
             && self.require_verification == require_verification
+            && self.profile_instructions == profile_instructions
     }
 
     fn update(
@@ -139,6 +142,7 @@ impl SystemPromptCache {
         user_agents_md: Option<SharedString>,
         sandboxing: bool,
         require_verification: bool,
+        profile_instructions: Option<&'static str>,
     ) {
         self.system_prompt = Some(system_prompt);
         self.available_tools = available_tools;
@@ -147,6 +151,7 @@ impl SystemPromptCache {
         self.user_agents_md = user_agents_md;
         self.sandboxing = sandboxing;
         self.require_verification = require_verification;
+        self.profile_instructions = profile_instructions;
     }
 }
 
@@ -1547,16 +1552,27 @@ impl Thread {
         let mut iteration_count: u32 = 0;
         // Set when a refusal fallback occurs so subsequent iterations use the fallback model.
         let mut refusal_fallback_model: Option<Arc<dyn LanguageModel>> = None;
+        let max_iterations: Option<u32> = this
+            .read_with(cx, |this, cx| {
+                AgentSettings::get_global(cx)
+                    .profiles
+                    .get(&this.profile_id)
+                    .and_then(|p| p.max_iterations)
+            })
+            .ok()
+            .flatten();
         loop {
             iteration_count += 1;
-            if iteration_count > MAX_TOOL_CALL_ITERATIONS {
-                log::warn!(
-                    "Agent reached max tool call iterations ({}), stopping turn",
-                    MAX_TOOL_CALL_ITERATIONS
-                );
-                // Notify the UI that the turn ended due to max iterations
-                event_stream.send_stop(acp::StopReason::EndTurn);
-                return Ok(());
+            if let Some(max) = max_iterations {
+                if iteration_count > max {
+                    log::warn!(
+                        "Agent reached max tool call iterations ({}), stopping turn",
+                        max
+                    );
+                    // Notify the UI that the turn ended due to max iterations
+                    event_stream.send_stop(acp::StopReason::EndTurn);
+                    return Ok(());
+                }
             }
             match Self::perform_compaction_if_needed(
                 this,
@@ -3297,6 +3313,7 @@ impl Thread {
         let date = Local::now().format("%Y-%m-%d").to_string();
         let sandboxing = crate::sandboxing::sandboxing_enabled(cx);
         let require_verification = self.require_verification;
+        let profile_instructions = profile_instruction(&self.profile_id);
 
         // Use cached system prompt if inputs haven't changed
         let system_prompt = if self.system_prompt_cache.is_valid(
@@ -3306,6 +3323,7 @@ impl Thread {
             &user_agents_md,
             sandboxing,
             require_verification,
+            profile_instructions,
         ) {
             self.system_prompt_cache.system_prompt.clone().unwrap_or_default()
         } else {
@@ -3317,6 +3335,7 @@ impl Thread {
                 user_agents_md,
                 sandboxing,
                 require_verification,
+                profile_instructions,
             }
             .render(&self.templates)
             .unwrap_or_else(|e| {
@@ -3354,6 +3373,7 @@ impl Thread {
         let date = Local::now().format("%Y-%m-%d").to_string();
         let sandboxing = crate::sandboxing::sandboxing_enabled(cx);
         let require_verification = self.require_verification;
+        let profile_instructions = profile_instruction(&self.profile_id);
 
         if !self.system_prompt_cache.is_valid(
             &available_tools,
@@ -3362,6 +3382,7 @@ impl Thread {
             &user_agents_md,
             sandboxing,
             require_verification,
+            profile_instructions,
         ) {
             let prompt = SystemPromptTemplate {
                 project: self.project_context.read(cx),
@@ -3371,6 +3392,7 @@ impl Thread {
                 user_agents_md: user_agents_md.clone(),
                 sandboxing,
                 require_verification,
+                profile_instructions,
             }
             .render(&self.templates)
             .unwrap_or_else(|e| {
@@ -3385,6 +3407,7 @@ impl Thread {
                 user_agents_md,
                 sandboxing,
                 require_verification,
+                profile_instructions,
             );
         }
     }

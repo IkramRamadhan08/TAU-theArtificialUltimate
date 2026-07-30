@@ -490,6 +490,8 @@ pub struct AgentProfileContent {
     pub context_servers: IndexMap<Arc<str>, ContextServerPresetContent>,
     /// The default language model selected when using this profile.
     pub default_model: Option<LanguageModelSelection>,
+    /// Maximum tool call iterations before stopping. None = unlimited.
+    pub max_iterations: Option<u32>,
 }
 
 #[with_fallible_options]

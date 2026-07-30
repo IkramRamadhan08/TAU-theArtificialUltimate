@@ -308,6 +308,7 @@ impl PickerDelegate for ToolPickerDelegate {
                             })
                             .collect(),
                         default_model: default_profile.default_model.clone(),
+                        max_iterations: default_profile.max_iterations,
                     });
 
                 if let Some(server_id) = server_id {

@@ -18,10 +18,14 @@ pub mod builtin_profiles {
 
     pub const WRITE: &str = "write";
     pub const ASK: &str = "ask";
-    pub const MINIMAL: &str = "minimal";
+    pub const PLAN: &str = "plan";
+    pub const GOAL: &str = "goal";
 
     pub fn is_builtin(profile_id: &AgentProfileId) -> bool {
-        profile_id.as_str() == WRITE || profile_id.as_str() == ASK || profile_id.as_str() == MINIMAL
+        matches!(
+            profile_id.as_str(),
+            WRITE | ASK | PLAN | GOAL
+        )
     }
 }
 
@@ -70,6 +74,9 @@ impl AgentProfile {
         let default_model = base_profile
             .as_ref()
             .and_then(|profile| profile.default_model.clone());
+        let max_iterations = base_profile
+            .as_ref()
+            .and_then(|profile| profile.max_iterations);
 
         let profile_settings = AgentProfileSettings {
             name: name.into(),
@@ -77,6 +84,7 @@ impl AgentProfile {
             enable_all_context_servers,
             context_servers,
             default_model,
+            max_iterations,
         };
 
         update_settings_file(fs, cx, {
@@ -109,6 +117,8 @@ pub struct AgentProfileSettings {
     pub context_servers: IndexMap<Arc<str>, ContextServerPreset>,
     /// Default language model to apply when this profile becomes active.
     pub default_model: Option<LanguageModelSelection>,
+    /// Maximum tool call iterations before stopping. None = unlimited.
+    pub max_iterations: Option<u32>,
 }
 
 impl AgentProfileSettings {
@@ -157,6 +167,7 @@ impl AgentProfileSettings {
                     })
                     .collect(),
                 default_model: self.default_model.clone(),
+                max_iterations: self.max_iterations,
             },
         );
 
@@ -172,6 +183,7 @@ impl From<AgentProfileContent> for AgentProfileSettings {
             enable_all_context_servers,
             context_servers,
             default_model,
+            max_iterations,
         } = content;
 
         Self {
@@ -183,6 +195,7 @@ impl From<AgentProfileContent> for AgentProfileSettings {
                 .map(|(server_id, preset)| (server_id, preset.into()))
                 .collect(),
             default_model,
+            max_iterations,
         }
     }
 }
@@ -214,6 +227,7 @@ mod tests {
             enable_all_context_servers,
             context_servers,
             default_model: None,
+            max_iterations: None,
         }
     }
 

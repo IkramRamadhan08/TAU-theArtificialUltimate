@@ -1576,10 +1576,10 @@ impl NativeAgent {
         ));
         let mode_command = acp::AvailableCommand::new(
             MODE_COMMAND_NAME,
-            "Switch agent profile: ask (chat) or write (autonomous)",
+            "Switch agent profile: ask, plan, write, or goal",
         )
         .input(acp::AvailableCommandInput::Unstructured(
-            acp::UnstructuredCommandInput::new("<ask|write>"),
+            acp::UnstructuredCommandInput::new("<ask|plan|write|goal>"),
         ))
         .meta(acp_thread::meta_with_command_category(
             acp_thread::CommandCategory::Native,
@@ -2223,7 +2223,8 @@ impl NativeAgent {
         let profile_id = match arg.trim().to_lowercase().as_str() {
             "write" => Some(agent_settings::AgentProfileId("write".into())),
             "ask" => Some(agent_settings::AgentProfileId("ask".into())),
-            "minimal" => Some(agent_settings::AgentProfileId("minimal".into())),
+            "plan" => Some(agent_settings::AgentProfileId("plan".into())),
+            "goal" => Some(agent_settings::AgentProfileId("goal".into())),
             _ => None,
         };
 

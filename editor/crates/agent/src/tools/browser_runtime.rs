@@ -8,6 +8,67 @@ use serde::Deserialize;
 use util::archive::extract_zip;
 use util::fs::make_file_executable;
 
+fn find_system_chrome() -> Option<PathBuf> {
+    let names: &[&str] = if cfg!(target_os = "windows") {
+        &["chrome.exe", "google-chrome.exe"]
+    } else if cfg!(target_os = "macos") {
+        &["google-chrome", "google-chrome-stable", "chromium"]
+    } else {
+        &["google-chrome", "google-chrome-stable", "chromium-browser", "chromium"]
+    };
+
+    if let Ok(paths) = std::env::var("PATH") {
+        for dir in std::env::split_paths(&paths) {
+            for name in names {
+                let full = dir.join(name);
+                if full.is_file() {
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::PermissionsExt;
+                        if let Ok(m) = std::fs::metadata(&full) {
+                            if m.permissions().mode() & 0o111 != 0 {
+                                return Some(full);
+                            }
+                        }
+                    }
+                    #[cfg(not(unix))]
+                    return Some(full);
+                }
+            }
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        for p in &[
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        ] {
+            if Path::new(p).exists() {
+                return Some(PathBuf::from(p));
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        for var in &["PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA"] {
+            if let Ok(base) = std::env::var(var) {
+                for p in &[
+                    format!("{base}\\Google\\Chrome\\Application\\chrome.exe"),
+                    format!("{base}\\Chromium\\Application\\chrome.exe"),
+                ] {
+                    if Path::new(p).exists() {
+                        return Some(PathBuf::from(p));
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
 const CFT_VERSION_LIST_URL: &str =
     "https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json";
 
@@ -64,10 +125,11 @@ fn platform_string() -> Result<&'static str> {
     }
 }
 
-fn cft_download_url(version: &str, platform: &str) -> String {
-    format!(
-        "https://storage.googleapis.com/chrome-for-testing-public/{version}/{platform}/chrome-headless-shell-{platform}.zip"
-    )
+fn cft_download_urls(version: &str, platform: &str) -> Vec<String> {
+    vec![
+        format!("https://storage.googleapis.com/chrome-for-testing-public/{version}/{platform}/chrome-headless-shell-{platform}.zip"),
+        format!("https://playwright.azureedge.net/chrome-for-testing-public/{version}/{platform}/chrome-headless-shell-{platform}.zip"),
+    ]
 }
 
 fn install_dir() -> PathBuf {
@@ -135,6 +197,14 @@ async fn fetch_latest_version(http: &Arc<HttpClientWithUrl>) -> Result<String> {
 pub async fn ensure_browser_installed(http: &Arc<HttpClientWithUrl>) -> Result<BrowserRuntime> {
     let platform = platform_string()?;
 
+    if let Some(system_chrome) = find_system_chrome() {
+        log::info!("Using system Chrome at {}", system_chrome.display());
+        return Ok(BrowserRuntime {
+            binary_path: system_chrome,
+            version: "system".into(),
+        });
+    }
+
     let version = match fetch_latest_version(http).await {
         Ok(v) => {
             log::info!("Latest Chrome for Testing version: {v}");
@@ -186,18 +256,33 @@ async fn download_and_extract(
     version: &str,
     platform: &str,
 ) -> Result<()> {
-    let url = cft_download_url(version, platform);
-    log::info!("Downloading from {url}");
+    let urls = cft_download_urls(version, platform);
+    let mut last_error = String::new();
+    let mut response_body = None;
 
-    let response = http
-        .get(&url, Default::default(), true)
-        .await
-        .context("Failed to download Chrome for Testing")?;
-
-    let status = response.status();
-    if !status.is_success() {
-        anyhow::bail!("Download failed with status: {status}");
+    for url in &urls {
+        log::info!("Downloading from {url}");
+        match http.get(url, Default::default(), true).await {
+            Ok(resp) => {
+                let status = resp.status();
+                if status.is_success() {
+                    response_body = Some(resp.into_body());
+                    break;
+                }
+                last_error = format!("HTTP {status}");
+                log::warn!("Download from {url} failed: {last_error}");
+            }
+            Err(e) => {
+                last_error = e.to_string();
+                log::warn!("Download from {url} failed: {last_error}");
+            }
+        }
     }
+
+    let mut body = response_body.context(format!(
+        "Failed to download Chrome for Testing from all sources. Last error: {last_error}. \
+         Try installing Chrome/Chromium on your system so the browser tool can use it directly."
+    ))?;
 
     let dest = install_dir().join(version);
     if dest.exists() {
@@ -207,7 +292,6 @@ async fn download_and_extract(
     std::fs::create_dir_all(&dest)
         .context("Failed to create installation directory")?;
 
-    let mut body = response.into_body();
     extract_zip(&dest, &mut body)
         .await
         .context("Failed to extract Chrome for Testing archive")?;

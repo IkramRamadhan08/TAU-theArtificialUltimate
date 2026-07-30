@@ -1,3 +1,4 @@
+use agent_settings::builtin_profiles;
 use anyhow::Result;
 use gpui::SharedString;
 use handlebars::Handlebars;
@@ -52,10 +53,44 @@ pub struct SystemPromptTemplate<'a> {
     /// When true, the LLM should ask the user for verbal confirmation
     /// before executing tools, instead of autonomously doing the work.
     pub require_verification: bool,
+    pub profile_instructions: Option<&'static str>,
 }
 
 impl Template for SystemPromptTemplate<'_> {
     const TEMPLATE_NAME: &'static str = "system_prompt.hbs";
+}
+
+pub fn profile_instruction(profile_id: &agent_settings::AgentProfileId) -> Option<&'static str> {
+    Some(match profile_id.as_str() {
+        builtin_profiles::WRITE => "\
+You are in WRITE mode. Be direct and action-oriented. \
+Focus on executing the user's request efficiently. \
+Do not explain what you are going to do \u{2014} just do it. \
+Keep responses concise. \
+If the user needs a plan first, suggest they switch to plan mode (/mode plan). \
+If they want to discuss, suggest they switch to ask mode (/mode ask).",
+
+        builtin_profiles::ASK => "\
+You are in ASK mode. This is for discussion, questions, and exploration. \
+Answer questions and help the user understand their codebase. \
+You do not need to take actions. \
+If the user wants changes made, suggest they switch to write mode (/mode write). \
+If they need a plan, suggest plan mode (/mode plan).",
+
+        builtin_profiles::PLAN => "\
+You are in PLAN mode. Research, analyze, and create plans using read-only tools. \
+Present a clear plan before any execution. \
+If the user asks you to execute, tell them to switch to write mode (/mode write). \
+If they want to discuss, suggest ask mode (/mode ask).",
+
+        builtin_profiles::GOAL => "\
+You are in GOAL mode. You work autonomously until the goal is achieved. \
+Before starting, estimate the task duration and inform the user. \
+There is no iteration limit \u{2014} keep working until done. \
+If stuck, explain the blocker to the user.",
+
+        _ => return None,
+    })
 }
 
 /// Handlebars helper for checking if an item is in a list
@@ -98,6 +133,7 @@ mod tests {
             user_agents_md: None,
             sandboxing: false,
             require_verification: false,
+            profile_instructions: None,
         };
         let templates = Templates::new();
         let rendered = template.render(&templates).unwrap();
@@ -130,6 +166,7 @@ mod tests {
             user_agents_md: Some("always be concise".into()),
             sandboxing: false,
             require_verification: false,
+            profile_instructions: None,
         };
         let templates = Templates::new();
         let rendered = template.render(&templates).unwrap();
@@ -158,6 +195,7 @@ mod tests {
             user_agents_md: None,
             sandboxing: false,
             require_verification: false,
+            profile_instructions: None,
         };
         let templates = Templates::new();
         let rendered = template.render(&templates).unwrap();
@@ -190,6 +228,7 @@ mod tests {
             user_agents_md: None,
             sandboxing: true,
             require_verification: false,
+            profile_instructions: None,
         };
         let templates = Templates::new();
         let rendered = template.render(&templates).unwrap();
@@ -215,6 +254,7 @@ mod tests {
             user_agents_md: None,
             sandboxing: true,
             require_verification: false,
+            profile_instructions: None,
         };
         let templates = Templates::new();
         let rendered = template.render(&templates).unwrap();
@@ -234,6 +274,7 @@ mod tests {
             user_agents_md: None,
             sandboxing: false,
             require_verification: false,
+            profile_instructions: None,
         };
         let templates = Templates::new();
         let rendered = template.render(&templates).unwrap();
@@ -251,6 +292,7 @@ mod tests {
             user_agents_md: None,
             sandboxing: false,
             require_verification: false,
+            profile_instructions: None,
         };
         let templates = Templates::new();
         let rendered = template.render(&templates).unwrap();

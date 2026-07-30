@@ -344,7 +344,8 @@ impl ProfilePickerDelegate {
         match candidate.id.as_str() {
             builtin_profiles::WRITE => Some("Get help to write anything."),
             builtin_profiles::ASK => Some("Chat about your codebase."),
-            builtin_profiles::MINIMAL => Some("Chat about anything with no tools."),
+            builtin_profiles::PLAN => Some("Research and plan with read-only tools."),
+            builtin_profiles::GOAL => Some("Work autonomously until the goal is achieved."),
             _ => None,
         }
     }

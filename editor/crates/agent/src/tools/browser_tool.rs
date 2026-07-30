@@ -40,22 +40,24 @@ where
             guard.take()
         };
 
-        let mut session = match session {
-            Some(s) if s.is_alive() => s,
-            Some(mut old) => {
-                old.close();
+        let mut session = if let Some(mut s) = session {
+            if s.is_alive() {
+                s
+            } else {
+                s.close();
                 let runtime = browser_runtime::ensure_browser_installed(&http).await?;
                 BrowserSession::launch(runtime.binary_path.to_str().unwrap_or_default())?
             }
-            None => {
-                let runtime = browser_runtime::ensure_browser_installed(&http).await?;
-                BrowserSession::launch(runtime.binary_path.to_str().unwrap_or_default())?
-            }
+        } else {
+            let runtime = browser_runtime::ensure_browser_installed(&http).await?;
+            BrowserSession::launch(runtime.binary_path.to_str().unwrap_or_default())?
         };
 
         let result = f(&mut session);
 
-        if let Ok(mut guard) = global_session().lock() {
+        if result.is_err() {
+            session.close();
+        } else if let Ok(mut guard) = global_session().lock() {
             *guard = Some(session);
         }
 
