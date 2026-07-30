@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::io::{Read, Write};
+use std::io::{BufRead, Read, Write};
 use std::net::TcpStream;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -49,8 +49,12 @@ impl CdpClient {
         let host = uri.host().unwrap_or("127.0.0.1").to_string();
         let port = uri.port_u16().unwrap_or(9222);
 
-        let tcp = TcpStream::connect(format!("{}:{}", host, port))
-            .context("Failed to connect to Chrome debug port")?;
+        let addr = format!("{}:{}", host, port);
+        let tcp = TcpStream::connect_timeout(
+            &addr.parse().context("Invalid address")?,
+            CDP_COMMAND_DEADLINE,
+        )
+        .with_context(|| format!("Failed to connect to Chrome debug port at {addr}"))?;
         tcp.set_read_timeout(Some(CDP_READ_TIMEOUT))
             .context("Failed to set read timeout")?;
         tcp.set_write_timeout(Some(CDP_WRITE_TIMEOUT))
@@ -100,6 +104,7 @@ impl CdpClient {
                     if e.kind() == std::io::ErrorKind::TimedOut
                         || e.kind() == std::io::ErrorKind::WouldBlock =>
                 {
+                    std::thread::sleep(Duration::from_millis(10));
                     continue;
                 }
                 Err(e) => {
@@ -163,9 +168,38 @@ impl BrowserSession {
             .spawn()
             .context("Failed to launch browser")?;
 
+        // Drain stderr on a background thread so the pipe buffer doesn't fill up
+        // and stall the child process, and so we can log crash diagnostics.
+        let stderr = child.stderr.take();
+        std::thread::spawn(move || {
+            if let Some(stderr) = stderr {
+                let mut reader = std::io::BufReader::new(stderr);
+                let mut buf = String::new();
+                while reader.read_line(&mut buf).is_ok() {
+                    let line = buf.trim().to_string();
+                    if !line.is_empty() {
+                        log::error!("[browser stderr] {line}");
+                    }
+                    buf.clear();
+                }
+            }
+        });
+
+        // Read stdout on a background thread to prevent pipe deadlocks.
+        let stdout = child.stdout.take();
+        std::thread::spawn(move || {
+            if let Some(stdout) = stdout {
+                let mut reader = std::io::BufReader::new(stdout);
+                let mut buf = String::new();
+                while reader.read_line(&mut buf).is_ok() {
+                    buf.clear();
+                }
+            }
+        });
+
         let mut last_error = String::from("no attempts made");
         let mut ws_url = None;
-        for attempt in 0..10 {
+        for attempt in 0..30 {
             if let Ok(Some(_)) = child.try_wait() {
                 anyhow::bail!(
                     "Browser process exited early during startup on port {port}. \
@@ -180,19 +214,33 @@ impl BrowserSession {
                 }
                 Err(e) => {
                     last_error = e.to_string();
-                    if attempt < 9 {
-                        std::thread::sleep(Duration::from_millis(200 * (attempt as u64 + 1)));
+                    if attempt < 29 {
+                        std::thread::sleep(Duration::from_millis(500));
                     }
                 }
             }
         }
-        let ws_url = ws_url.context(format!(
-            "Failed to get WebSocket URL from browser debug port {port}. \
-             Last error: {last_error}"
-        ))?;
-        let mut client = CdpClient::connect(&ws_url)?;
+        let ws_url = ws_url.with_context(|| {
+            // Kill the orphaned browser child before surfacing the error.
+            let _ = child.kill();
+            let _ = child.wait();
+            format!(
+                "Failed to get WebSocket URL from browser debug port {port}. \
+                 Last error: {last_error}"
+            )
+        })?;
+        let mut client = CdpClient::connect(&ws_url).map_err(|e| {
+            let _ = child.kill();
+            let _ = child.wait();
+            e
+        })?;
         client
             .send_command("Browser.getVersion", serde_json::json!({}))
+            .map_err(|e| {
+                let _ = child.kill();
+                let _ = child.wait();
+                e
+            })
             .context("Browser process is unresponsive after connecting")?;
 
         Ok(Self::new(client, Some(child), port, Some(temp_dir)))
@@ -226,21 +274,24 @@ impl BrowserSession {
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
 
+            // "complete": fully loaded.
+            // "interactive": DOM ready, subresources may still load (SPA).
+            // Treat both as done to avoid timing out on JS-heavy pages.
             if state == "complete" || state == "interactive" {
-                break;
+                // Small grace period for the SPA to attach event listeners.
+                std::thread::sleep(Duration::from_millis(300));
+                return Ok(());
             }
 
             if start.elapsed() > timeout {
                 anyhow::bail!(
-                    "Page did not reach readyState 'complete' within {}s (last state: '{state}')",
+                    "Page did not reach readyState 'complete' or 'interactive' within {}s (last state: '{state}')",
                     timeout.as_secs()
                 );
             }
 
-            std::thread::sleep(Duration::from_millis(200));
+            std::thread::sleep(Duration::from_millis(100));
         }
-
-        Ok(())
     }
 
     pub fn screenshot(&self) -> Result<String> {
@@ -289,19 +340,16 @@ impl BrowserSession {
     }
 
     pub fn type_text(&self, selector: &str, text: &str) -> Result<()> {
-        self.send_command("Runtime.evaluate", json!({
-            "expression": format!("document.querySelector('{}').focus()", selector),
-            "returnByValue": true
-        }))?;
-
-        for ch in text.chars() {
-            self.send_command("Input.dispatchKeyEvent", json!({
-                "type": "keyDown",
-                "text": ch.to_string()
+        if !selector.is_empty() {
+            self.send_command("Runtime.evaluate", json!({
+                "expression": format!("document.querySelector('{}').focus()", selector),
+                "returnByValue": true
             }))?;
-            self.send_command("Input.dispatchKeyEvent", json!({
-                "type": "keyUp",
-                "text": ch.to_string()
+        }
+
+        if !text.is_empty() {
+            self.send_command("Input.insertText", json!({
+                "text": text
             }))?;
         }
 
@@ -309,14 +357,28 @@ impl BrowserSession {
     }
 
     pub fn fill(&self, selector: &str, value: &str) -> Result<()> {
+        if selector.is_empty() {
+            anyhow::bail!("fill: selector cannot be empty");
+        }
+        let escaped = selector.replace('\\', "\\\\").replace('\'', "\\'");
         self.send_command("Runtime.evaluate", json!({
             "expression": format!(
-                "(() => {{ const el = document.querySelector('{}'); el.value = '{}'; el.dispatchEvent(new Event('input', {{ bubbles: true }})); el.dispatchEvent(new Event('change', {{ bubbles: true }})); }})()",
-                selector.replace('\'', "\\'"),
-                value.replace('\'', "\\'").replace('\n', "\\n")
+                r#"(() => {{
+                    const el = document.querySelector('{}');
+                    if (!el) return;
+                    el.focus();
+                    el.select();
+                }})()"#,
+                escaped
             ),
             "returnByValue": true
         }))?;
+
+        if !value.is_empty() {
+            self.send_command("Input.insertText", json!({
+                "text": value
+            }))?;
+        }
 
         Ok(())
     }
@@ -335,6 +397,48 @@ impl BrowserSession {
     }
 
     pub fn press_key(&self, key: &str) -> Result<()> {
+        // Handle modifier+key combinations (e.g., "Control+C", "Control+V").
+        if let Some((modifier, rest)) = key.split_once('+') {
+            let modifier = modifier.trim();
+            let rest = rest.trim();
+            let (mod_code, mod_name) = match modifier {
+                "Control" | "Ctrl" => (17, "Control"),
+                "Shift" => (16, "Shift"),
+                "Alt" => (18, "Alt"),
+                "Meta" | "Command" | "Cmd" => (91, "Meta"),
+                _ => (0, modifier),
+            };
+            let (key_code, code, key_name): (u32, &str, &str) = match rest {
+                "c" | "C" => (67, "KeyC", "c"),
+                "v" | "V" => (86, "KeyV", "v"),
+                "a" | "A" => (65, "KeyA", "a"),
+                "x" | "X" => (88, "KeyX", "x"),
+                "z" | "Z" => (90, "KeyZ", "z"),
+                other => (other.chars().next().unwrap_or('\0') as u32, other, other),
+            };
+
+            self.send_command("Input.dispatchKeyEvent", json!({
+                "type": "rawKeyDown",
+                "windowsVirtualKeyCode": mod_code,
+                "code": mod_name,
+                "key": mod_name
+            }))?;
+            self.send_command("Input.dispatchKeyEvent", json!({
+                "type": "char",
+                "text": key_name,
+                "windowsVirtualKeyCode": key_code,
+                "code": code,
+                "key": key_name
+            }))?;
+            self.send_command("Input.dispatchKeyEvent", json!({
+                "type": "keyUp",
+                "windowsVirtualKeyCode": mod_code,
+                "code": mod_name,
+                "key": mod_name
+            }))?;
+            return Ok(());
+        }
+
         let (key_code, code) = match key {
             "Enter" => (13, "Enter"),
             "Tab" => (9, "Tab"),
@@ -523,7 +627,13 @@ impl BrowserSession {
             "returnByValue": true
         }))?;
 
-        self.type_text("", text)
+        if !text.is_empty() {
+            self.send_command("Input.insertText", json!({
+                "text": text
+            }))?;
+        }
+
+        Ok(())
     }
 
     pub fn fill_by_index(&self, index: usize, value: &str, clear: bool) -> Result<()> {
@@ -553,12 +663,17 @@ impl BrowserSession {
             }))?;
         }
 
-        let escaped_value = value.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n");
         let _result = self.send_command("Runtime.callFunctionOn", json!({
             "objectId": object_id,
-            "functionDeclaration": &format!("function() {{ this.value = '{}'; this.dispatchEvent(new Event('input', {{ bubbles: true }})); this.dispatchEvent(new Event('change', {{ bubbles: true }})); }}", escaped_value),
+            "functionDeclaration": "function() { this.focus(); this.select(); }",
             "returnByValue": true
         }))?;
+
+        if !value.is_empty() {
+            self.send_command("Input.insertText", json!({
+                "text": value
+            }))?;
+        }
 
         Ok(())
     }
@@ -938,7 +1053,7 @@ impl BrowserSession {
         Ok(())
     }
 
-    pub fn query_shadow_dom(&self, shadow_selector: &str, inner_selector: &str) -> Result<Value> {
+    pub fn query_shadow_dom(&self, shadow_selector: &str, inner_selector: &str) -> Result<String> {
         let escaped_shadow = shadow_selector.replace('\\', "\\\\").replace('\'', "\\'");
         let escaped_inner = inner_selector.replace('\\', "\\\\").replace('\'', "\\'");
 
@@ -958,7 +1073,12 @@ impl BrowserSession {
             "returnByValue": true
         }))?;
 
-        Ok(result.get("result").cloned().unwrap_or(json!(null)))
+        let html = result
+            .get("value")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("Shadow DOM element not found"))?;
+
+        Ok(html.to_string())
     }
 
     pub fn click_in_shadow_dom(&self, shadow_selector: &str, inner_selector: &str) -> Result<()> {
@@ -999,7 +1119,6 @@ impl BrowserSession {
     pub fn fill_in_shadow_dom(&self, shadow_selector: &str, inner_selector: &str, value: &str) -> Result<()> {
         let escaped_shadow = shadow_selector.replace('\\', "\\\\").replace('\'', "\\'");
         let escaped_inner = inner_selector.replace('\\', "\\\\").replace('\'', "\\'");
-        let escaped_value = value.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n");
 
         let expression = format!(
             r#"(() => {{
@@ -1008,12 +1127,10 @@ impl BrowserSession {
                 const inner = el.shadowRoot.querySelector('{}');
                 if (!inner) return false;
                 inner.focus();
-                inner.value = '{}';
-                inner.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                inner.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                inner.select();
                 return true;
             }})()"#,
-            escaped_shadow, escaped_inner, escaped_value
+            escaped_shadow, escaped_inner
         );
 
         let result = self.send_command("Runtime.evaluate", json!({
@@ -1028,7 +1145,13 @@ impl BrowserSession {
             .unwrap_or(false);
 
         if !success {
-            anyhow::bail!("Failed to fill element in shadow DOM");
+            anyhow::bail!("Failed to focus element in shadow DOM");
+        }
+
+        if !value.is_empty() {
+            self.send_command("Input.insertText", json!({
+                "text": value
+            }))?;
         }
 
         Ok(())
@@ -1062,12 +1185,20 @@ impl BrowserSession {
     }
 
     pub fn is_alive(&mut self) -> bool {
-        match &mut self.child {
-            Some(child) => match child.try_wait() {
-                Ok(None) => true,
-                _ => false,
-            },
+        let child_alive = match &mut self.child {
+            Some(child) => matches!(child.try_wait(), Ok(None)),
             None => false,
+        };
+        if !child_alive {
+            return false;
+        }
+        // Verify the WebSocket connection is still responsive with a lightweight ping.
+        match self.send_command("Browser.getVersion", serde_json::json!({})) {
+            Ok(_) => true,
+            Err(_) => {
+                log::warn!("Browser WebSocket is unresponsive, marking session as dead");
+                false
+            }
         }
     }
 
@@ -1120,8 +1251,14 @@ fn get_ws_url(port: u16) -> Result<String> {
 }
 
 fn http_get(port: u16, path: &str) -> Result<String> {
-    let mut client = TcpStream::connect(format!("127.0.0.1:{port}"))?;
-    client.set_read_timeout(Some(CDP_READ_TIMEOUT))?;
+    let addr = format!("127.0.0.1:{port}");
+    let mut client = TcpStream::connect_timeout(
+        &addr.parse().context("Invalid address")?,
+        CDP_COMMAND_DEADLINE,
+    )
+    .with_context(|| format!("Failed to connect to {addr}"))?;
+    // Use a short per-read timeout; the deadline below provides total timeout.
+    client.set_read_timeout(Some(Duration::from_secs(2)))?;
     client.set_write_timeout(Some(CDP_WRITE_TIMEOUT))?;
 
     let request = format!(
@@ -1132,12 +1269,24 @@ fn http_get(port: u16, path: &str) -> Result<String> {
 
     let mut response = Vec::new();
     let mut buf = [0u8; 4096];
+    let deadline = Instant::now() + CDP_COMMAND_DEADLINE;
     loop {
-        let n = client.read(&mut buf)?;
-        if n == 0 {
-            break;
+        if Instant::now() > deadline {
+            anyhow::bail!("Timed out waiting for HTTP response from {addr}");
         }
-        response.extend_from_slice(&buf[..n]);
+        match client.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => response.extend_from_slice(&buf[..n]),
+            Err(ref e)
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    || e.kind() == std::io::ErrorKind::TimedOut =>
+            {
+                // Chrome hasn't sent the response yet — retry quickly.
+                std::thread::sleep(Duration::from_millis(10));
+                continue;
+            }
+            Err(e) => return Err(e.into()),
+        }
     }
 
     let response = String::from_utf8_lossy(&response);
@@ -1147,12 +1296,15 @@ fn http_get(port: u16, path: &str) -> Result<String> {
         anyhow::bail!("HTTP {status_line}");
     }
 
+    // Read exactly Content-Length bytes when present, otherwise read until
+    // the end of the headers (after the blank line).
     let body = response
         .split("\r\n\r\n")
         .nth(1)
-        .unwrap_or("");
+        .unwrap_or("")
+        .to_string();
 
-    Ok(body.to_string())
+    Ok(body)
 }
 
 fn try_get_ws_url_from_json_version(port: u16) -> Result<String> {
@@ -1174,6 +1326,10 @@ fn try_get_ws_url_from_json_list(port: u16) -> Result<String> {
 
     let targets: Vec<Value> = serde_json::from_str(&body)
         .context("Failed to parse /json/list JSON")?;
+
+    if targets.is_empty() {
+        anyhow::bail!("/json/list returned no debuggable targets yet");
+    }
 
     let ws_url = targets
         .iter()

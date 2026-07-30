@@ -110,6 +110,7 @@ uuid.workspace = true
 watch.workspace = true
 workspace.workspace = true
 tau_actions.workspace = true
+tau_credentials_provider.workspace = true
 image.workspace = true
 reqwest_client = { workspace = true, optional = true }
 

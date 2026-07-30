@@ -336,7 +336,6 @@ async fn test_terminal_tool_timeout_kills_handle(cx: &mut TestAppContext) {
             ToolInput::resolved(crate::TerminalToolInput {
                 command: "sleep 1000".to_string(),
                 cd: ".".to_string(),
-                timeout_ms: Some(5),
                 ..Default::default()
             }),
             event_stream,
@@ -404,7 +403,6 @@ async fn test_terminal_tool_without_timeout_does_not_kill_handle(cx: &mut TestAp
             ToolInput::resolved(crate::TerminalToolInput {
                 command: "sleep 1000".to_string(),
                 cd: ".".to_string(),
-                timeout_ms: None,
                 ..Default::default()
             }),
             event_stream,
@@ -4873,7 +4871,6 @@ async fn test_terminal_tool_permission_rules(cx: &mut TestAppContext) {
                 ToolInput::resolved(crate::TerminalToolInput {
                     command: "rm -rf /".to_string(),
                     cd: ".".to_string(),
-                    timeout_ms: None,
                     ..Default::default()
                 }),
                 event_stream,
@@ -4926,7 +4923,6 @@ async fn test_terminal_tool_permission_rules(cx: &mut TestAppContext) {
                 ToolInput::resolved(crate::TerminalToolInput {
                     command: "echo hello".to_string(),
                     cd: ".".to_string(),
-                    timeout_ms: None,
                     ..Default::default()
                 }),
                 event_stream,
@@ -4985,7 +4981,6 @@ async fn test_terminal_tool_permission_rules(cx: &mut TestAppContext) {
                 ToolInput::resolved(crate::TerminalToolInput {
                     command: "sudo rm file".to_string(),
                     cd: ".".to_string(),
-                    timeout_ms: None,
                     ..Default::default()
                 }),
                 event_stream,
@@ -5033,7 +5028,6 @@ async fn test_terminal_tool_permission_rules(cx: &mut TestAppContext) {
                 ToolInput::resolved(crate::TerminalToolInput {
                     command: "echo hello".to_string(),
                     cd: ".".to_string(),
-                    timeout_ms: None,
                     ..Default::default()
                 }),
                 event_stream,

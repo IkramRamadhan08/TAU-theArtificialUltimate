@@ -544,6 +544,7 @@ dependencies = [
  "streaming_diff",
  "task",
  "tau_actions",
+ "tau_credentials_provider",
  "telemetry",
  "tempfile",
  "terminal",
@@ -15141,7 +15142,7 @@ dependencies = [
 
 [[package]]
 name = "tau"
-version = "0.94.0"
+version = "0.94.1"
 dependencies = [
  "acp_thread",
  "acp_tools",

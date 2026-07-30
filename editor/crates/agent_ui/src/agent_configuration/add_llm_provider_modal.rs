@@ -348,9 +348,11 @@ fn save_provider_to_settings(
     }
 
     let fs = <dyn Fs>::global(cx);
-    let task = cx.write_credentials(&api_url, "Bearer", api_key.as_bytes());
+    let credentials_provider = tau_credentials_provider::global(cx);
     cx.spawn(async move |cx| {
-        task.await
+        credentials_provider
+            .write_credentials(&api_url, "Bearer", api_key.as_bytes(), cx)
+            .await
             .map_err(|_| SharedString::from("Failed to write API key to keychain"))?;
         cx.update(|cx| {
             update_settings_file(fs, cx, move |settings, _cx| {

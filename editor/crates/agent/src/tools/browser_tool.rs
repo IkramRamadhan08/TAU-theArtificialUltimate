@@ -33,7 +33,10 @@ async fn with_session<R>(cx: &AsyncApp, f: impl FnOnce(&mut BrowserSession) -> R
 where
     R: Send + 'static,
 {
-    let http = global_http_client().get().expect("HTTP client not initialized for browser tools").clone();
+    let http = global_http_client()
+        .get()
+        .ok_or_else(|| anyhow::anyhow!("HTTP client not initialized for browser tools"))?
+        .clone();
     let task: Task<Result<R>> = cx.background_spawn(async move {
         let session = {
             let mut guard = global_session().lock().map_err(|e| anyhow::anyhow!("{}", e))?;
@@ -46,19 +49,32 @@ where
             } else {
                 s.close();
                 let runtime = browser_runtime::ensure_browser_installed(&http).await?;
-                BrowserSession::launch(runtime.binary_path.to_str().unwrap_or_default())?
+                let binary = runtime
+                    .binary_path
+                    .to_str()
+                    .ok_or_else(|| anyhow::anyhow!("Browser binary path is not valid UTF-8"))?;
+                BrowserSession::launch(binary)?
             }
         } else {
             let runtime = browser_runtime::ensure_browser_installed(&http).await?;
-            BrowserSession::launch(runtime.binary_path.to_str().unwrap_or_default())?
+            let binary = runtime
+                .binary_path
+                .to_str()
+                .ok_or_else(|| anyhow::anyhow!("Browser binary path is not valid UTF-8"))?;
+            BrowserSession::launch(binary)?
         };
 
         let result = f(&mut session);
 
         if result.is_err() {
             session.close();
+        } else if !session.is_alive() {
+            session.close();
         } else if let Ok(mut guard) = global_session().lock() {
             *guard = Some(session);
+        } else {
+            // Mutex poisoned — close the session rather than leak it.
+            session.close();
         }
 
         result
@@ -179,8 +195,8 @@ impl AgentTool for BrowserNavigateTool {
 
             with_session(cx, move |session| {
                 session.navigate(&url)?;
-                let title = session.get_page_title().unwrap_or_default();
-                let dom = session.get_dom().unwrap_or_default();
+                let title = session.get_page_title()?;
+                let dom = session.get_dom()?;
                 let content = match convert_html_to_markdown(std::io::Cursor::new(&dom), &mut []) {
                     Ok(md) => md,
                     Err(_) => dom,
@@ -2277,12 +2293,7 @@ impl AgentTool for BrowserShadowDomQueryTool {
             })?;
 
             with_session(cx, move |session| {
-                let result = session.query_shadow_dom(&input.shadow_selector, &input.inner_selector)?;
-                let html = result.get("result")
-                    .and_then(|v| v.get("value"))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("Element not found")
-                    .to_string();
+                let html = session.query_shadow_dom(&input.shadow_selector, &input.inner_selector)?;
                 Ok(BrowserShadowDomQueryOutput::Success { result: html })
             })
             .await

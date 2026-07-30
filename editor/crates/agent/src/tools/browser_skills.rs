@@ -86,6 +86,13 @@ pub fn list_sites() -> Result<Vec<String>> {
     Ok(sites)
 }
 
+fn extract_site_from_url(url: &str) -> Option<String> {
+    let without_scheme = url.split("://").nth(1)?;
+    let host = without_scheme.split(['/', '?', '#']).next()?;
+    let host = host.strip_prefix("www.").unwrap_or(host);
+    host.split('.').next().map(|s| s.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

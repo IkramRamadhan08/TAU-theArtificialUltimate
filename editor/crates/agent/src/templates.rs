@@ -240,7 +240,7 @@ mod tests {
         assert!(rendered.contains("fs_write_paths"));
         assert!(rendered.contains("allow_fs_write_all: true"));
         assert!(rendered.contains("unsandboxed: true"));
-        assert!(rendered.contains("for the rest of the thread"));
+        assert!(rendered.contains("skip the prompt"));
     }
 
     #[test]
@@ -260,7 +260,7 @@ mod tests {
         let rendered = template.render(&templates).unwrap();
 
         assert!(rendered.contains("## Terminal sandbox"));
-        assert!(rendered.contains("No project directories are currently writable"));
+        assert!(rendered.contains("Writes elsewhere are blocked"));
     }
 
     #[test]

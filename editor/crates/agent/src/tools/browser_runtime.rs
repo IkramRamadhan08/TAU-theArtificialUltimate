@@ -72,7 +72,7 @@ fn find_system_chrome() -> Option<PathBuf> {
 const CFT_VERSION_LIST_URL: &str =
     "https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json";
 
-const FALLBACK_VERSION: &str = "131.0.6778.85";
+const FALLBACK_VERSION: &str = "149.0.7827.201";
 
 pub struct BrowserRuntime {
     pub binary_path: PathBuf,

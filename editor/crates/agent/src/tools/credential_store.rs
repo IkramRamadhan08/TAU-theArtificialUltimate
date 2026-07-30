@@ -92,13 +92,12 @@ impl CredentialStore {
 mod tests {
     use super::*;
     use gpui::TestAppContext;
-    use project::FakeFs;
-    use std::sync::Arc;
+    use fs::FakeFs;
     use util::path;
 
     #[gpui::test]
     async fn test_store_and_retrieve(cx: &mut TestAppContext) {
-        let fs = Arc::new(FakeFs::new(cx.executor()));
+        let fs = FakeFs::new(cx.executor());
         let dir = PathBuf::from("/config");
         fs.insert_tree(path!("/config"), Default::default()).await;
         let store = CredentialStore::new(fs, dir);

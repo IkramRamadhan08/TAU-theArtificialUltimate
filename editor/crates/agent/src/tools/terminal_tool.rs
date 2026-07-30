@@ -823,7 +823,6 @@ mod tests {
             command: "(nix run nixpkgs#hello > /tmp/nix-server.log 2>&1 &)\nsleep 5\ncat /tmp/nix-server.log\npkill -f \"node.*index.js\" || echo \"No server process found\""
                 .to_string(),
             cd: ".".to_string(),
-            timeout_ms: None,
                 ..Default::default()
             };
 
@@ -891,8 +890,7 @@ mod tests {
             let input = TerminalToolInput {
                 command: cmd.to_string(),
                 cd: ".".to_string(),
-                timeout_ms: None,
-                ..Default::default()
+                    ..Default::default()
             };
 
             let title = format_initial_title(Ok(input));
@@ -929,7 +927,6 @@ mod tests {
         let input = TerminalToolInput {
             command: "echo 'hello world'".to_string(),
             cd: ".".to_string(),
-            timeout_ms: None,
             ..Default::default()
         };
 
@@ -959,7 +956,6 @@ mod tests {
         let input = TerminalToolInput {
             command: long_command,
             cd: ".".to_string(),
-            timeout_ms: None,
             ..Default::default()
         };
 
@@ -1099,6 +1095,8 @@ mod tests {
                 head_lines: Some(1),
                 tail_lines: Some(1),
             },
+            None,
+            0,
         );
 
         assert_eq!(result, "```\none\n\nfour\n```");
@@ -1118,6 +1116,8 @@ mod tests {
                 head_lines: None,
                 tail_lines: Some(1),
             },
+            None,
+            0,
         );
 
         assert!(result.contains("failed with exit code 1"));
@@ -1139,6 +1139,8 @@ mod tests {
                 head_lines: Some(1),
                 tail_lines: None,
             },
+            None,
+            0,
         );
 
         assert!(result.contains("timed out"));
@@ -1160,6 +1162,8 @@ mod tests {
                 head_lines: None,
                 tail_lines: Some(1),
             },
+            None,
+            0,
         );
 
         assert!(result.contains("user stopped"));
@@ -1183,6 +1187,8 @@ mod tests {
                 head_lines: Some(1),
                 tail_lines: Some(1),
             },
+            None,
+            0,
         );
 
         assert!(!result.contains("Showing"));
@@ -1450,7 +1456,6 @@ mod tests {
                 crate::ToolInput::resolved(TerminalToolInput {
                     command: "echo $HOME".to_string(),
                     cd: "root".to_string(),
-                    timeout_ms: None,
                     ..Default::default()
                 }),
                 event_stream,
@@ -1518,7 +1523,6 @@ mod tests {
                 crate::ToolInput::resolved(TerminalToolInput {
                     command: "echo $HOME".to_string(),
                     cd: "root".to_string(),
-                    timeout_ms: None,
                     ..Default::default()
                 }),
                 event_stream,
@@ -1580,7 +1584,6 @@ mod tests {
                 crate::ToolInput::resolved(TerminalToolInput {
                     command: "echo $(rm -rf /)".to_string(),
                     cd: "root".to_string(),
-                    timeout_ms: None,
                     ..Default::default()
                 }),
                 event_stream,
@@ -1650,7 +1653,6 @@ mod tests {
                 crate::ToolInput::resolved(TerminalToolInput {
                     command: "PAGER=blah git log --oneline".to_string(),
                     cd: "root".to_string(),
-                    timeout_ms: None,
                     ..Default::default()
                 }),
                 event_stream,
@@ -1717,9 +1719,9 @@ mod tests {
                 crate::ToolInput::resolved(TerminalToolInput {
                     command: "printf lines".to_string(),
                     cd: "root".to_string(),
-                    timeout_ms: None,
                     head_lines: Some(1),
                     tail_lines: Some(1),
+                    ..Default::default()
                 }),
                 event_stream,
                 cx,
@@ -1776,7 +1778,6 @@ mod tests {
                 crate::ToolInput::resolved(TerminalToolInput {
                     command: "echo output".to_string(),
                     cd: "root".to_string(),
-                    timeout_ms: None,
                     ..Default::default()
                 }),
                 event_stream,
@@ -1836,7 +1837,6 @@ mod tests {
                 crate::ToolInput::resolved(TerminalToolInput {
                     command: "PAGER=blah git log".to_string(),
                     cd: "root".to_string(),
-                    timeout_ms: None,
                     ..Default::default()
                 }),
                 event_stream,
@@ -1970,7 +1970,6 @@ mod tests {
                 crate::ToolInput::resolved(TerminalToolInput {
                     command: command.to_string(),
                     cd: "root".to_string(),
-                    timeout_ms: None,
                     ..Default::default()
                 }),
                 event_stream,
@@ -2138,7 +2137,6 @@ mod tests {
                 crate::ToolInput::resolved(TerminalToolInput {
                     command: "echo $(whoami)".to_string(),
                     cd: "root".to_string(),
-                    timeout_ms: None,
                     ..Default::default()
                 }),
                 event_stream,
@@ -2211,7 +2209,6 @@ mod tests {
                 crate::ToolInput::resolved(TerminalToolInput {
                     command: "PAGER=other git log".to_string(),
                     cd: "root".to_string(),
-                    timeout_ms: None,
                     ..Default::default()
                 }),
                 event_stream,
@@ -2278,7 +2275,6 @@ mod tests {
                 crate::ToolInput::resolved(TerminalToolInput {
                     command: "A=1 B=2 git log".to_string(),
                     cd: "root".to_string(),
-                    timeout_ms: None,
                     ..Default::default()
                 }),
                 event_stream,
@@ -2356,7 +2352,6 @@ mod tests {
                 crate::ToolInput::resolved(TerminalToolInput {
                     command: "PAGER=\"less -R\" git log".to_string(),
                     cd: "root".to_string(),
-                    timeout_ms: None,
                     ..Default::default()
                 }),
                 event_stream,
