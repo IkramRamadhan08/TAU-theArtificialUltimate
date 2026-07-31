@@ -57,7 +57,10 @@ pub struct TerminalToolInput {
     pub command: String,
     /// Working directory for the command. This must be one of the root directories of the project.
     pub cd: String,
-    /// Optional maximum runtime (in milliseconds). If exceeded, the running terminal task is killed.
+    /// Optional maximum runtime (in milliseconds). On timeout the running task is kept alive;
+    /// reconnect with the returned `terminal_id` and a larger `timeout_ms` to keep waiting.
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
     /// Return only the first N lines of terminal output to the model after the command finishes. Do not pipe output to `head`; use this parameter instead so the user can still see live output. Avoid requesting too many lines, or the response may waste tokens or exceed the context window.
     #[serde(default)]
     pub head_lines: Option<usize>,
@@ -112,7 +115,8 @@ pub struct SandboxedTerminalToolInput {
     pub command: String,
     /// Working directory for the command. This must be one of the root directories of the project.
     pub cd: String,
-    /// Optional maximum runtime (in milliseconds). If exceeded, the running terminal task is killed.
+    /// Optional maximum runtime (in milliseconds). On timeout the running task is kept alive;
+    /// reconnect with the returned `terminal_id` and a larger `timeout_ms` to keep waiting.
     pub timeout_ms: Option<u64>,
     /// Return only the first N lines of terminal output to the model after the command finishes. Do not pipe output to `head`; use this parameter instead so the user can still see live output. Avoid requesting too many lines, or the response may waste tokens or exceed the context window.
     #[serde(default)]
@@ -191,7 +195,7 @@ impl From<TerminalToolInput> for TerminalToolRequest {
         Self {
             command: input.command,
             cd: input.cd,
-            timeout_ms: None,
+            timeout_ms: input.timeout_ms,
             selection: TerminalOutputSelection {
                 head_lines: input.head_lines,
                 tail_lines: input.tail_lines,
@@ -1204,7 +1208,7 @@ mod tests {
             output,
             "false",
             false,
-            false,
+            true,
             TerminalOutputSelection::default(),
             None,
             0,

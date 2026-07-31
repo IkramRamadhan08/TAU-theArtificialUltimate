@@ -4021,7 +4021,7 @@ mod internal_tests {
     use language_model::fake_provider::{FakeLanguageModel, FakeLanguageModelProvider};
     use language_model::{
         CompletionIntent, LanguageModelCompletionEvent, LanguageModelProviderId,
-        LanguageModelProviderName,
+        LanguageModelProviderName, SelectedModel,
     };
     use serde_json::json;
     use settings::SettingsStore;
@@ -6305,6 +6305,25 @@ mod internal_tests {
         model.end_last_completion_stream();
 
         send.await.unwrap();
+        cx.run_until_parked();
+
+        // `select_model` persists the choice as the default model in
+        // settings. In production the agent panel observes settings changes
+        // and syncs them to the registry; there is no such observer here, so
+        // replicate that sync. Without it, reloading would resolve the
+        // registry's stale default instead of the selected model.
+        cx.update(|cx| {
+            let selection = agent_settings::AgentSettings::get_global(cx)
+                .default_model
+                .as_ref()
+                .map(|selection| SelectedModel {
+                    provider: LanguageModelProviderId::from(selection.provider.0.clone()),
+                    model: LanguageModelId::from(selection.model.clone()),
+                });
+            LanguageModelRegistry::global(cx).update(cx, |registry, cx| {
+                registry.select_default_model(selection.as_ref(), cx);
+            });
+        });
         cx.run_until_parked();
 
         // Close the session so it can be reloaded from disk.

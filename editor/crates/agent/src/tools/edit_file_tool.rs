@@ -1213,6 +1213,7 @@ mod tests {
     #[gpui::test]
     async fn test_streaming_authorize(cx: &mut TestAppContext) {
         let (edit_tool, _project, _action_log, _fs, _thread) = setup_test(cx, json!({})).await;
+        set_default_permission_mode(cx, settings::ToolPermissionMode::Confirm);
 
         // Test 1: Path with .tau component should require confirmation
         let (stream_tx, mut stream_rx) = ToolCallEventStream::test();
@@ -1721,6 +1722,7 @@ mod tests {
         fs.insert_tree("/project", json!({})).await;
         let (edit_tool, _project, _action_log, _fs, _thread) =
             setup_test_with_fs(cx, fs, &[path!("/project").as_ref()]).await;
+        set_default_permission_mode(cx, settings::ToolPermissionMode::Confirm);
 
         let test_cases = vec![
             (
@@ -1799,6 +1801,9 @@ mod tests {
             ],
         )
         .await;
+        cx.background_executor.run_until_parked();
+        cx.run_until_parked();
+        set_default_permission_mode(cx, settings::ToolPermissionMode::Confirm);
 
         let test_cases = vec![
             ("frontend/src/main.js", false, "File in first worktree"),
@@ -1854,6 +1859,7 @@ mod tests {
         .await;
         let (edit_tool, _project, _action_log, _fs, _thread) =
             setup_test_with_fs(cx, fs, &[path!("/project").as_ref()]).await;
+        set_default_permission_mode(cx, settings::ToolPermissionMode::Confirm);
 
         let test_cases = vec![
             ("", false, "Empty path is treated as project root"),
@@ -1910,6 +1916,9 @@ mod tests {
         .await;
         let (edit_tool, _project, _action_log, _fs, _thread) =
             setup_test_with_fs(cx, fs, &[path!("/project").as_ref()]).await;
+        cx.background_executor.run_until_parked();
+        cx.run_until_parked();
+        set_default_permission_mode(cx, settings::ToolPermissionMode::Confirm);
 
         let modes = vec![EditSessionMode::Edit, EditSessionMode::Write];
 
@@ -2955,6 +2964,14 @@ mod tests {
                         .ensure_final_newline_on_save = Some(false);
                 });
             });
+        });
+    }
+
+    fn set_default_permission_mode(cx: &mut TestAppContext, mode: settings::ToolPermissionMode) {
+        cx.update(|cx| {
+            let mut settings = agent_settings::AgentSettings::get_global(cx).clone();
+            settings.tool_permissions.default = mode;
+            agent_settings::AgentSettings::override_global(settings, cx);
         });
     }
 }

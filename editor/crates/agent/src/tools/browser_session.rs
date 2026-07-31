@@ -70,6 +70,15 @@ impl CdpClient {
     }
 
     pub fn send_command(&mut self, method: &str, params: Value) -> Result<Value> {
+        self.send_command_with_deadline(method, params, CDP_COMMAND_DEADLINE)
+    }
+
+    fn send_command_with_deadline(
+        &mut self,
+        method: &str,
+        params: Value,
+        deadline: Duration,
+    ) -> Result<Value> {
         let id = self.msg_id.fetch_add(1, Ordering::SeqCst);
 
         let msg = json!({
@@ -80,7 +89,7 @@ impl CdpClient {
 
         self.ws.write(WsMessage::Text(msg.to_string().into()))?;
 
-        let deadline = Instant::now() + CDP_COMMAND_DEADLINE;
+        let deadline = Instant::now() + deadline;
 
         loop {
             if Instant::now() > deadline {
@@ -129,6 +138,30 @@ impl CdpClient {
 
     pub fn close(&mut self) {
         let _ = self.ws.close(None);
+    }
+
+    fn set_read_timeout(&self, timeout: Option<Duration>) -> std::io::Result<()> {
+        match self.ws.get_ref() {
+            MaybeTlsStream::Plain(tcp) => tcp.set_read_timeout(timeout),
+            MaybeTlsStream::Rustls(stream) => stream.get_ref().set_read_timeout(timeout),
+            #[allow(unreachable_patterns)]
+            _ => Ok(()),
+        }
+    }
+
+    /// Lightweight liveness probe with a short deadline so a dead WebSocket
+    /// doesn't block session-pool reuse for the full command timeout. The
+    /// socket's read timeout must be lowered to match, otherwise a
+    /// dead-but-open socket blocks in `ws.read` for `CDP_READ_TIMEOUT`
+    /// before the deadline can fire.
+    pub fn ping(&mut self) -> Result<()> {
+        let probe_timeout = Duration::from_secs(3);
+        self.set_read_timeout(Some(probe_timeout))?;
+        let result =
+            self.send_command_with_deadline("Browser.getVersion", json!({}), probe_timeout)
+                .map(|_| ());
+        self.set_read_timeout(Some(CDP_READ_TIMEOUT))?;
+        result
     }
 }
 
@@ -1193,12 +1226,9 @@ impl BrowserSession {
             return false;
         }
         // Verify the WebSocket connection is still responsive with a lightweight ping.
-        match self.send_command("Browser.getVersion", serde_json::json!({})) {
-            Ok(_) => true,
-            Err(_) => {
-                log::warn!("Browser WebSocket is unresponsive, marking session as dead");
-                false
-            }
+        match self.client.lock() {
+            Ok(mut client) => client.ping().is_ok(),
+            Err(_) => false,
         }
     }
 
@@ -1240,14 +1270,16 @@ fn find_free_port() -> Result<u16> {
 }
 
 fn get_ws_url(port: u16) -> Result<String> {
-    match try_get_ws_url_from_json_version(port) {
+    // Prefer the page-level WebSocket from /json/list: the target is explicit,
+    // so page-level commands (Page.navigate, Runtime.evaluate) are deterministic.
+    match try_get_ws_url_from_json_list(port) {
         Ok(url) => return Ok(url),
         Err(e) => {
-            log::warn!("/json/version on port {port} failed: {e}, trying /json/list");
+            log::warn!("/json/list on port {port} failed: {e}, trying /json/version");
         }
     }
 
-    try_get_ws_url_from_json_list(port)
+    try_get_ws_url_from_json_version(port)
 }
 
 fn http_get(port: u16, path: &str) -> Result<String> {
@@ -1331,13 +1363,24 @@ fn try_get_ws_url_from_json_list(port: u16) -> Result<String> {
         anyhow::bail!("/json/list returned no debuggable targets yet");
     }
 
+    let ws_url_from_target = |t: &Value| {
+        t.get("webSocketDebuggerUrl")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+    };
+
+    let is_page = |t: &Value| t.get("type").and_then(|v| v.as_str()) == Some("page");
+
+    // Prefer page targets; only fall back to any target if no page exists yet.
     let ws_url = targets
         .iter()
-        .find_map(|t| {
-            t.get("webSocketDebuggerUrl")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string())
+        .find(|t| is_page(t) && ws_url_from_target(t).is_some())
+        .or_else(|| {
+            targets
+                .iter()
+                .find(|t| ws_url_from_target(t).is_some())
         })
+        .and_then(ws_url_from_target)
         .context("No webSocketDebuggerUrl found in /json/list targets")?;
 
     Ok(ws_url)

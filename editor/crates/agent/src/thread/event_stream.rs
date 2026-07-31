@@ -829,7 +829,10 @@ impl ToolCallEventStream {
             match check(cx) {
                 ToolPermissionDecision::Allow => return Task::ready(Ok(())),
                 ToolPermissionDecision::Deny(reason) => {
-                    return Task::ready(Err(anyhow!(reason)));
+                    return Task::ready(Err(anyhow!(
+                        "{}: {reason}",
+                        super::TOOL_DENIED_MESSAGE
+                    )));
                 }
                 ToolPermissionDecision::Confirm => {}
             }
@@ -926,7 +929,10 @@ impl ToolCallEventStream {
                                     &tool_use_id,
                                     auto_deny_outcome.clone(),
                                 );
-                                return Err(anyhow!(reason));
+                                return Err(anyhow!(
+                                    "{}: {reason}",
+                                    super::TOOL_DENIED_MESSAGE
+                                ));
                             }
                             ToolPermissionDecision::Confirm => continue,
                         }

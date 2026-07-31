@@ -75,8 +75,12 @@ impl CredentialStore {
     async fn restrict_permissions(path: &PathBuf) -> Result<()> {
         use std::os::unix::fs::PermissionsExt;
         let perms = std::fs::Permissions::from_mode(0o600);
-        std::fs::set_permissions(path, perms)?;
-        Ok(())
+        match std::fs::set_permissions(path, perms) {
+            // In-memory Fs backends (FakeFs in tests) don't touch the real
+            // filesystem, so the path won't exist on disk — nothing to restrict.
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            result => result.map_err(Into::into),
+        }
     }
 
     #[cfg(not(unix))]

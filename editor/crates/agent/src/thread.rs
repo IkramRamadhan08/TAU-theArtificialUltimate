@@ -67,6 +67,7 @@ use util::{ResultExt, paths::PathStyle};
 use uuid::Uuid;
 
 const TOOL_CANCELED_MESSAGE: &str = "Tool canceled by user";
+const TOOL_DENIED_MESSAGE: &str = "Permission to run tool denied by user";
 pub const MAX_TOOL_NAME_LENGTH: usize = 64;
 pub const MAX_SUBAGENT_DEPTH: u8 = 3;
 
@@ -607,6 +608,15 @@ impl Thread {
             )
     }
 
+    fn is_denied_tool_result(tool_result: &LanguageModelToolResult) -> bool {
+        tool_result.is_error
+            && matches!(
+                tool_result.content.as_slice(),
+                [LanguageModelToolResultContent::Text(text)]
+                    if text.as_ref().starts_with(TOOL_DENIED_MESSAGE)
+            )
+    }
+
     fn tool_result_content_for_replay(
         tool_result: &LanguageModelToolResult,
     ) -> Option<Vec<acp::ToolCallContent>> {
@@ -962,6 +972,11 @@ impl Thread {
         } else {
             self.messages.last().cloned()
         }
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn messages_for_test(&self) -> Vec<Arc<Message>> {
+        self.messages.clone()
     }
 
     pub fn add_default_tools(
@@ -2308,6 +2323,7 @@ impl Thread {
                 .any(|p| check_text.to_lowercase().contains(p));
 
         let is_canceled = Self::is_canceled_tool_result(&tool_result);
+        let is_denied = Self::is_denied_tool_result(&tool_result);
 
         event_stream.update_tool_call_fields(
             &tool_result.tool_use_id,
@@ -2370,7 +2386,7 @@ impl Thread {
                         }
                     }
                 }
-                if (is_error || has_hidden_failure) && !is_canceled {
+                if (is_error || has_hidden_failure) && !is_canceled && !is_denied {
                     *running_turn
                         .pending_verification
                         .entry(tool_name)

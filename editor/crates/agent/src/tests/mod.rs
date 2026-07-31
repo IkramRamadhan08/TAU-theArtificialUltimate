@@ -315,7 +315,7 @@ async fn test_echo(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-async fn test_terminal_tool_timeout_kills_handle(cx: &mut TestAppContext) {
+async fn test_terminal_tool_timeout_keeps_handle_alive(cx: &mut TestAppContext) {
     init_test(cx);
     always_allow_tools(cx);
 
@@ -336,6 +336,7 @@ async fn test_terminal_tool_timeout_kills_handle(cx: &mut TestAppContext) {
             ToolInput::resolved(crate::TerminalToolInput {
                 command: "sleep 1000".to_string(),
                 cd: ".".to_string(),
+                timeout_ms: Some(100),
                 ..Default::default()
             }),
             event_stream,
@@ -361,8 +362,8 @@ async fn test_terminal_tool_timeout_kills_handle(cx: &mut TestAppContext) {
             let result = result.expect("terminal tool task should complete");
 
             assert!(
-                handle.was_killed(),
-                "expected terminal handle to be killed on timeout"
+                !handle.was_killed(),
+                "expected terminal handle to be kept alive on timeout (reconnect design)"
             );
             assert!(
                 result.contains("partial output"),
@@ -902,32 +903,32 @@ async fn test_tool_authorization(cx: &mut TestAppContext) {
             acp::PermissionOptionKind::RejectOnce,
         ))
         .unwrap();
-    cx.run_until_parked();
+        cx.run_until_parked();
 
-    let completion = fake_model.pending_completions().pop().unwrap();
-    let message = completion.messages.last().unwrap();
-    assert_eq!(
-        message.content,
-        vec![
-            language_model::MessageContent::ToolResult(LanguageModelToolResult {
-                tool_use_id: tool_call_auth_1.tool_call.tool_call_id.0.to_string().into(),
-                tool_name: ToolRequiringPermission::NAME.into(),
-                is_error: false,
-                content: vec!["Allowed".into()],
-                output: Some("Allowed".into())
-            }),
-            language_model::MessageContent::ToolResult(LanguageModelToolResult {
-                tool_use_id: tool_call_auth_2.tool_call.tool_call_id.0.to_string().into(),
-                tool_name: ToolRequiringPermission::NAME.into(),
-                is_error: true,
-                content: vec!["Permission to run tool denied by user".into()],
-                output: Some("Permission to run tool denied by user".into())
-            })
-        ]
-    );
+        let completion = fake_model.pending_completions().pop().unwrap();
+        let message = completion.messages.last().unwrap();
+        assert_eq!(
+            message.content,
+            vec![
+                language_model::MessageContent::ToolResult(LanguageModelToolResult {
+                    tool_use_id: tool_call_auth_1.tool_call.tool_call_id.0.to_string().into(),
+                    tool_name: ToolRequiringPermission::NAME.into(),
+                    is_error: false,
+                    content: vec!["Allowed".into()],
+                    output: Some("Allowed".into())
+                }),
+                language_model::MessageContent::ToolResult(LanguageModelToolResult {
+                    tool_use_id: tool_call_auth_2.tool_call.tool_call_id.0.to_string().into(),
+                    tool_name: ToolRequiringPermission::NAME.into(),
+                    is_error: true,
+                    content: vec!["Permission to run tool denied by user".into()],
+                    output: Some("Permission to run tool denied by user".into())
+                })
+            ]
+        );
 
-    // Simulate yet another tool call.
-    fake_model.send_last_completion_stream_event(LanguageModelCompletionEvent::ToolUse(
+        // Simulate yet another tool call.
+        fake_model.send_last_completion_stream_event(LanguageModelCompletionEvent::ToolUse(
         LanguageModelToolUse {
             id: "tool_id_3".into(),
             name: ToolRequiringPermission::NAME.into(),
@@ -1025,15 +1026,18 @@ async fn test_tool_hallucination(cx: &mut TestAppContext) {
 }
 
 async fn expect_tool_call(events: &mut UnboundedReceiver<Result<ThreadEvent>>) -> acp::ToolCall {
-    let event = events
-        .next()
-        .await
-        .expect("no tool call authorization event received")
-        .unwrap();
-    match event {
-        ThreadEvent::ToolCall(tool_call) => tool_call,
-        event => {
-            panic!("Unexpected event {event:?}");
+    loop {
+        let event = events
+            .next()
+            .await
+            .expect("no tool call authorization event received")
+            .unwrap();
+        match event {
+            ThreadEvent::ToolCall(tool_call) => return tool_call,
+            ThreadEvent::Plan(_) | ThreadEvent::PlanStepUpdate(..) => continue,
+            event => {
+                panic!("Unexpected event {event:?}");
+            }
         }
     }
 }
@@ -1041,15 +1045,20 @@ async fn expect_tool_call(events: &mut UnboundedReceiver<Result<ThreadEvent>>) -
 async fn expect_tool_call_update_fields(
     events: &mut UnboundedReceiver<Result<ThreadEvent>>,
 ) -> acp::ToolCallUpdate {
-    let event = events
-        .next()
-        .await
-        .expect("no tool call authorization event received")
-        .unwrap();
-    match event {
-        ThreadEvent::ToolCallUpdate(acp_thread::ToolCallUpdate::UpdateFields(update)) => update,
-        event => {
-            panic!("Unexpected event {event:?}");
+    loop {
+        let event = events
+            .next()
+            .await
+            .expect("no tool call authorization event received")
+            .unwrap();
+        match event {
+            ThreadEvent::ToolCallUpdate(acp_thread::ToolCallUpdate::UpdateFields(update)) => {
+                return update
+            }
+            ThreadEvent::Plan(_) | ThreadEvent::PlanStepUpdate(..) => continue,
+            event => {
+                panic!("Unexpected event {event:?}");
+            }
         }
     }
 }
@@ -2808,10 +2817,11 @@ async fn test_terminal_tool_timeout_expires(cx: &mut TestAppContext) {
     // Collect remaining events
     let remaining_events = collect_events_until_stop(&mut events, cx).await;
 
-    // Verify the terminal was killed due to timeout
+    // Verify the terminal was NOT killed on timeout; it is kept alive so the
+    // agent can reconnect via the returned terminal_id.
     assert!(
-        handle.was_killed(),
-        "expected terminal handle to be killed on timeout"
+        !handle.was_killed(),
+        "expected terminal handle to be kept alive on timeout (reconnect design)"
     );
 
     // Verify we got an EndTurn (the tool completed, just with timeout)
@@ -2822,8 +2832,12 @@ async fn test_terminal_tool_timeout_expires(cx: &mut TestAppContext) {
 
     // Verify the tool result indicates timeout, not user stopped
     thread.update(cx, |thread, _cx| {
-        let message = thread.last_received_or_pending_message().unwrap();
-        let agent_message = message.as_agent_message().unwrap();
+        let agent_message = thread
+            .messages_for_test()
+            .into_iter()
+            .rev()
+            .find_map(|message| message.as_agent_message().cloned())
+            .expect("expected an agent message in the thread");
 
         let tool_use = agent_message
             .content
@@ -4254,6 +4268,15 @@ async fn test_streaming_tool_completes_when_llm_stream_ends_without_final_input(
                         output: Some("tool input was not fully received".into()),
                     }
                 )],
+                cache: false,
+                reasoning_details: None,
+            },
+            LanguageModelRequestMessage {
+                role: Role::User,
+                content: vec![
+                    "[System] The following tools reported failures: streaming_echo. Their output may contain errors. Verify and retry if needed."
+                        .into(),
+                ],
                 cache: true,
                 reasoning_details: None,
             },
@@ -4452,6 +4475,9 @@ async fn setup(cx: &mut TestAppContext, model: TestModel) -> ThreadTest {
                             "find_path": true,
                         }
                     }
+                },
+                "tool_permissions": {
+                    "default": "confirm"
                 }
             }
         })
@@ -5823,6 +5849,37 @@ async fn test_max_subagent_depth_prevents_tool_registration(cx: &mut TestAppCont
 #[gpui::test]
 async fn test_lsp_tools_gated_by_feature_flag(cx: &mut TestAppContext) {
     init_test(cx);
+
+    // Register the flag settings and install an empty `FeatureFlagStore` so
+    // `cx.has_flag` consults overrides rather than the staff debug-build
+    // default, matching `test_sibling_thread_tools_gated_by_feature_flag`.
+    cx.update(|cx| {
+        SettingsStore::update_global(cx, |store, _| {
+            store.register_setting::<feature_flags::FeatureFlagsSettings>();
+        });
+        cx.update_flags(false, vec![]);
+    });
+
+    // The default `plan` profile only enables read-only tools and therefore
+    // omits `rename_symbol` and `apply_code_action` (file-modifying tools).
+    // Enable every tool this test exercises explicitly: the point here is
+    // that the feature flags gate them, not the profile.
+    cx.update(|cx| {
+        let mut settings = agent_settings::AgentSettings::get_global(cx).clone();
+        let profile_id = settings.default_profile.clone();
+        if let Some(profile) = settings.profiles.get_mut(&profile_id) {
+            for tool_name in [
+                FindReferencesTool::NAME,
+                GetCodeActionsTool::NAME,
+                ApplyCodeActionTool::NAME,
+                GoToDefinitionTool::NAME,
+                RenameTool::NAME,
+            ] {
+                profile.tools.insert(tool_name.into(), true);
+            }
+        }
+        agent_settings::AgentSettings::override_global(settings, cx);
+    });
 
     let fs = FakeFs::new(cx.executor());
     fs.insert_tree(path!("/test"), json!({})).await;
@@ -7590,6 +7647,15 @@ async fn test_streaming_tool_error_breaks_stream_loop_immediately(cx: &mut TestA
                         output: Some("failed".into()),
                     }
                 )],
+                cache: false,
+                reasoning_details: None,
+            },
+            LanguageModelRequestMessage {
+                role: Role::User,
+                content: vec![
+                    "[System] The following tools reported failures: streaming_failing_echo. Their output may contain errors. Verify and retry if needed."
+                        .into(),
+                ],
                 cache: true,
                 reasoning_details: None,
             },
@@ -7707,6 +7773,15 @@ async fn test_streaming_tool_error_waits_for_prior_tools_to_complete(cx: &mut Te
                         content: vec!["hello world".into()],
                         output: Some("hello world".into()),
                     }),
+                ],
+                cache: false,
+                reasoning_details: None,
+            },
+            LanguageModelRequestMessage {
+                role: Role::User,
+                content: vec![
+                    "[System] The following tools reported failures: streaming_failing_echo. Their output may contain errors. Verify and retry if needed."
+                        .into(),
                 ],
                 cache: true,
                 reasoning_details: None,
