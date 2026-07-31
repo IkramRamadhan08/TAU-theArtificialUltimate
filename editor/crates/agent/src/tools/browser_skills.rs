@@ -19,9 +19,13 @@ fn skills_dir() -> Result<PathBuf> {
     Ok(skills_path)
 }
 
+fn normalize_site(site: &str) -> String {
+    extract_site_from_url(site).unwrap_or_else(|| site.to_string())
+}
+
 pub fn get_skills_for_site(site: &str) -> Result<Vec<DomainSkill>> {
     let skills_path = skills_dir()?;
-    let site_dir = skills_path.join(site);
+    let site_dir = skills_path.join(normalize_site(site));
 
     if !site_dir.exists() {
         return Ok(vec![]);
@@ -55,7 +59,7 @@ pub fn get_skills_for_site(site: &str) -> Result<Vec<DomainSkill>> {
 
 pub fn save_skill(site: &str, name: &str, content: &str) -> Result<()> {
     let skills_path = skills_dir()?;
-    let site_dir = skills_path.join(site);
+    let site_dir = skills_path.join(normalize_site(site));
     std::fs::create_dir_all(&site_dir)?;
 
     let skill_path = site_dir.join(format!("{}.md", name));
