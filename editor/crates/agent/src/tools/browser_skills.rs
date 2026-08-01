@@ -12,7 +12,14 @@ pub struct DomainSkill {
     pub updated_at: String,
 }
 
+static SKILLS_DIR_OVERRIDE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
 fn skills_dir() -> Result<PathBuf> {
+    if let Some(dir) = SKILLS_DIR_OVERRIDE.get() {
+        let dir = dir.clone();
+        std::fs::create_dir_all(&dir)?;
+        return Ok(dir);
+    }
     let config_dir = dirs::config_dir().context("No config directory")?;
     let skills_path = config_dir.join("tau").join("domain-skills");
     std::fs::create_dir_all(&skills_path)?;
@@ -101,10 +108,33 @@ fn extract_site_from_url(url: &str) -> Option<String> {
 mod tests {
     use super::*;
 
+    fn set_skills_dir_for_test(dir: PathBuf) {
+        let _ = SKILLS_DIR_OVERRIDE.set(dir);
+    }
+
     #[test]
     fn test_extract_site_from_url() {
         assert_eq!(extract_site_from_url("https://github.com/login"), Some("github".into()));
         assert_eq!(extract_site_from_url("https://www.google.com"), Some("google".into()));
         assert_eq!(extract_site_from_url("https://docs.rs/tokio"), Some("docs".into()));
+    }
+
+    #[test]
+    fn skill_roundtrip_read_write_list() {
+        let temp = tempfile::tempdir().expect("tempdir for skills");
+        set_skills_dir_for_test(temp.path().to_path_buf());
+
+        save_skill("https://github.com", "test-skill", "# Hello").expect("save");
+        let skills = get_skills_for_site("https://github.com").expect("read");
+        assert_eq!(skills.len(), 1, "expected one skill");
+        assert_eq!(skills[0].name, "test-skill");
+        assert_eq!(skills[0].content, "# Hello");
+
+        let sites = list_sites().expect("list");
+        assert_eq!(sites, vec!["github".to_string()]);
+
+        save_skill("https://github.com", "test-skill", "# Updated").expect("overwrite");
+        let skills = get_skills_for_site("https://github.com").expect("read again");
+        assert_eq!(skills[0].content, "# Updated");
     }
 }

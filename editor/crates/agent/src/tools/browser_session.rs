@@ -37,6 +37,7 @@ const CDP_COMMAND_DEADLINE: Duration = Duration::from_secs(30);
 pub struct CdpClient {
     ws: WebSocket<tungstenite::stream::MaybeTlsStream<TcpStream>>,
     msg_id: AtomicU64,
+    downloads: std::sync::Mutex<HashMap<String, Value>>,
 }
 
 impl CdpClient {
@@ -66,6 +67,7 @@ impl CdpClient {
         Ok(Self {
             ws,
             msg_id: AtomicU64::new(1),
+            downloads: std::sync::Mutex::new(HashMap::new()),
         })
     }
 
@@ -135,6 +137,40 @@ impl CdpClient {
                         );
                     }
                     return Ok(response.get("result").cloned().unwrap_or(json!(null)));
+                }
+            } else if let Some(method) = response.get("method").and_then(|v| v.as_str()) {
+                // Capture download events so `get_downloads` can report real
+                // downloads instead of always returning an empty list.
+                if let Some(params) = response.get("params") {
+                    match method {
+                        "Browser.downloadWillBegin" | "Page.downloadWillBegin" => {
+                            let mut entry = params.clone();
+                            entry["state"] = json!("in_progress");
+                            if let Some(guid) = entry.get("guid").and_then(|v| v.as_str()) {
+                                self.downloads
+                                    .lock()
+                                    .map_err(|e| anyhow::anyhow!("{}", e))?
+                                    .insert(guid.to_string(), entry);
+                            }
+                        }
+                        "Browser.downloadProgress" | "Page.downloadProgress" => {
+                            if let Some(guid) = params.get("guid").and_then(|v| v.as_str()) {
+                                let mut downloads = self
+                                    .downloads
+                                    .lock()
+                                    .map_err(|e| anyhow::anyhow!("{}", e))?;
+                                let entry = downloads
+                                    .entry(guid.to_string())
+                                    .or_insert_with(|| json!({ "guid": guid }));
+                                for key in ["state", "receivedBytes", "totalBytes"] {
+                                    if let Some(value) = params.get(key) {
+                                        entry[key] = value.clone();
+                                    }
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
                 }
             }
         }
@@ -578,10 +614,10 @@ impl BrowserSession {
             .context("No accessibility nodes returned")?;
 
         let mut parsed = Vec::new();
-        let mut nodes_by_id: HashMap<u64, Value> = HashMap::new();
+        let mut nodes_by_id: HashMap<i64, Value> = HashMap::new();
 
         for node in nodes {
-            if let Some(node_id) = node.get("nodeId").and_then(|v| v.as_u64()) {
+            if let Some(node_id) = node.get("nodeId").and_then(ax_id) {
                 nodes_by_id.insert(node_id, node.clone());
             }
         }
@@ -589,7 +625,15 @@ impl BrowserSession {
         let root_id = result
             .get("root")
             .and_then(|v| v.get("nodeId"))
-            .and_then(|v| v.as_u64());
+            .and_then(ax_id)
+            .or_else(|| {
+                // Chrome no longer returns a `root` key from getFullAXTree;
+                // the root is the node without a `parentId`.
+                nodes_by_id
+                    .iter()
+                    .find(|(_, node)| node.get("parentId").is_none())
+                    .map(|(node_id, _)| *node_id)
+            });
 
         if let Some(root_id) = root_id {
             if nodes_by_id.contains_key(&root_id) {
@@ -929,40 +973,43 @@ impl BrowserSession {
     }
 
     pub fn get_iframe_targets(&self) -> Result<Vec<TabInfo>> {
-        let result = self.send_command("Target.getTargets", json!({}))?;
+        // Target.getTargets only exposes iframes when they run as separate
+        // (out-of-process) targets, which localhost and many same-site frames
+        // never do. Page.getFrameTree lists every frame, so it is the reliable
+        // source for enumerating iframes.
+        let result = self.send_command("Page.getFrameTree", json!({}))?;
 
-        let target_infos = result
-            .get("targetInfos")
-            .and_then(|v| v.as_array())
-            .context("No target infos returned")?;
-
-        let mut iframes = Vec::new();
-        for info in target_infos {
-            if info.get("type").and_then(|v| v.as_str()) == Some("iframe") {
-                iframes.push(TabInfo {
-                    target_id: info
-                        .get("targetId")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string(),
-                    title: info
-                        .get("title")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string(),
-                    url: info
-                        .get("url")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string(),
-                    is_attached: info
-                        .get("attached")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(false),
-                });
+        fn walk_frames(frame_tree: &Value, out: &mut Vec<TabInfo>) {
+            if let Some(frame) = frame_tree.get("frame") {
+                if let Some(frame_id) = frame.get("id").and_then(|v| v.as_str()) {
+                    out.push(TabInfo {
+                        target_id: frame_id.to_string(),
+                        title: frame
+                            .get("title")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        url: frame
+                            .get("url")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        is_attached: true,
+                    });
+                }
+            }
+            if let Some(children) = frame_tree
+                .get("childFrames")
+                .and_then(|v| v.as_array())
+            {
+                for child in children {
+                    walk_frames(child, out);
+                }
             }
         }
 
+        let mut iframes = Vec::new();
+        walk_frames(result.get("frameTree").unwrap_or(&json!({})), &mut iframes);
         Ok(iframes)
     }
 
@@ -1010,9 +1057,12 @@ impl BrowserSession {
     }
 
     pub fn get_cookies(&self, urls: Option<Vec<String>>) -> Result<Vec<Value>> {
-        let result = self.send_command("Network.getCookies", json!({
-            "urls": urls.unwrap_or_default()
-        }))?;
+        // Network.getCookies with an empty urls list returns no cookies, so
+        // fall back to Network.getAllCookies when no urls are requested.
+        let result = match urls {
+            Some(urls) => self.send_command("Network.getCookies", json!({ "urls": urls }))?,
+            None => self.send_command("Network.getAllCookies", json!({}))?,
+        };
 
         let cookies = result
             .get("cookies")
@@ -1064,7 +1114,7 @@ impl BrowserSession {
             .and_then(|v| v.as_f64())
             .unwrap_or(-1.0);
 
-        self.send_command("Network.setCookie", json!({
+        let result = self.send_command("Network.setCookie", json!({
             "name": name,
             "value": value,
             "domain": domain,
@@ -1074,6 +1124,12 @@ impl BrowserSession {
             "sameSite": same_site,
             "expires": expires
         }))?;
+
+        // Network.setCookie can silently reject a cookie; surface that.
+        let success = result.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+        if !success {
+            anyhow::bail!("Failed to set cookie '{}' for domain '{}'", name, domain);
+        }
 
         Ok(())
     }
@@ -1109,7 +1165,8 @@ impl BrowserSession {
         }))?;
 
         let html = result
-            .get("value")
+            .get("result")
+            .and_then(|v| v.get("value"))
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("Shadow DOM element not found"))?;
 
@@ -1193,30 +1250,41 @@ impl BrowserSession {
     }
 
     pub fn start_download_monitoring(&self) -> Result<()> {
+        self.start_download_monitoring_in(
+            &dirs::download_dir().unwrap_or_else(|| std::path::PathBuf::from(".")),
+        )
+    }
+
+    pub fn start_download_monitoring_in(&self, download_path: &std::path::Path) -> Result<()> {
+        // Page.enable is required for Chrome to emit the
+        // Page.downloadWillBegin/Page.downloadProgress events that
+        // `get_downloads` relies on.
+        self.send_command("Page.enable", json!({}))?;
         self.send_command("Page.setDownloadBehavior", json!({
             "behavior": "allow",
-            "downloadPath": dirs::download_dir()
-                .unwrap_or_else(|| std::path::PathBuf::from("."))
-                .to_string_lossy()
+            "downloadPath": download_path.to_string_lossy(),
+            "eventsEnabled": true
         }))?;
         Ok(())
     }
 
     pub fn get_downloads(&self) -> Result<Value> {
-        let expression = r#"(() => {
-            const downloads = [];
-            if (window.__TAU_DOWNLOADS) {
-                downloads.push(...window.__TAU_DOWNLOADS);
-            }
-            return JSON.stringify(downloads);
-        })()"#;
+        // Events only reach the read loop while a command is in flight, so drain
+        // any buffered download events with a trivial evaluate before reading.
+        self.send_command("Runtime.evaluate", json!({ "expression": "1" }))?;
 
-        let result = self.send_command("Runtime.evaluate", json!({
-            "expression": expression,
-            "returnByValue": true
-        }))?;
+        let downloads = self
+            .client
+            .lock()
+            .map_err(|e| anyhow::anyhow!("{}", e))?
+            .downloads
+            .lock()
+            .map_err(|e| anyhow::anyhow!("{}", e))?
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
 
-        Ok(result.get("result").cloned().unwrap_or(json!(null)))
+        Ok(serde_json::Value::Array(downloads))
     }
 
     pub fn is_alive(&mut self) -> bool {
@@ -1423,21 +1491,25 @@ fn try_get_ws_url_from_json_list(port: u16) -> Result<String> {
     Ok(ws_url)
 }
 
-fn build_accessibility_tree(node_id: u64, nodes_by_id: &HashMap<u64, Value>) -> AccessibilityNode {
+// Accessibility node ids come from Chrome as numbers or numeric strings, and
+// can be negative for synthetic nodes (e.g. InlineTextBox).
+fn ax_id(value: &Value) -> Option<i64> {
+    value
+        .as_i64()
+        .or_else(|| value.as_str().and_then(|s| s.parse::<i64>().ok()))
+}
+
+fn build_accessibility_tree(node_id: i64, nodes_by_id: &HashMap<i64, Value>) -> AccessibilityNode {
     let node = nodes_by_id.get(&node_id).cloned().unwrap_or(json!({}));
 
     let backend_dom_node_id = node
         .get("backendDOMNodeId")
         .and_then(|v| v.as_u64());
 
-    let child_node_ids: Vec<u64> = node
+    let child_node_ids: Vec<i64> = node
         .get("childIds")
         .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_u64())
-                .collect()
-        })
+        .map(|arr| arr.iter().filter_map(ax_id).collect())
         .unwrap_or_default();
 
     let child_nodes: Vec<AccessibilityNode> = child_node_ids
@@ -1446,7 +1518,7 @@ fn build_accessibility_tree(node_id: u64, nodes_by_id: &HashMap<u64, Value>) -> 
         .map(|child_node| {
             let child_node_id = child_node
                 .get("nodeId")
-                .and_then(|v| v.as_u64())
+                .and_then(ax_id)
                 .unwrap_or(0);
             build_accessibility_tree(child_node_id, nodes_by_id)
         })
@@ -1544,6 +1616,32 @@ pub fn format_accessibility_tree(nodes: &[AccessibilityNode]) -> String {
 mod tests {
     use super::*;
 
+    // Serializes the end-to-end browser tests. Launching several headless
+    // Chromium instances concurrently makes `find_free_port` (bind, read port,
+    // release) vulnerable to races where two instances claim the same debug
+    // port. Production only launches one session at a time behind the global
+    // session mutex, so the lock is test-only.
+    static BROWSER_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    // Recover from a poisoned lock (a prior test panicked while holding it) so
+    // one failure does not cascade into the other browser tests.
+    fn browser_test_guard() -> std::sync::MutexGuard<'static, ()> {
+        BROWSER_TEST_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn available_browser() -> &'static str {
+        [
+            "/usr/bin/chromium",
+            "/usr/bin/chromium-browser",
+            "/usr/bin/google-chrome",
+            "/usr/bin/google-chrome-stable",
+        ]
+        .iter()
+        .find(|path| std::path::Path::new(path).exists())
+        .copied()
+        .unwrap_or("")
+    }
+
     // Chrome's /json/list and /json/version endpoints respond with 200 OK and
     // a Content-Length, then keep the TCP connection open indefinitely
     // (ignoring `Connection: close`). http_get must stop once Content-Length
@@ -1605,19 +1703,11 @@ mod tests {
     // connection.
     #[test]
     fn browser_session_launch_navigate_screenshot() {
-        let browser_path = [
-            "/usr/bin/chromium",
-            "/usr/bin/chromium-browser",
-            "/usr/bin/google-chrome",
-            "/usr/bin/google-chrome-stable",
-        ]
-        .iter()
-        .find(|path| std::path::Path::new(path).exists())
-        .cloned()
-        .unwrap_or("");
+        let browser_path = available_browser();
         if browser_path.is_empty() {
             return;
         }
+        let _guard = browser_test_guard();
 
         let start = Instant::now();
         let mut session = BrowserSession::launch(browser_path)
@@ -1641,5 +1731,452 @@ mod tests {
         assert!(!screenshot.is_empty(), "screenshot should not be empty");
 
         session.close();
+    }
+
+    // ------------------------------------------------------------------------
+    // Local HTTP test server + comprehensive coverage of the remaining
+    // BrowserSession methods (and therefore the browser_* tools that call
+    // them).
+    // ------------------------------------------------------------------------
+
+    struct TestServer {
+        addr: String,
+        shutdown: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        handle: Option<std::thread::JoinHandle<()>>,
+    }
+
+    const MAIN_PAGE: &str = r#"<!DOCTYPE html>
+    <html>
+    <head>
+      <title>TAU E2E Test</title>
+      <style>
+        #scroll-box { overflow: auto; height: 80px; width: 200px; }
+        #scroll-inner { height: 400px; width: 200px; }
+        #spacer { height: 2000px; }
+      </style>
+    </head>
+    <body>
+      <h1 id="heading">Test Page</h1>
+      <input id="name-input" type="text">
+      <input id="file-input" type="file">
+      <button id="click-button">Click</button>
+      <select id="select-box"><option value="a">A</option><option value="b">B</option></select>
+      <div id="scroll-box"><div id="scroll-inner">scroll target</div></div>
+      <div id="shadow-host"></div>
+      <iframe id="test-iframe" src="/iframe" style="width:300px;height:150px"></iframe>
+      <a id="download-link" href="/download">Download</a>
+      <div id="spacer"></div>
+      <script>
+        window.__TAU_CLICKED = false;
+        window.__TAU_SHADOW_VALUE = null;
+        window.__TAU_KEYS = [];
+        document.addEventListener('keydown', function (e) { window.__TAU_KEYS.push(e.key); });
+        document.getElementById('click-button').addEventListener('click', function () {
+          window.__TAU_CLICKED = true;
+        });
+        var host = document.getElementById('shadow-host');
+        var root = host.attachShadow({ mode: 'open' });
+        root.innerHTML = '<input id="shadow-input"><button id="shadow-button">Shadow Click</button>';
+        root.querySelector('#shadow-button').addEventListener('click', function () {
+          window.__TAU_SHADOW_VALUE = 'clicked';
+        });
+      </script>
+    </body>
+    </html>"#;
+
+    fn http_response(status: u16, content_type: &str, body: &str) -> String {
+        format!(
+            "HTTP/1.1 {status} OK\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        )
+    }
+
+    fn handle_test_connection(stream: &mut std::net::TcpStream) {
+        let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+        let mut buf = [0u8; 8192];
+        let mut request = String::new();
+        loop {
+            match stream.read(&mut buf) {
+                Ok(0) => break,
+                Ok(read) => {
+                    request.push_str(&String::from_utf8_lossy(&buf[..read]));
+                    if request.contains("\r\n\r\n") {
+                        break;
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+
+        let path = request
+            .lines()
+            .next()
+            .and_then(|line| line.split_whitespace().nth(1))
+            .unwrap_or("/");
+        let path = path.split('?').next().unwrap_or("/");
+
+        let response = match path {
+            "/" => http_response(200, "text/html", MAIN_PAGE),
+            "/iframe" => http_response(
+                200,
+                "text/html",
+                "<!DOCTYPE html><html><head><title>Iframe</title></head><body><h1 id='inner'>iframe</h1><input id='iframe-input'></body></html>",
+            ),
+            "/download" => {
+                let body = "hello download";
+                format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=\"tau-test.txt\"\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                )
+            }
+            _ => http_response(404, "text/plain", "not found"),
+        };
+
+        let _ = stream.write_all(response.as_bytes());
+        let _ = stream.flush();
+    }
+
+    impl TestServer {
+        fn start() -> Self {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let addr = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
+            let shutdown = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let flag = shutdown.clone();
+            let handle = std::thread::spawn(move || {
+                let _ = listener.set_nonblocking(true);
+                while !flag.load(std::sync::atomic::Ordering::SeqCst) {
+                    match listener.accept() {
+                        Ok((mut stream, _)) => handle_test_connection(&mut stream),
+                        Err(ref error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                            std::thread::sleep(Duration::from_millis(25));
+                        }
+                        Err(_) => break,
+                    }
+                }
+            });
+            Self {
+                addr,
+                shutdown,
+                handle: Some(handle),
+            }
+        }
+
+        fn stop(mut self) {
+            self.shutdown.store(true, std::sync::atomic::Ordering::SeqCst);
+            if let Some(handle) = self.handle.take() {
+                let _ = handle.join();
+            }
+        }
+    }
+
+    fn poll_with_timeout<F: FnMut() -> bool>(mut check: F, timeout: Duration) -> bool {
+        let start = Instant::now();
+        while start.elapsed() < timeout {
+            if check() {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(200));
+        }
+        false
+    }
+
+    fn flatten_ax<'a>(
+        nodes: &'a [AccessibilityNode],
+        out: &mut Vec<(usize, &'a AccessibilityNode)>,
+    ) {
+        let mut counter = 0;
+        flatten_ax_recursive(nodes, &mut counter, out);
+    }
+
+    fn flatten_ax_recursive<'a>(
+        nodes: &'a [AccessibilityNode],
+        counter: &mut usize,
+        out: &mut Vec<(usize, &'a AccessibilityNode)>,
+    ) {
+        for node in nodes {
+            let index = *counter;
+            *counter += 1;
+            out.push((index, node));
+            if !node.child_nodes.is_empty() {
+                flatten_ax_recursive(&node.child_nodes, counter, out);
+            }
+        }
+    }
+
+    #[test]
+    fn browser_session_navigation_and_interaction() {
+        let browser_path = available_browser();
+        if browser_path.is_empty() {
+            return;
+        }
+        let _guard = browser_test_guard();
+        let server = TestServer::start();
+        let mut session = BrowserSession::launch(browser_path).expect("launch");
+        session.navigate(&server.addr).expect("navigate");
+
+        let title = session.get_page_title().expect("title");
+        assert_eq!(title, "TAU E2E Test", "unexpected title: {title}");
+        assert!(
+            session.get_page_url().expect("url").starts_with(&server.addr),
+            "unexpected url"
+        );
+        let dom = session.get_dom().expect("dom");
+        assert!(dom.contains("id=\"click-button\""), "dom missing button");
+        let info = session.get_page_info().expect("page info");
+        assert_eq!(
+            info.get("title").and_then(|v| v.as_str()),
+            Some("TAU E2E Test"),
+            "unexpected page info"
+        );
+        assert!(session.wait_for_load(5000).expect("wait_for_load"));
+
+        let value = session.evaluate("2 + 2").expect("evaluate");
+        assert_eq!(value.get("value").and_then(|v| v.as_i64()), Some(4));
+
+        session.click("#click-button").expect("click");
+        let clicked = session.evaluate("window.__TAU_CLICKED").expect("clicked state");
+        assert_eq!(clicked.get("value").and_then(|v| v.as_bool()), Some(true));
+
+        session.type_text("#name-input", "hello").expect("type");
+        let typed = session.evaluate("document.getElementById('name-input').value").expect("typed value");
+        assert_eq!(typed.get("value").and_then(|v| v.as_str()), Some("hello"));
+
+        session.fill("#name-input", "world").expect("fill");
+        let filled = session.evaluate("document.getElementById('name-input').value").expect("filled value");
+        assert_eq!(filled.get("value").and_then(|v| v.as_str()), Some("world"));
+
+        session.press_key("ArrowDown").expect("press_key");
+        let keys = session.evaluate("window.__TAU_KEYS").expect("keys");
+        assert!(
+            keys.get("value")
+                .and_then(|v| v.as_array())
+                .map(|keys| keys.iter().any(|key| key == "ArrowDown"))
+                .unwrap_or(false),
+            "ArrowDown not recorded: {keys}"
+        );
+
+        session.dispatch_key_event("#name-input", "Enter", "keydown").expect("dispatch key");
+        let keys = session.evaluate("window.__TAU_KEYS").expect("keys 2");
+        assert!(
+            keys.get("value")
+                .and_then(|v| v.as_array())
+                .map(|keys| keys.iter().any(|key| key == "Enter"))
+                .unwrap_or(false),
+            "Enter not recorded: {keys}"
+        );
+
+        session.evaluate("window.__TAU_CLICKED = false").expect("reset clicked");
+        let rect = session
+            .evaluate(
+                "(() => { const r = document.getElementById('click-button').getBoundingClientRect(); \
+                 return JSON.stringify({x: r.x + r.width / 2, y: r.y + r.height / 2}); })()",
+            )
+            .expect("rect");
+        let rect: Value =
+            serde_json::from_str(rect.get("value").and_then(|v| v.as_str()).expect("rect string"))
+                .expect("rect json");
+        let x = rect.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let y = rect.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        session.click_at_xy(x, y, "left", 1).expect("click at xy");
+        let clicked = session.evaluate("window.__TAU_CLICKED").expect("clicked after xy");
+        assert_eq!(clicked.get("value").and_then(|v| v.as_bool()), Some(true));
+
+        session.scroll(0, 800).expect("scroll");
+        session.scroll(0, 800).expect("scroll 2");
+        let scrolled = poll_with_timeout(
+            || {
+                session
+                    .evaluate("window.scrollY")
+                    .map(|value| {
+                        value
+                            .get("value")
+                            .and_then(|v| v.as_f64())
+                            .unwrap_or(0.0)
+                            > 0.0
+                    })
+                    .unwrap_or(false)
+            },
+            Duration::from_secs(3),
+        );
+        assert!(scrolled, "page did not scroll");
+
+        session.wait_for_element("#name-input", 5000).expect("wait for element");
+        let idle = session.wait_for_network_idle(5000, 500).expect("wait network idle");
+        assert!(idle, "network never went idle");
+
+        let tabs = session.get_tabs().expect("tabs");
+        assert!(!tabs.is_empty(), "expected at least one tab");
+        let create = session
+            .send_command("Target.createTarget", json!({ "url": "about:blank" }))
+            .expect("create tab");
+        let new_id = create
+            .get("targetId")
+            .and_then(|v| v.as_str())
+            .expect("new target id")
+            .to_string();
+        assert_eq!(session.get_tabs().expect("tabs 2").len(), 2, "expected two tabs");
+        session.switch_tab(&new_id).expect("switch tab");
+        session.close_tab(&new_id).expect("close tab");
+        assert_eq!(session.get_tabs().expect("tabs 3").len(), 1, "expected one tab");
+
+        session.close();
+        server.stop();
+    }
+
+    #[test]
+    fn browser_session_advanced_features() {
+        let browser_path = available_browser();
+        if browser_path.is_empty() {
+            return;
+        }
+        let _guard = browser_test_guard();
+        let server = TestServer::start();
+        let mut session = BrowserSession::launch(browser_path).expect("launch");
+        session.navigate(&server.addr).expect("navigate");
+
+        let tree = session.get_accessibility_tree().expect("ax tree");
+        assert!(!tree.is_empty(), "expected non-empty accessibility tree");
+        let mut flat = Vec::new();
+        flatten_ax(&tree, &mut flat);
+
+        let click_index = flat
+            .iter()
+            .find(|(_, node)| node.name.as_deref().map(|n| n.contains("Click")).unwrap_or(false))
+            .map(|(index, _)| *index)
+            .expect("no Click button in accessibility tree");
+        session.click_by_index(click_index).expect("click_by_index");
+        let clicked = session.evaluate("window.__TAU_CLICKED").expect("clicked by index");
+        assert_eq!(clicked.get("value").and_then(|v| v.as_bool()), Some(true));
+
+        let textbox_index = flat
+            .iter()
+            .find(|(_, node)| node.role.as_deref() == Some("textbox"))
+            .map(|(index, _)| *index)
+            .expect("no textbox in accessibility tree");
+        session.type_by_index(textbox_index, "abc").expect("type_by_index");
+        let typed = session.evaluate("document.getElementById('name-input').value").expect("typed by index");
+        assert_eq!(typed.get("value").and_then(|v| v.as_str()), Some("abc"));
+        session.fill_by_index(textbox_index, "xyz", true).expect("fill_by_index");
+        let filled = session.evaluate("document.getElementById('name-input').value").expect("filled by index");
+        assert_eq!(filled.get("value").and_then(|v| v.as_str()), Some("xyz"));
+
+        let iframe_found = poll_with_timeout(
+            || {
+                session
+                    .get_iframe_targets()
+                    .map(|targets| targets.iter().any(|info| info.url.contains("/iframe")))
+                    .unwrap_or(false)
+            },
+            Duration::from_secs(10),
+        );
+        assert!(iframe_found, "no iframe target found");
+
+        let html = session
+            .query_shadow_dom("#shadow-host", "#shadow-button")
+            .expect("query shadow");
+        assert!(html.contains("shadow-button"), "shadow query: {html}");
+        session
+            .click_in_shadow_dom("#shadow-host", "#shadow-button")
+            .expect("click shadow");
+        let shadow_state = session.evaluate("window.__TAU_SHADOW_VALUE").expect("shadow state");
+        assert_eq!(shadow_state.get("value").and_then(|v| v.as_str()), Some("clicked"));
+        session
+            .fill_in_shadow_dom("#shadow-host", "#shadow-input", "secret")
+            .expect("fill shadow");
+        let shadow_value = session
+            .evaluate("document.querySelector('#shadow-host').shadowRoot.querySelector('#shadow-input').value")
+            .expect("shadow value");
+        assert_eq!(shadow_value.get("value").and_then(|v| v.as_str()), Some("secret"));
+
+        let temp = tempfile::tempdir().expect("tempdir for upload");
+        let upload_path = temp.path().join("hello.txt");
+        std::fs::write(&upload_path, "file content").expect("write upload file");
+        session
+            .upload_file("#file-input", upload_path.to_str().unwrap())
+            .expect("upload");
+        let file_name = session
+            .evaluate("document.getElementById('file-input').files[0].name")
+            .expect("uploaded name");
+        assert_eq!(file_name.get("value").and_then(|v| v.as_str()), Some("hello.txt"));
+
+        session
+            .set_cookie(&json!({
+                "name": "tau_test",
+                "value": "42",
+                "domain": "127.0.0.1",
+                "path": "/",
+                "sameSite": "Lax"
+            }))
+            .expect("set cookie");
+        let cookies = session.get_cookies(None).expect("get cookies");
+        assert!(
+            cookies
+                .iter()
+                .any(|cookie| cookie.get("name").and_then(|v| v.as_str()) == Some("tau_test")),
+            "cookie not set: {cookies:?}"
+        );
+        session
+            .delete_cookies("tau_test", "127.0.0.1", "/")
+            .expect("delete cookie");
+        let cookies = session.get_cookies(None).expect("get cookies 2");
+        assert!(
+            !cookies
+                .iter()
+                .any(|cookie| cookie.get("name").and_then(|v| v.as_str()) == Some("tau_test")),
+            "cookie not deleted: {cookies:?}"
+        );
+
+        session.close();
+        server.stop();
+    }
+
+    #[test]
+    fn browser_session_downloads() {
+        let browser_path = available_browser();
+        if browser_path.is_empty() {
+            return;
+        }
+        let _guard = browser_test_guard();
+        let server = TestServer::start();
+        let download_dir = tempfile::tempdir().expect("tempdir for downloads");
+        let mut session = BrowserSession::launch(browser_path).expect("launch");
+        session.navigate(&server.addr).expect("navigate");
+
+        session
+            .start_download_monitoring_in(download_dir.path())
+            .expect("start monitoring");
+        session.click("#download-link").expect("click download link");
+
+        let download_seen = poll_with_timeout(
+            || {
+                session
+                    .get_downloads()
+                    .map(|downloads| {
+                        downloads
+                            .as_array()
+                            .map(|items| {
+                                items
+                                    .iter()
+                                    .any(|item| {
+                                        item.get("state").and_then(|v| v.as_str())
+                                            == Some("completed")
+                                    })
+                            })
+                            .unwrap_or(false)
+                    })
+                    .unwrap_or(false)
+            },
+            Duration::from_secs(20),
+        );
+        assert!(download_seen, "download never completed");
+
+        let file_landed = poll_with_timeout(
+            || download_dir.path().join("tau-test.txt").exists(),
+            Duration::from_secs(10),
+        );
+        assert!(file_landed, "downloaded file not found in monitored directory");
+
+        session.close();
+        server.stop();
     }
 }
