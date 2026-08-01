@@ -2182,7 +2182,7 @@ impl NativeAgent {
                         .visible_providers()
                         .iter()
                         .flat_map(|p| p.recommended_models(cx))
-                        .find(|m| m.id().0.to_string() == model_name)
+                        .find(|m| m.id().0 == model_name)
                 });
 
                 if let Some(model) = found {

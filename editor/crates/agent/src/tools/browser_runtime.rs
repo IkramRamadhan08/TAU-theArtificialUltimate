@@ -298,9 +298,13 @@ async fn download_and_extract(
 
     if cfg!(target_os = "macos") {
         let shell_dir = dest.join(format!("chrome-headless-shell-{platform}"));
-        let _ = std::process::Command::new("xattr")
+        if let Err(error) = util::command::new_command("xattr")
             .args(["-cr", &shell_dir.to_string_lossy()])
-            .output();
+            .output()
+            .await
+        {
+            log::error!("Failed to run xattr -cr on {shell_dir:?}: {error}");
+        }
     }
 
     let binary = binary_path_for_version(version)?;

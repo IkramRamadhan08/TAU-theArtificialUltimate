@@ -87,7 +87,11 @@ impl CdpClient {
             "params": params,
         });
 
+        // Tungstenite buffers small messages internally and only writes to the
+        // socket on `flush()`; without it the command never reaches Chrome and
+        // the subsequent read blocks until the deadline.
         self.ws.write(WsMessage::Text(msg.to_string().into()))?;
+        self.ws.flush()?;
 
         let deadline = Instant::now() + deadline;
 
@@ -262,17 +266,15 @@ impl BrowserSession {
                  Last error: {last_error}"
             )
         })?;
-        let mut client = CdpClient::connect(&ws_url).map_err(|e| {
+        let mut client = CdpClient::connect(&ws_url).inspect_err(|_| {
             let _ = child.kill();
             let _ = child.wait();
-            e
         })?;
         client
             .send_command("Browser.getVersion", serde_json::json!({}))
-            .map_err(|e| {
+            .inspect_err(|_| {
                 let _ = child.kill();
                 let _ = child.wait();
-                e
             })
             .context("Browser process is unresponsive after connecting")?;
 
@@ -1282,6 +1284,33 @@ fn get_ws_url(port: u16) -> Result<String> {
     try_get_ws_url_from_json_version(port)
 }
 
+/// Returns true once the full HTTP response has been received, judged by
+/// `Content-Length`. Headers that arrive in separate reads are accumulated
+/// until we know the expected body size; we then stop as soon as that many
+/// body bytes have arrived. When the server omits `Content-Length` (no
+/// chunked encoding), this returns false and the caller falls back to
+/// reading until EOF or the deadline.
+fn http_response_complete(response: &[u8]) -> bool {
+    let headers_end = response.windows(4).position(|window| window == b"\r\n\r\n");
+    let Some(headers_end) = headers_end else {
+        return false;
+    };
+    let expected_length = String::from_utf8_lossy(&response[..headers_end])
+        .lines()
+        .find_map(|line| {
+            let (name, value) = line.split_once(':')?;
+            if name.trim().eq_ignore_ascii_case("content-length") {
+                value.trim().parse::<usize>().ok()
+            } else {
+                None
+            }
+        });
+    match expected_length {
+        Some(expected) => response.len() >= headers_end + 4 + expected,
+        None => false,
+    }
+}
+
 fn http_get(port: u16, path: &str) -> Result<String> {
     let addr = format!("127.0.0.1:{port}");
     let mut client = TcpStream::connect_timeout(
@@ -1308,12 +1337,20 @@ fn http_get(port: u16, path: &str) -> Result<String> {
         }
         match client.read(&mut buf) {
             Ok(0) => break,
-            Ok(n) => response.extend_from_slice(&buf[..n]),
+            Ok(n) => {
+                response.extend_from_slice(&buf[..n]);
+                if http_response_complete(&response) {
+                    break;
+                }
+            }
             Err(ref e)
                 if e.kind() == std::io::ErrorKind::WouldBlock
                     || e.kind() == std::io::ErrorKind::TimedOut =>
             {
-                // Chrome hasn't sent the response yet — retry quickly.
+                // Chrome hasn't sent the whole response yet — retry quickly.
+                // Chrome keeps the TCP connection open after responding
+                // (ignoring `Connection: close`), so we must not wait for
+                // EOF; we stop once Content-Length bytes have been read.
                 std::thread::sleep(Duration::from_millis(10));
                 continue;
             }
@@ -1501,4 +1538,108 @@ pub fn format_accessibility_tree(nodes: &[AccessibilityNode]) -> String {
     }
 
     output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Chrome's /json/list and /json/version endpoints respond with 200 OK and
+    // a Content-Length, then keep the TCP connection open indefinitely
+    // (ignoring `Connection: close`). http_get must stop once Content-Length
+    // bytes have arrived instead of waiting for EOF, or every browser tool
+    // call blocks for the full 30s read deadline.
+    #[test]
+    fn json_endpoint_returns_body_when_connection_stays_open() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let body = r#"[{"description":"","id":"FAKE","title":"about:blank","type":"page","url":"about:blank","webSocketDebuggerUrl":"ws://127.0.0.1:9222/devtools/page/FAKE"}]"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=UTF-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+
+        std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut request = [0u8; 4096];
+                let _ = stream.read(&mut request);
+                let _ = stream.write_all(response.as_bytes());
+                let _ = stream.flush();
+                // Hold the socket open well past the assertion window so a
+                // regression that waits for EOF hits the read deadline
+                // instead of an early EOF.
+                std::thread::sleep(Duration::from_secs(60));
+            }
+        });
+
+        let start = Instant::now();
+        let ws_url = try_get_ws_url_from_json_list(port).expect("should return the WS URL");
+        assert!(
+            start.elapsed() < Duration::from_secs(5),
+            "http_get blocked on keep-alive connection for {}s",
+            start.elapsed().as_secs()
+        );
+        assert_eq!(
+            ws_url,
+            "ws://127.0.0.1:9222/devtools/page/FAKE"
+        );
+    }
+
+    #[test]
+    fn http_response_complete_detects_full_body() {
+        let response = b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello";
+        assert!(http_response_complete(response));
+        assert!(!http_response_complete(&response[..response.len() - 1]));
+        assert!(!http_response_complete(b"HTTP/1.1 200 OK\r\n"));
+        assert!(!http_response_complete(
+            b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhell"
+        ));
+    }
+
+    // End-to-end run of the real launch flow against system Chrome/Chromium:
+    // launch (which fetches the WS URL over the keep-alive HTTP endpoint),
+    // navigate, evaluate, screenshot, and close. Skipped when no browser is
+    // installed. This is the flow behind every browser_* tool, so it guards
+    // against regressions in get_ws_url/http_get hanging on the keep-alive
+    // connection.
+    #[test]
+    fn browser_session_launch_navigate_screenshot() {
+        let browser_path = [
+            "/usr/bin/chromium",
+            "/usr/bin/chromium-browser",
+            "/usr/bin/google-chrome",
+            "/usr/bin/google-chrome-stable",
+        ]
+        .iter()
+        .find(|path| std::path::Path::new(path).exists())
+        .cloned()
+        .unwrap_or("");
+        if browser_path.is_empty() {
+            return;
+        }
+
+        let start = Instant::now();
+        let mut session = BrowserSession::launch(browser_path)
+            .expect("browser should launch and connect");
+        assert!(
+            start.elapsed() < Duration::from_secs(30),
+            "launch took {}s",
+            start.elapsed().as_secs()
+        );
+
+        session
+            .navigate("data:text/html,<title>TAU Browser Test</title><h1>ok</h1>")
+            .expect("navigate should complete");
+        let title = session.get_page_title().expect("get title");
+        assert!(title.contains("TAU Browser Test"), "unexpected title: {title}");
+
+        let dom = session.get_dom().expect("get dom");
+        assert!(dom.contains("<h1>ok</h1>"), "unexpected dom: {dom}");
+
+        let screenshot = session.screenshot().expect("screenshot");
+        assert!(!screenshot.is_empty(), "screenshot should not be empty");
+
+        session.close();
+    }
 }

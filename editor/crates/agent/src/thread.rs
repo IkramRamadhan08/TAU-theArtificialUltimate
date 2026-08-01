@@ -689,8 +689,7 @@ impl Thread {
                                 model: model.model.into(),
                             };
                             registry.select_model(&model, cx)
-                        })
-                        .into_iter(),
+                        }),
                 )
                 .next()
                 .map(|model| model.model)
