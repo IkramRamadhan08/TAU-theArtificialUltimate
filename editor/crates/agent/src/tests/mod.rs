@@ -432,6 +432,79 @@ async fn test_terminal_tool_without_timeout_does_not_kill_handle(cx: &mut TestAp
 }
 
 #[gpui::test]
+async fn test_terminal_tool_without_timeout_completes_when_command_exits(
+    cx: &mut TestAppContext,
+) {
+    init_test(cx);
+    always_allow_tools(cx);
+
+    let fs = FakeFs::new(cx.executor());
+    let project = Project::test(fs, [], cx).await;
+
+    let environment = Rc::new(cx.update(|cx| {
+        FakeThreadEnvironment::default()
+            .with_terminal(FakeTerminalHandle::new_with_immediate_exit(cx, 0))
+    }));
+    let handle = environment.terminal_handle.clone().unwrap();
+
+    #[allow(clippy::arc_with_non_send_sync)]
+    let tool = Arc::new(crate::TerminalTool::new(project, environment));
+    let (event_stream, mut rx) = crate::ToolCallEventStream::test();
+
+    let task = cx.update(|cx| {
+        tool.run(
+            ToolInput::resolved(crate::TerminalToolInput {
+                command: "echo done".to_string(),
+                cd: ".".to_string(),
+                ..Default::default()
+            }),
+            event_stream,
+            cx,
+        )
+    });
+
+    let update = rx.expect_update_fields().await;
+    assert!(
+        update.content.iter().any(|blocks| {
+            blocks
+                .iter()
+                .any(|c| matches!(c, acp::ToolCallContent::Terminal(_)))
+        }),
+        "expected tool call update to include terminal content"
+    );
+
+    let mut task_future: Pin<Box<Fuse<Task<Result<String, String>>>>> = Box::pin(task.fuse());
+
+    let deadline = std::time::Instant::now() + Duration::from_millis(500);
+    loop {
+        if let Some(result) = task_future.as_mut().now_or_never() {
+            let result = result.expect("terminal tool task should complete");
+
+            assert!(
+                !handle.was_killed(),
+                "expected terminal handle to complete without being killed"
+            );
+            assert!(
+                !result.contains("timed out"),
+                "expected no timeout without timeout_ms, got: {result}"
+            );
+            assert!(
+                result.contains("command output"),
+                "expected result to include terminal output, got: {result}"
+            );
+            return;
+        }
+
+        if std::time::Instant::now() >= deadline {
+            panic!("timed out waiting for terminal tool task to complete");
+        }
+
+        cx.run_until_parked();
+        cx.background_executor.timer(Duration::from_millis(1)).await;
+    }
+}
+
+#[gpui::test]
 async fn test_thinking(cx: &mut TestAppContext) {
     let ThreadTest { model, thread, .. } = setup(cx, TestModel::Fake).await;
     let fake_model = model.as_fake();
