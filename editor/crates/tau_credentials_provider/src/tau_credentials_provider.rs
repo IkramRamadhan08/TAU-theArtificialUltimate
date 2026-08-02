@@ -145,19 +145,18 @@ impl FileCredentialsProvider {
     fn save_credentials(&self, credentials: &HashMap<String, (String, Vec<u8>)>) -> Result<()> {
         let json = serde_json::to_string(credentials)?;
         std::fs::write(&self.path, json)?;
+        #[cfg(unix)]
         restrict_permissions(&self.path)?;
 
         Ok(())
     }
 }
 
+#[cfg(unix)]
 fn restrict_permissions(path: &Path) -> Result<()> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
+    use std::os::unix::fs::PermissionsExt;
 
-        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
-    }
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
 
     Ok(())
 }
