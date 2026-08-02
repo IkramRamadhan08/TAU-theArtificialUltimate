@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::future::Future;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::{Arc, LazyLock};
 
@@ -151,6 +151,9 @@ impl FileCredentialsProvider {
         Ok(())
     }
 }
+
+#[cfg(unix)]
+use std::path::Path;
 
 #[cfg(unix)]
 fn restrict_permissions(path: &Path) -> Result<()> {
