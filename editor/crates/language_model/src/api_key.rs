@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Context as _, Result, anyhow};
 use credentials_provider::CredentialsProvider;
 use env_var::EnvVar;
 use futures::{FutureExt, future};
@@ -7,10 +7,7 @@ use std::{
     fmt::{Display, Formatter},
     sync::Arc,
 };
-use util::ResultExt as _;
-
 use crate::AuthenticateError;
-
 /// Manages a single API key for a language model provider. API keys either come from environment
 /// variables or the system keychain.
 ///
@@ -21,6 +18,7 @@ pub struct ApiKeyState {
     env_var: EnvVar,
     load_status: LoadStatus,
     load_task: Option<future::Shared<Task<()>>>,
+    last_store_error: Option<SharedString>,
 }
 
 #[derive(Debug, Clone)]
@@ -43,7 +41,12 @@ impl ApiKeyState {
             env_var,
             load_status: LoadStatus::NotPresent,
             load_task: None,
+            last_store_error: None,
         }
+    }
+
+    pub fn last_store_error(&self) -> Option<SharedString> {
+        self.last_store_error.clone()
     }
 
     pub fn has_key(&self) -> bool {
@@ -110,26 +113,39 @@ impl ApiKeyState {
             )));
         }
         cx.spawn(async move |ent, cx| {
-            if let Some(key) = &key {
-                provider
+            let store_result = match &key {
+                Some(key) => provider
                     .write_credentials(&url, "Bearer", key.as_bytes(), cx)
                     .await
-                    .log_err();
-            } else {
-                provider.delete_credentials(&url, cx).await.log_err();
-            }
+                    .context("failed to store API key in system keychain"),
+                None => provider
+                    .delete_credentials(&url, cx)
+                    .await
+                    .context("failed to delete API key from system keychain"),
+            };
+
             ent.update(cx, |ent, cx| {
                 let this = get_this(ent);
                 this.url = url;
-                this.load_status = match &key {
-                    Some(key) => LoadStatus::Loaded(ApiKey {
-                        source: ApiKeySource::SystemKeychain,
-                        key: key.as_str().into(),
-                    }),
-                    None => LoadStatus::NotPresent,
-                };
+                match store_result.as_ref() {
+                    Ok(()) => {
+                        this.last_store_error = None;
+                        this.load_status = match &key {
+                            Some(key) => LoadStatus::Loaded(ApiKey {
+                                source: ApiKeySource::SystemKeychain,
+                                key: key.as_str().into(),
+                            }),
+                            None => LoadStatus::NotPresent,
+                        };
+                    }
+                    Err(err) => {
+                        this.last_store_error = Some(err.to_string().into());
+                    }
+                }
                 cx.notify();
-            })
+            })?;
+
+            store_result
         })
     }
 
@@ -294,5 +310,146 @@ impl Display for ApiKeySource {
             ApiKeySource::EnvVar(var) => write!(f, "environment variable {}", var),
             ApiKeySource::SystemKeychain => write!(f, "system keychain"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::future::Future;
+    use std::pin::Pin;
+    use std::sync::Arc;
+
+    use anyhow::Result;
+    use credentials_provider::CredentialsProvider;
+    use env_var::EnvVar;
+    use gpui::{App, AppContext as _, AsyncApp, SharedString, TestAppContext};
+
+    use crate::api_key::ApiKeyState;
+
+    struct FailingWriteProvider;
+
+    impl CredentialsProvider for FailingWriteProvider {
+        fn read_credentials<'a>(
+            &'a self,
+            _url: &'a str,
+            _cx: &'a AsyncApp,
+        ) -> Pin<Box<dyn Future<Output = Result<Option<(String, Vec<u8>)>>> + 'a>> {
+            Box::pin(async { Ok(None) })
+        }
+
+        fn write_credentials<'a>(
+            &'a self,
+            _url: &'a str,
+            _username: &'a str,
+            _password: &'a [u8],
+            _cx: &'a AsyncApp,
+        ) -> Pin<Box<dyn Future<Output = Result<()>> + 'a>> {
+            Box::pin(async { Err(anyhow::anyhow!("keychain unavailable")) })
+        }
+
+        fn delete_credentials<'a>(
+            &'a self,
+            _url: &'a str,
+            _cx: &'a AsyncApp,
+        ) -> Pin<Box<dyn Future<Output = Result<()>> + 'a>> {
+            Box::pin(async { Ok(()) })
+        }
+    }
+
+    struct SucceedingWriteProvider;
+
+    impl CredentialsProvider for SucceedingWriteProvider {
+        fn read_credentials<'a>(
+            &'a self,
+            _url: &'a str,
+            _cx: &'a AsyncApp,
+        ) -> Pin<Box<dyn Future<Output = Result<Option<(String, Vec<u8>)>>> + 'a>> {
+            Box::pin(async { Ok(None) })
+        }
+
+        fn write_credentials<'a>(
+            &'a self,
+            _url: &'a str,
+            _username: &'a str,
+            _password: &'a [u8],
+            _cx: &'a AsyncApp,
+        ) -> Pin<Box<dyn Future<Output = Result<()>> + 'a>> {
+            Box::pin(async { Ok(()) })
+        }
+
+        fn delete_credentials<'a>(
+            &'a self,
+            _url: &'a str,
+            _cx: &'a AsyncApp,
+        ) -> Pin<Box<dyn Future<Output = Result<()>> + 'a>> {
+            Box::pin(async { Ok(()) })
+        }
+    }
+
+    struct ApiKeyHolder {
+        api_key_state: ApiKeyState,
+    }
+
+    fn new_holder(cx: &mut App) -> gpui::Entity<ApiKeyHolder> {
+        cx.new(|_cx| ApiKeyHolder {
+            api_key_state: ApiKeyState::new(
+                SharedString::new("https://example.com"),
+                EnvVar::new(SharedString::new("TEST_API_KEY")),
+            ),
+        })
+    }
+
+    #[gpui::test]
+    async fn test_store_reports_keychain_failure(cx: &mut TestAppContext) {
+        let entity = cx.update(|cx| new_holder(cx));
+
+        let store_task = entity.update(cx, |this, cx| {
+            this.api_key_state.store(
+                SharedString::new("https://example.com"),
+                Some("secret".to_string()),
+                |this| &mut this.api_key_state,
+                Arc::new(FailingWriteProvider),
+                cx,
+            )
+        });
+
+        assert!(store_task.await.is_err());
+
+        let (has_key, last_store_error) = cx.update(|cx| {
+            let holder = entity.read(cx);
+            (
+                holder.api_key_state.has_key(),
+                holder.api_key_state.last_store_error(),
+            )
+        });
+        assert!(!has_key);
+        assert!(last_store_error.is_some());
+    }
+
+    #[gpui::test]
+    async fn test_successful_store_loads_key_and_clears_error(cx: &mut TestAppContext) {
+        let entity = cx.update(|cx| new_holder(cx));
+
+        let store_task = entity.update(cx, |this, cx| {
+            this.api_key_state.store(
+                SharedString::new("https://example.com"),
+                Some("secret".to_string()),
+                |this| &mut this.api_key_state,
+                Arc::new(SucceedingWriteProvider),
+                cx,
+            )
+        });
+
+        assert!(store_task.await.is_ok());
+
+        let (has_key, last_store_error) = cx.update(|cx| {
+            let holder = entity.read(cx);
+            (
+                holder.api_key_state.has_key(),
+                holder.api_key_state.last_store_error(),
+            )
+        });
+        assert!(has_key);
+        assert!(last_store_error.is_none());
     }
 }

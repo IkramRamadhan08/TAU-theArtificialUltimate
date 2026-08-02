@@ -199,7 +199,11 @@ impl<S: ApiCompatibleProviderSettings> Render for ApiCompatibleProviderConfigura
                 .child(
                     div()
                         .pt(DynamicSpacing::Base04.rems(cx))
-                        .child(self.api_key_editor.clone()),
+                        .child(self.api_key_editor.clone())
+                        .when_some(
+                            self.state.read(cx).api_key_state.last_store_error(),
+                            |this, error| this.child(Label::new(error).color(Color::Error)),
+                        ),
                 )
                 .child(
                     Label::new(format!(

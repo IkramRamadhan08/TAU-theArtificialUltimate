@@ -664,6 +664,10 @@ impl Render for ConfigurationView {
                         ),
                 )
                 .child(self.api_key_editor.clone())
+                .when_some(
+                    self.state.read(cx).api_key_state.last_store_error(),
+                    |this, error| this.child(Label::new(error).color(Color::Error)),
+                )
                 .child(
                     Label::new(format!(
                         "You can also set the {API_KEY_ENV_VAR_NAME} environment variable and restart Tau."
