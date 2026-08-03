@@ -1,68 +1,60 @@
-mod cloud;
+mod brave;
+mod duckduckgo;
+mod fallback;
 
-use client::{Client, UserStore};
-use gpui::{App, Context, Entity};
-use language_model::LanguageModelRegistry;
 use std::sync::Arc;
-use web_search::{WebSearchProviderId, WebSearchRegistry};
 
-pub fn init(client: Arc<Client>, user_store: Entity<UserStore>, cx: &mut App) {
+use anyhow::{Context as _, Result, anyhow, bail};
+use futures::AsyncReadExt as _;
+use gpui::App;
+use http_client::{AsyncBody, HttpClientWithUrl};
+use web_search::WebSearchRegistry;
+
+pub fn init(http_client: Arc<HttpClientWithUrl>, cx: &mut App) {
     let registry = WebSearchRegistry::global(cx);
     registry.update(cx, |registry, cx| {
-        register_web_search_providers(registry, client, user_store, cx);
+        registry.register_provider(fallback::FallbackWebSearchProvider::new(http_client), cx);
     });
 }
 
-fn register_web_search_providers(
-    registry: &mut WebSearchRegistry,
-    client: Arc<Client>,
-    user_store: Entity<UserStore>,
-    cx: &mut Context<WebSearchRegistry>,
-) {
-    register_zed_web_search_provider(
-        registry,
-        client.clone(),
-        user_store.clone(),
-        &LanguageModelRegistry::global(cx),
-        cx,
-    );
+const MAX_HTML_BODY_BYTES: usize = 5 * 1024 * 1024;
 
-    cx.subscribe(
-        &LanguageModelRegistry::global(cx),
-        move |this, registry, event, cx| {
-            if let language_model::Event::DefaultModelChanged = event {
-                register_zed_web_search_provider(
-                    this,
-                    client.clone(),
-                    user_store.clone(),
-                    &registry,
-                    cx,
-                )
-            }
-        },
-    )
-    .detach();
+/// Fetches the HTML at `url`, enforcing a size cap before parsing.
+async fn fetch_html(http_client: &HttpClientWithUrl, url: &str) -> Result<String> {
+    let mut response = http_client
+        .get(url, AsyncBody::default(), true)
+        .await
+        .with_context(|| format!("error fetching {url}"))?;
+    if !response.status().is_success() {
+        anyhow::bail!(
+            "error fetching {url}: unexpected status {}",
+            response.status()
+        );
+    }
+
+    let mut body = Vec::new();
+    let mut buffer = [0u8; 8192];
+    loop {
+        let bytes_read = response
+            .body_mut()
+            .read(&mut buffer)
+            .await
+            .context("error reading response body")?;
+        if bytes_read == 0 {
+            break;
+        }
+        body.extend_from_slice(&buffer[..bytes_read]);
+        if body.len() > MAX_HTML_BODY_BYTES {
+            bail!(
+                "response body from {url} exceeded {} bytes",
+                MAX_HTML_BODY_BYTES
+            );
+        }
+    }
+
+    String::from_utf8(body).map_err(|_| anyhow!("response body from {url} was not valid UTF-8"))
 }
 
-fn register_zed_web_search_provider(
-    registry: &mut WebSearchRegistry,
-    client: Arc<Client>,
-    user_store: Entity<UserStore>,
-    language_model_registry: &Entity<LanguageModelRegistry>,
-    cx: &mut Context<WebSearchRegistry>,
-) {
-    let using_zed_provider = language_model_registry
-        .read(cx)
-        .default_model()
-        .is_some_and(|default| default.is_provided_by_zed());
-    if using_zed_provider {
-        registry.register_provider(
-            cloud::CloudWebSearchProvider::new(client, user_store, cx),
-            cx,
-        )
-    } else {
-        registry.unregister_provider(WebSearchProviderId(
-            cloud::TAU_WEB_SEARCH_PROVIDER_ID.into(),
-        ));
-    }
+fn normalize_whitespace(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }

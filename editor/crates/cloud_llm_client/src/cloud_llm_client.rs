@@ -259,23 +259,6 @@ impl<T> CompletionEvent<T> {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct WebSearchBody {
-    pub query: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct WebSearchResponse {
-    pub results: Vec<WebSearchResult>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct WebSearchResult {
-    pub title: String,
-    pub url: String,
-    pub text: String,
-}
-
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct LanguageModelId(pub Arc<str>);
 

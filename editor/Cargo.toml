@@ -693,6 +693,7 @@ rustls-platform-verifier = "0.5.0"
 # WARNING: If you change this, you must also publish a new version of tau-scap to crates.io
 scap = { git = "https://github.com/IkramRamadhan08/scap", rev = "24c96c3", default-features = false, package = "tau-scap" }
 schemars = { version = "1.0", features = ["indexmap2"] }
+scraper = "0.20.0"
 semver = { version = "1.0", features = ["serde"] }
 serde = { version = "1.0.221", features = ["derive", "rc"] }
 serde_json = { version = "1.0.144", features = ["preserve_order", "raw_value"] }
