@@ -15263,7 +15263,7 @@ dependencies = [
 
 [[package]]
 name = "tau"
-version = "0.95.3"
+version = "0.95.4"
 dependencies = [
  "acp_thread",
  "acp_tools",
