@@ -1,0 +1,161 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: x86_64-windows
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            asset: tau-x86_64-windows.zip
+          - name: x86_64-linux
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            asset: tau-x86_64-linux.tar.xz
+          - name: aarch64-macos
+            os: macos-latest
+            target: aarch64-apple-darwin
+            asset: tau-aarch64-macos.tar.gz
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            libssl-dev \
+            libsqlite3-dev \
+            libcurl4-openssl-dev \
+            libx11-dev \
+            libxcb1-dev \
+            libasound2-dev \
+            libwayland-dev \
+            libxkbcommon-dev \
+            libxkbcommon-x11-dev \
+            xz-utils
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.95.0"
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            editor/target
+          key: ${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('editor/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.target }}-
+
+      - name: Build tau (editor) + cli (release)
+        working-directory: editor
+        run: |
+          cargo build --release --bin tau --bin cli --target ${{ matrix.target }}
+
+      # Windows: tau.exe -> tau-x86_64-windows.exe, cli.exe -> tau-cli-x86_64-windows.exe
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        working-directory: editor
+        run: |
+          $rel = "target/${{ matrix.target }}/release"
+          Copy-Item "$rel/tau.exe" "tau-x86_64-windows.exe"
+          Copy-Item "$rel/cli.exe" "tau-cli-x86_64-windows.exe"
+          Compress-Archive -Path "tau-x86_64-windows.exe","tau-cli-x86_64-windows.exe" `
+            -DestinationPath "${{ matrix.asset }}" -Force
+          Write-Host "Packaged ${{ matrix.asset }} ($([math]::Round((Get-Item '${{ matrix.asset }}').Length / 1MB, 1)) MB)"
+
+      # Linux: tau.app/bin/tau (cli launcher) + tau.app/libexec/tau-editor (editor)
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        working-directory: editor
+        run: |
+          set -euo pipefail
+          rel="target/${{ matrix.target }}/release"
+          stage="$(mktemp -d)"
+          app="${stage}/tau.app"
+          mkdir -p "${app}/bin" "${app}/libexec" "${app}/lib"
+
+          # Editor binary + CLI launcher (mirrors script/bundle-linux layout)
+          cp "${rel}/tau" "${app}/libexec/tau-editor"
+          cp "${rel}/cli" "${app}/bin/tau"
+          ln -sf tau "${app}/bin/TAU"
+
+          # Bundle non-core shared libs so the binary runs on older distros
+          for lib in $(ldd "${rel}/tau" | awk '{print $3}' | grep -E '^/' | grep -vE '/(libc|libm|libgcc_s|libpthread|libdl|ld-linux)\.so' || true); do
+            cp -n "$lib" "${app}/lib/" 2>/dev/null || true
+          done
+
+          # Icons (best-effort; ignore if absent)
+          mkdir -p "${app}/share/icons/hicolor/512x512/apps"
+          cp assets/images/tau-icon.png "${app}/share/icons/hicolor/512x512/apps/tau.png" 2>/dev/null || true
+
+          tar -cJf "../${{ matrix.asset }}" -C "${stage}" tau.app
+          echo "Packaged ${{ matrix.asset }}"
+
+      # macOS: flat binaries, no codesign (install.sh falls back to flat layout)
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        working-directory: editor
+        run: |
+          set -euo pipefail
+          rel="target/${{ matrix.target }}/release"
+          cp "${rel}/tau" "tau-aarch64-macos"
+          cp "${rel}/cli" "tau-cli-aarch64-macos"
+          tar -czf "${{ matrix.asset }}" "tau-aarch64-macos" "tau-cli-aarch64-macos"
+          echo "Packaged ${{ matrix.asset }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: editor/${{ matrix.asset }}
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: TAU ${{ github.ref_name }}
+          draft: true
+          generate_release_notes: true
+          files: artifacts/*

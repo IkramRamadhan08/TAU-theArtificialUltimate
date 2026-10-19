@@ -2132,18 +2132,23 @@ pub fn load_default_keymap(cx: &mut App) {
         return;
     }
 
-    cx.bind_keys(
-        KeymapFile::load_asset(DEFAULT_KEYMAP_PATH, Some(KeybindSource::Default), cx).unwrap(),
-    );
+    match KeymapFile::load_asset(DEFAULT_KEYMAP_PATH, Some(KeybindSource::Default), cx) {
+        Ok(key_bindings) => cx.bind_keys(key_bindings),
+        Err(error) => log::error!("failed to load default keymap: {error}"),
+    }
 
     if let Some(asset_path) = base_keymap.asset_path() {
-        cx.bind_keys(KeymapFile::load_asset(asset_path, Some(KeybindSource::Base), cx).unwrap());
+        match KeymapFile::load_asset(asset_path, Some(KeybindSource::Base), cx) {
+            Ok(key_bindings) => cx.bind_keys(key_bindings),
+            Err(error) => log::error!("failed to load base keymap: {error}"),
+        }
     }
 
     if VimModeSetting::get_global(cx).0 || vim_mode_setting::HelixModeSetting::get_global(cx).0 {
-        cx.bind_keys(
-            KeymapFile::load_asset(VIM_KEYMAP_PATH, Some(KeybindSource::Vim), cx).unwrap(),
-        );
+        match KeymapFile::load_asset(VIM_KEYMAP_PATH, Some(KeybindSource::Vim), cx) {
+            Ok(key_bindings) => cx.bind_keys(key_bindings),
+            Err(error) => log::error!("failed to load vim keymap: {error}"),
+        }
     }
 }
 
