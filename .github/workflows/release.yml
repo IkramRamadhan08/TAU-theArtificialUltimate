@@ -100,52 +100,37 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
+            editor/target
           key: macos-release-${{ hashFiles('editor/Cargo.lock') }}
           restore-keys: macos-release-
       - name: Set release channel
         run: echo "stable" > crates/tau/RELEASE_CHANNEL
-      - name: Set build metadata
-        run: echo "TAU_COMMIT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-      - name: Build release
+      - name: Build
         run: cargo build --release -p tau -p cli
         env:
           RELEASE_CHANNEL: stable
           TAU_BUNDLE: "true"
-      - name: Strip binary
-        run: |
-          strip -x target/release/tau
-          strip -x target/release/cli
       - name: Package
         working-directory: .
         run: |
-          # Create minimal .app bundle for Spotlight/Finder integration
           APP="TAU.app"
           mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
           cp editor/target/release/tau "$APP/Contents/MacOS/tau"
           cp editor/target/release/cli "$APP/Contents/MacOS/tau-cli"
           chmod +x "$APP/Contents/MacOS/tau" "$APP/Contents/MacOS/tau-cli"
           python3 -c "
-          import json, plistlib, sys
+          import plistlib
           plist = {
               'CFBundleExecutable': 'tau',
               'CFBundleIdentifier': 'ai.tau.TAU',
               'CFBundleName': 'TAU',
               'CFBundleDisplayName': 'TAU',
-              'CFBundleVersion': '1.0.0',
-              'CFBundleShortVersionString': '1.0.0',
               'CFBundlePackageType': 'APPL',
               'CFBundleSupportedPlatforms': ['MacOSX'],
               'LSMinimumSystemVersion': '11.0',
               'NSHighResolutionCapable': True,
-              'CFBundleDocumentTypes': [{
-                  'CFBundleTypeRole': 'Editor',
-                  'LSHandlerRank': 'Alternate',
-                  'LSItemContentTypes': ['public.folder', 'public.plain-text', 'public.text'],
-              }],
           }
-          with open('$APP/Contents/Info.plist', 'wb') as f:
-              plistlib.dump(plist, f)
+          with open('TAU.app/Contents/Info.plist','wb') as f: plistlib.dump(plist,f)
           "
           tar czf tau-aarch64-macos.tar.gz "$APP"
       - name: Upload artifact
