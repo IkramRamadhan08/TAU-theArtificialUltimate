@@ -35,6 +35,7 @@ mod skill_tool;
 mod spawn_agent_tool;
 mod symbol_locator;
 mod terminal_tool;
+mod todo_tool;
 mod tool_permissions;
 mod web_search_tool;
 mod write_file_tool;
@@ -101,6 +102,7 @@ pub use skill_tool::*;
 pub use spawn_agent_tool::*;
 pub use symbol_locator::*;
 pub use terminal_tool::*;
+pub use todo_tool::*;
 pub use tool_permissions::*;
 pub use web_search_tool::*;
 pub use write_file_tool::*;
@@ -249,6 +251,7 @@ tools! {
     SkillTool,
     SpawnAgentTool,
     TerminalTool,
+    TodoWriteTool,
     WebSearchTool,
     WriteFileTool,
 }

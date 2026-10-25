@@ -1024,6 +1024,7 @@ impl Thread {
             self.project.clone(),
             environment.clone(),
         ));
+        self.add_tool(TodoWriteTool::new());
         self.add_tool(WebSearchTool);
         self.add_tool(BrowserNavigateTool);
         self.add_tool(BrowserScreenshotTool);
@@ -3238,6 +3239,28 @@ impl Thread {
 
     fn tool(&self, name: &str) -> Option<Arc<dyn AnyAgentTool>> {
         self.running_turn.as_ref()?.tools.get(name).cloned()
+    }
+
+    /// Check if the same tool has failed repeatedly with similar errors.
+    pub(crate) fn should_force_alternative_approach(
+        &self,
+        tool_name: &str,
+        _error_text: &str,
+    ) -> bool {
+        let mut failures = 0;
+        for message in self.messages.iter().rev().take(40) {
+            if let Message::ToolCall(tc) = &**message {
+                if tc.tool == tool_name && tc.status == ToolCallStatus::Error {
+                    failures += 1;
+                    if failures >= 3 {
+                        return true;
+                    }
+                } else if tc.tool == tool_name {
+                    break;
+                }
+            }
+        }
+        false
     }
 
     pub fn has_tool(&self, name: &str) -> bool {

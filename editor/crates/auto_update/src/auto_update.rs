@@ -594,7 +594,7 @@ impl AutoUpdater {
 
         this.update(cx, |this, cx| {
             this.status = AutoUpdateStatus::Checking;
-            log::info!("Auto Update: checking for updates");
+            // log::info!("Auto Update: checking for updates");
             cx.notify();
         });
 

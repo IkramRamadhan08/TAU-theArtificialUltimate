@@ -11,6 +11,7 @@ use language_model::{LanguageModelImage, LanguageModelToolResultContent};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ui::SharedString;
+use util::ResultExt;
 
 use super::browser_runtime;
 use super::browser_session::{BrowserSession, format_accessibility_tree};
@@ -195,6 +196,7 @@ impl AgentTool for BrowserNavigateTool {
 
             with_session(cx, move |session| {
                 session.navigate(&url)?;
+                let _ = session.wait_for_network_idle(8000, 400).log_err();
                 let title = session.get_page_title()?;
                 let dom = session.get_dom()?;
                 let content = match convert_html_to_markdown(std::io::Cursor::new(&dom), &mut []) {
@@ -288,6 +290,7 @@ impl AgentTool for BrowserScreenshotTool {
 
             with_session(cx, move |session| {
                 session.navigate(&url)?;
+                let _ = session.wait_for_network_idle(8000, 400).log_err();
                 let base64 = session.screenshot()?;
                 Ok(BrowserScreenshotOutput::Success {
                     screenshot_base64: base64,
@@ -842,6 +845,10 @@ impl AgentTool for BrowserAccessibilityTreeTool {
         "Getting accessibility tree".into()
     }
 
+    fn description(&self) -> SharedString {
+        "Get the accessibility tree of the current page. Use with browser_click_by_index/browser_type_by_index for more reliable interactions that don't depend on brittle CSS selectors.".into()
+    }
+
     fn supports_provider(_provider: &language_model::LanguageModelProviderId) -> bool {
         true
     }
@@ -907,6 +914,10 @@ impl AgentTool for BrowserClickByIndexTool {
         _cx: &mut App,
     ) -> SharedString {
         "Clicking element by index".into()
+    }
+
+    fn description(&self) -> SharedString {
+        "Click an element by its index from browser_accessibility_tree. More robust than CSS selectors against dynamic class names.".into()
     }
 
     fn supports_provider(_provider: &language_model::LanguageModelProviderId) -> bool {
@@ -982,6 +993,10 @@ impl AgentTool for BrowserTypeByIndexTool {
         "Typing text by index".into()
     }
 
+    fn description(&self) -> SharedString {
+        "Type text into an element by its index from browser_accessibility_tree.".into()
+    }
+
     fn supports_provider(_provider: &language_model::LanguageModelProviderId) -> bool {
         true
     }
@@ -1055,6 +1070,10 @@ impl AgentTool for BrowserFillByIndexTool {
         _cx: &mut App,
     ) -> SharedString {
         "Filling form field by index".into()
+    }
+
+    fn description(&self) -> SharedString {
+        "Fill a form field by its index from browser_accessibility_tree.".into()
     }
 
     fn supports_provider(_provider: &language_model::LanguageModelProviderId) -> bool {

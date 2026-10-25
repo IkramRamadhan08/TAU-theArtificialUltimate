@@ -8,6 +8,21 @@ use serde::Deserialize;
 use util::archive::extract_zip;
 use util::fs::make_file_executable;
 
+#[cfg(windows)]
+fn to_long_path(p: &Path) -> PathBuf {
+    let s = p.to_string_lossy();
+    if s.starts_with(r"\\?\") {
+        p.to_path_buf()
+    } else {
+        PathBuf::from(format!(r"\\?\{}", s.replace('/', "\\")))
+    }
+}
+
+#[cfg(not(windows))]
+fn to_long_path(p: &Path) -> PathBuf {
+    p.to_path_buf()
+}
+
 fn find_system_chrome() -> Option<PathBuf> {
     let names: &[&str] = if cfg!(target_os = "windows") {
         &["chrome.exe", "google-chrome.exe"]
@@ -133,18 +148,20 @@ fn cft_download_urls(version: &str, platform: &str) -> Vec<String> {
 }
 
 fn install_dir() -> PathBuf {
-    paths::data_dir().join("browser")
+    to_long_path(&paths::data_dir().join("browser"))
 }
 
 fn binary_path_for_version(version: &str) -> Result<PathBuf> {
     let platform = platform_string()?;
     let dir_name = format!("chrome-headless-shell-{platform}");
-    Ok(install_dir().join(version).join(dir_name).join(
-        if cfg!(target_os = "windows") {
-            "chrome-headless-shell.exe"
-        } else {
-            "chrome-headless-shell"
-        },
+    Ok(to_long_path(
+        &install_dir().join(version).join(dir_name).join(
+            if cfg!(target_os = "windows") {
+                "chrome-headless-shell.exe"
+            } else {
+                "chrome-headless-shell"
+            },
+        ),
     ))
 }
 
@@ -229,7 +246,7 @@ pub async fn ensure_browser_installed(http: &Arc<HttpClientWithUrl>) -> Result<B
     }
 
     log::info!(
-        "Downloading Chrome for Testing {version} for {platform}..."
+        "First-time setup: downloading Chrome for Testing {version} for {platform} (~100MB). This may take a moment..."
     );
     download_and_extract(http, &version, platform).await?;
 
