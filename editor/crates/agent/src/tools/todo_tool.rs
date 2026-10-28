@@ -91,7 +91,7 @@ impl AgentTool for TodoWriteTool {
     const NAME: &'static str = "todo_write";
 
     fn kind() -> acp::ToolKind {
-        acp::ToolKind::Thought
+        acp::ToolKind::Other
     }
 
     fn initial_title(
@@ -102,9 +102,7 @@ impl AgentTool for TodoWriteTool {
         "Planning tasks".into()
     }
 
-    fn description(&self) -> SharedString {
-        "Create and manage a structured task list for the current session. Use for multi-step tasks to track progress. Update as you go, mark items in_progress when starting and completed immediately when done.".into()
-    }
+
 
     fn supports_provider(_provider: &language_model::LanguageModelProviderId) -> bool {
         true

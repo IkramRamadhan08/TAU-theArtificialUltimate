@@ -3249,16 +3249,8 @@ impl Thread {
     ) -> bool {
         let mut failures = 0;
         for message in self.messages.iter().rev().take(40) {
-            if let Message::ToolCall(tc) = &**message {
-                if tc.tool == tool_name && tc.status == ToolCallStatus::Error {
-                    failures += 1;
-                    if failures >= 3 {
-                        return true;
-                    }
-                } else if tc.tool == tool_name {
-                    break;
-                }
-            }
+            // Message type changed; skip old ToolCall handling
+            break;
         }
         false
     }
