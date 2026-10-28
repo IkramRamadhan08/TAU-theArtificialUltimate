@@ -3242,6 +3242,7 @@ impl Thread {
     }
 
     /// Check if the same tool has failed repeatedly with similar errors.
+    #[allow(dead_code)]
     pub(crate) fn should_force_alternative_approach(
         &self,
         _tool_name: &str,
