@@ -845,7 +845,7 @@ impl AgentTool for BrowserAccessibilityTreeTool {
         "Getting accessibility tree".into()
     }
 
-    fn description(&self) -> SharedString {
+    fn description() -> SharedString {
         "Get the accessibility tree of the current page. Use with browser_click_by_index/browser_type_by_index for more reliable interactions that don't depend on brittle CSS selectors.".into()
     }
 
@@ -916,7 +916,7 @@ impl AgentTool for BrowserClickByIndexTool {
         "Clicking element by index".into()
     }
 
-    fn description(&self) -> SharedString {
+    fn description() -> SharedString {
         "Click an element by its index from browser_accessibility_tree. More robust than CSS selectors against dynamic class names.".into()
     }
 
@@ -993,7 +993,7 @@ impl AgentTool for BrowserTypeByIndexTool {
         "Typing text by index".into()
     }
 
-    fn description(&self) -> SharedString {
+    fn description() -> SharedString {
         "Type text into an element by its index from browser_accessibility_tree.".into()
     }
 
@@ -1072,7 +1072,7 @@ impl AgentTool for BrowserFillByIndexTool {
         "Filling form field by index".into()
     }
 
-    fn description(&self) -> SharedString {
+    fn description() -> SharedString {
         "Fill a form field by its index from browser_accessibility_tree.".into()
     }
 
