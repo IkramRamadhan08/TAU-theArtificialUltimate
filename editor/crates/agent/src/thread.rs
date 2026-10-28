@@ -13,7 +13,7 @@ use crate::{
     GitStatusTool, GetCodeActionsTool, GoToDefinitionTool, GrepTool, ListAgentsAndModelsTool,
     ListDirectoryTool, MovePathTool, ProjectSnapshot, ReadFileTool, RenameTool,
     RequestCredentialTool, SandboxedTerminalTool, SearchSemanticTool, SpawnAgentTool,
-    SystemPromptTemplate, Template, Templates, TerminalTool, WebSearchTool, WriteFileTool, profile_instruction,
+    SystemPromptTemplate, Template, Templates, TerminalTool, TodoWriteTool, WebSearchTool, WriteFileTool, profile_instruction,
 };
 use acp_thread::UserMessageId;
 use action_log::ActionLog;
@@ -3244,14 +3244,9 @@ impl Thread {
     /// Check if the same tool has failed repeatedly with similar errors.
     pub(crate) fn should_force_alternative_approach(
         &self,
-        tool_name: &str,
+        _tool_name: &str,
         _error_text: &str,
     ) -> bool {
-        let mut failures = 0;
-        for message in self.messages.iter().rev().take(40) {
-            // Message type changed; skip old ToolCall handling
-            break;
-        }
         false
     }
 
