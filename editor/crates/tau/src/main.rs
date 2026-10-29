@@ -225,6 +225,50 @@ static STARTUP_TIME: OnceLock<Instant> = OnceLock::new();
 fn main() {
     STARTUP_TIME.get_or_init(|| Instant::now());
 
+    std::panic::set_hook(Box::new(|panic_info| {
+        let payload = if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
+            (*s).to_string()
+        } else if let Some(s) = panic_info.payload().downcast_ref::<String>() {
+            s.clone()
+        } else {
+            "Unknown panic payload".to_string()
+        };
+        let location = if let Some(loc) = panic_info.location() {
+            format!("{}:{}:{}", loc.file(), loc.line(), loc.column())
+        } else {
+            "unknown location".to_string()
+        };
+        let backtrace = std::backtrace::Backtrace::capture();
+        let message = format!("TAU panic at {location}:\n{payload}\n\nBacktrace:\n{backtrace}");
+
+        eprintln!("{message}");
+        log::error!("{message}");
+
+        let logs_dir = paths::logs_dir();
+        let _ = std::fs::create_dir_all(logs_dir);
+        let crash_file = logs_dir.join("crash.log");
+        let _ = std::fs::write(&crash_file, &message);
+
+        #[cfg(target_os = "windows")]
+        unsafe {
+            use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
+            let short_msg = format!(
+                "TAU encountered a fatal startup/runtime error:\n\n{}\n\nAt: {}\n\nCrash log written to:\n{}",
+                payload,
+                location,
+                crash_file.display()
+            );
+            let wide_message: Vec<u16> = short_msg.encode_utf16().chain(std::iter::once(0)).collect();
+            let wide_title: Vec<u16> = "TAU Fatal Error\0".encode_utf16().collect();
+            MessageBoxW(
+                None,
+                windows::core::PCWSTR::from_raw(wide_message.as_ptr()),
+                windows::core::PCWSTR::from_raw(wide_title.as_ptr()),
+                MB_OK | MB_ICONERROR,
+            );
+        }
+    }));
+
     #[cfg(unix)]
     util::prevent_root_execution();
 
@@ -1763,7 +1807,10 @@ fn parse_url_arg(arg: &str, cx: &App) -> String {
 
 fn load_embedded_fonts(cx: &App) {
     let asset_source = cx.asset_source();
-    let font_paths = asset_source.list("fonts").unwrap();
+    let Ok(font_paths) = asset_source.list("fonts") else {
+        log::error!("Failed to list embedded fonts");
+        return;
+    };
     let embedded_fonts = Mutex::new(Vec::new());
     let executor = cx.background_executor();
 
@@ -1774,15 +1821,18 @@ fn load_embedded_fonts(cx: &App) {
             }
 
             scope.spawn(async {
-                let font_bytes = asset_source.load(font_path).unwrap().unwrap();
-                embedded_fonts.lock().push(font_bytes);
+                if let Ok(Some(font_bytes)) = asset_source.load(font_path) {
+                    embedded_fonts.lock().push(font_bytes);
+                } else {
+                    log::warn!("Failed to load embedded font: {font_path}");
+                }
             });
         }
     }));
 
-    cx.text_system()
-        .add_fonts(embedded_fonts.into_inner())
-        .unwrap();
+    if let Err(err) = cx.text_system().add_fonts(embedded_fonts.into_inner()) {
+        log::error!("Failed to add embedded fonts to text system: {err:#}");
+    }
 }
 
 /// Spawns a background task to load the user themes from the themes directory.

@@ -113,12 +113,17 @@ fn get_adapter(
     D3D_FEATURE_LEVEL,
 )> {
     for adapter_index in 0.. {
-        let adapter: IDXGIAdapter1 = unsafe { dxgi_factory.EnumAdapters(adapter_index)?.cast()? };
+        let Ok(adapter) = (unsafe { dxgi_factory.EnumAdapters(adapter_index) }) else {
+            break;
+        };
+        let Ok(adapter): Result<IDXGIAdapter1, _> = adapter.cast() else {
+            continue;
+        };
         if let Ok(desc) = unsafe { adapter.GetDesc1() } {
             let gpu_name = String::from_utf16_lossy(&desc.Description)
                 .trim_matches(char::from(0))
                 .to_string();
-            log::info!("Using GPU: {}", gpu_name);
+            log::info!("Checking GPU adapter: {}", gpu_name);
         }
         // Check to see whether the adapter supports Direct3D 11 and create
         // the device if it does.
@@ -136,7 +141,25 @@ fn get_adapter(
         }
     }
 
-    unreachable!()
+    if let Ok(warp_adapter) = unsafe { dxgi_factory.EnumWarpAdapter::<IDXGIAdapter1>() } {
+        log::warn!("Hardware GPU adapter not suitable; falling back to WARP software adapter.");
+        let mut context: Option<ID3D11DeviceContext> = None;
+        let mut feature_level = D3D_FEATURE_LEVEL::default();
+        if let Some(device) = get_device(
+            &warp_adapter,
+            Some(&mut context),
+            Some(&mut feature_level),
+            debug_layer_available,
+        )
+        .log_err()
+        {
+            return Ok((warp_adapter, device, context.unwrap(), feature_level));
+        }
+    }
+
+    Err(anyhow::anyhow!(
+        "No compatible DirectX 11 GPU adapter or WARP fallback found"
+    ))
 }
 
 #[inline]

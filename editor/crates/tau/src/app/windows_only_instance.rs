@@ -53,12 +53,19 @@ pub fn handle_single_instance(opener: OpenListener, args: &Args) -> bool {
                 })
             })
             .unwrap();
+        true
     } else if !args.foreground {
-        // We are not the first instance, send args to the first instance
-        send_args_to_instance(args).log_err();
+        // We are not the first instance, try to send args to the first instance.
+        // If the pipe connection or instance is unresponsive/dead, proceed as new instance.
+        if let Err(e) = send_args_to_instance(args) {
+            log::warn!("Failed to communicate with existing TAU instance: {e:#}. Launching new instance.");
+            true
+        } else {
+            false
+        }
+    } else {
+        is_first_instance
     }
-
-    is_first_instance
 }
 
 fn with_pipe(f: &dyn Fn(String)) {
