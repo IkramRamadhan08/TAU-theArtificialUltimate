@@ -43,10 +43,7 @@ pub fn current_platform(headless: bool) -> Rc<dyn Platform> {
     {
         Rc::new(
             gpui_windows::WindowsPlatform::new(headless)
-                .unwrap_or_else(|err| {
-                    log::error!("failed to initialize Windows platform: {err:#}");
-                    panic!("failed to initialize Windows platform: {err:#}");
-                }),
+                .expect("failed to initialize Windows platform"),
         )
     }
 
