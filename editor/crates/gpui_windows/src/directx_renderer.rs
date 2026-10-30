@@ -144,22 +144,40 @@ impl DirectXRenderer {
             .context("Creating DirectX devices")?;
         let atlas = Arc::new(DirectXAtlas::new(&devices.device, &devices.device_context));
 
-        let resources = DirectXResources::new(&devices, 1, 1, hwnd, disable_direct_composition)
-            .context("Creating DirectX resources")?;
         let globals = DirectXGlobalElements::new(&devices.device)
             .context("Creating DirectX global elements")?;
         let pipelines = DirectXRenderPipelines::new(&devices.device)
             .context("Creating DirectX render pipelines")?;
 
-        let direct_composition = if disable_direct_composition {
-            None
+        let (resources, direct_composition) = if disable_direct_composition {
+            let resources = DirectXResources::new(&devices, 1, 1, hwnd, true)
+                .context("Creating DirectX resources")?;
+            (resources, None)
         } else {
-            let composition = DirectComposition::new(devices.dxgi_device.as_ref().unwrap(), hwnd)
-                .context("Creating DirectComposition")?;
-            composition
-                .set_swap_chain(&resources.swap_chain)
-                .context("Setting swap chain for DirectComposition")?;
-            Some(composition)
+            match DirectXResources::new(&devices, 1, 1, hwnd, false) {
+                Ok(resources) => {
+                    let comp_res = DirectComposition::new(devices.dxgi_device.as_ref().unwrap(), hwnd)
+                        .and_then(|comp| {
+                            comp.set_swap_chain(&resources.swap_chain)?;
+                            Ok(comp)
+                        });
+                    match comp_res {
+                        Ok(comp) => (resources, Some(comp)),
+                        Err(err) => {
+                            log::warn!("DirectComposition initialization failed ({err:?}). Falling back to standard HWND swapchain.");
+                            let fallback_resources = DirectXResources::new(&devices, 1, 1, hwnd, true)
+                                .context("Creating fallback DirectX resources")?;
+                            (fallback_resources, None)
+                        }
+                    }
+                }
+                Err(err) => {
+                    log::warn!("Composition swapchain creation failed ({err:?}). Falling back to standard HWND swapchain.");
+                    let fallback_resources = DirectXResources::new(&devices, 1, 1, hwnd, true)
+                        .context("Creating fallback DirectX resources")?;
+                    (fallback_resources, None)
+                }
+            }
         };
 
         Ok(DirectXRenderer {
@@ -262,27 +280,64 @@ impl DirectXRenderer {
 
         let devices = DirectXRendererDevices::new(directx_devices, disable_direct_composition)
             .context("Recreating DirectX devices")?;
-        let resources = DirectXResources::new(
-            &devices,
-            self.width,
-            self.height,
-            self.hwnd,
-            disable_direct_composition,
-        )
-        .context("Creating DirectX resources")?;
+        let (resources, direct_composition) = if disable_direct_composition {
+            let resources = DirectXResources::new(
+                &devices,
+                self.width,
+                self.height,
+                self.hwnd,
+                true,
+            )
+            .context("Creating DirectX resources")?;
+            (resources, None)
+        } else {
+            match DirectXResources::new(
+                &devices,
+                self.width,
+                self.height,
+                self.hwnd,
+                false,
+            ) {
+                Ok(resources) => {
+                    let comp_res = DirectComposition::new(devices.dxgi_device.as_ref().unwrap(), self.hwnd)
+                        .and_then(|comp| {
+                            comp.set_swap_chain(&resources.swap_chain)?;
+                            Ok(comp)
+                        });
+                    match comp_res {
+                        Ok(comp) => (resources, Some(comp)),
+                        Err(err) => {
+                            log::warn!("DirectComposition recovery failed ({err:?}). Falling back to standard HWND swapchain.");
+                            let fallback_resources = DirectXResources::new(
+                                &devices,
+                                self.width,
+                                self.height,
+                                self.hwnd,
+                                true,
+                            )
+                            .context("Creating fallback DirectX resources")?;
+                            (fallback_resources, None)
+                        }
+                    }
+                }
+                Err(err) => {
+                    log::warn!("Composition swapchain recovery failed ({err:?}). Falling back to standard HWND swapchain.");
+                    let fallback_resources = DirectXResources::new(
+                        &devices,
+                        self.width,
+                        self.height,
+                        self.hwnd,
+                        true,
+                    )
+                    .context("Creating fallback DirectX resources")?;
+                    (fallback_resources, None)
+                }
+            }
+        };
         let globals = DirectXGlobalElements::new(&devices.device)
             .context("Creating DirectXGlobalElements")?;
         let pipelines = DirectXRenderPipelines::new(&devices.device)
             .context("Creating DirectXRenderPipelines")?;
-
-        let direct_composition = if disable_direct_composition {
-            None
-        } else {
-            let composition =
-                DirectComposition::new(devices.dxgi_device.as_ref().unwrap(), self.hwnd)?;
-            composition.set_swap_chain(&resources.swap_chain)?;
-            Some(composition)
-        };
 
         self.atlas
             .handle_device_lost(&devices.device, &devices.device_context);
