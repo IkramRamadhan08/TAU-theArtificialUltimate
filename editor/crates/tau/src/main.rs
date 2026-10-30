@@ -1831,9 +1831,7 @@ fn load_embedded_fonts(cx: &App) {
         }
     }));
 
-    let fonts = Arc::try_unwrap(embedded_fonts)
-        .unwrap_or_else(|arc| arc.lock().clone())
-        .into_inner();
+    let fonts = embedded_fonts.lock().drain(..).collect::<Vec<_>>();
     if let Err(err) = cx.text_system().add_fonts(fonts) {
         log::error!("Failed to add embedded fonts to text system: {err:#}");
     }
