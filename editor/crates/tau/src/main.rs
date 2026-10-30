@@ -1811,7 +1811,7 @@ fn load_embedded_fonts(cx: &App) {
         log::error!("Failed to list embedded fonts");
         return;
     };
-    let embedded_fonts = Mutex::new(Vec::new());
+    let embedded_fonts = Arc::new(Mutex::new(Vec::new()));
     let executor = cx.background_executor();
 
     cx.foreground_executor().block_on(executor.scoped(|scope| {
@@ -1821,6 +1821,7 @@ fn load_embedded_fonts(cx: &App) {
             }
 
             let asset_source = asset_source.clone();
+            let embedded_fonts = embedded_fonts.clone();
             scope.spawn(async move {
                 if let Ok(Some(font_bytes)) = asset_source.load(&font_path) {
                     embedded_fonts.lock().push(font_bytes);
@@ -1831,7 +1832,7 @@ fn load_embedded_fonts(cx: &App) {
         }
     }));
 
-    if let Err(err) = cx.text_system().add_fonts(embedded_fonts.into_inner()) {
+    if let Err(err) = cx.text_system().add_fonts(embedded_fonts.lock().drain(..).collect()) {
         log::error!("Failed to add embedded fonts to text system: {err:#}");
     }
 }
