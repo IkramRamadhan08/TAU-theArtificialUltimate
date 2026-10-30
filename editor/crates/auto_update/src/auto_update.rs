@@ -313,9 +313,9 @@ impl InstallerDir {
             .context("No parent dir for Tau.exe")?
             .join("updates");
         if smol::fs::metadata(&installer_dir).await.is_ok() {
-            smol::fs::remove_dir_all(&installer_dir).await?;
+            let _ = smol::fs::remove_dir_all(&installer_dir).await;
         }
-        smol::fs::create_dir(&installer_dir).await?;
+        smol::fs::create_dir_all(&installer_dir).await?;
         Ok(Self(installer_dir))
     }
 
@@ -1036,13 +1036,13 @@ async fn install_release_windows(
 
     let mut cmd = new_command("powershell");
     cmd.args([
-        "Expand-Archive",
-        "-Path",
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "Expand-Archive -LiteralPath $args[0] -DestinationPath $args[1] -Force",
     ])
     .arg(downloaded_zip)
-    .args(["-DestinationPath"])
-    .arg(&extracted)
-    .arg("-Force");
+    .arg(&extracted);
     let output = cmd
         .output()
         .await
