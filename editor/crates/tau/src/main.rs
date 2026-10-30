@@ -1819,7 +1819,6 @@ fn load_embedded_fonts(cx: &App) {
             if !font_path.ends_with(".ttf") {
                 continue;
             }
-
             let asset_source = asset_source.clone();
             let embedded_fonts = embedded_fonts.clone();
             scope.spawn(async move {
@@ -1832,7 +1831,10 @@ fn load_embedded_fonts(cx: &App) {
         }
     }));
 
-    if let Err(err) = cx.text_system().add_fonts(embedded_fonts.lock().drain(..).collect()) {
+    let fonts = Arc::try_unwrap(embedded_fonts)
+        .unwrap_or_else(|arc| arc.lock().clone())
+        .into_inner();
+    if let Err(err) = cx.text_system().add_fonts(fonts) {
         log::error!("Failed to add embedded fonts to text system: {err:#}");
     }
 }
