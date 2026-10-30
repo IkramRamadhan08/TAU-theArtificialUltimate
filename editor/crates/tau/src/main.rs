@@ -1815,13 +1815,14 @@ fn load_embedded_fonts(cx: &App) {
     let executor = cx.background_executor();
 
     cx.foreground_executor().block_on(executor.scoped(|scope| {
-        for font_path in &font_paths {
+        for font_path in font_paths {
             if !font_path.ends_with(".ttf") {
                 continue;
             }
 
-            scope.spawn(async {
-                if let Ok(Some(font_bytes)) = asset_source.load(font_path) {
+            let asset_source = asset_source.clone();
+            scope.spawn(async move {
+                if let Ok(Some(font_bytes)) = asset_source.load(&font_path) {
                     embedded_fonts.lock().push(font_bytes);
                 } else {
                     log::warn!("Failed to load embedded font: {font_path}");
