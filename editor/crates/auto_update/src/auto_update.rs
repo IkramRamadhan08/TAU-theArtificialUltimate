@@ -1039,7 +1039,7 @@ async fn install_release_windows(
         "-NoProfile",
         "-NonInteractive",
         "-Command",
-        "Expand-Archive -LiteralPath $args[0] -DestinationPath $args[1] -Force",
+        "param($src, $dst); Expand-Archive -LiteralPath $src -DestinationPath $dst -Force",
     ])
     .arg(downloaded_zip)
     .arg(&extracted);

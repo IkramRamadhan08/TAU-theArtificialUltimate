@@ -367,7 +367,7 @@ impl DirectXRenderer {
             return Ok(());
         }
         self.pre_draw(&match background_appearance {
-            WindowBackgroundAppearance::Opaque => [1.0f32; 4],
+            WindowBackgroundAppearance::Opaque => [0.11f32, 0.12f32, 0.13f32, 1.0f32],
             _ => [0.0f32; 4],
         })?;
 
