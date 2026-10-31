@@ -159,6 +159,10 @@ if ($CURRENT_PATH -notlike "*$INSTALL_DIR*") {
 # Also set for current session
 $env:Path = "$env:Path;$INSTALL_DIR"
 
+# Ensure smooth rendering across all Windows GPU hardware by default
+[Environment]::SetEnvironmentVariable("GPUI_DISABLE_DIRECT_COMPOSITION", "1", "User")
+$env:GPUI_DISABLE_DIRECT_COMPOSITION = "1"
+
 # ----- Start Menu shortcut (default) -----
 if (-not $NoStartMenu) {
     Write-Step "Creating Start Menu shortcut..."
